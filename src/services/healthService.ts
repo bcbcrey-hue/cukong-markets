@@ -1,24 +1,89 @@
-import type { HealthSnapshot, RuntimeOrder, RuntimePosition, SignalCandidate } from '../core/types';
+import type {
+  HealthSnapshot,
+  OrderRecord,
+  PositionRecord,
+  RuntimeStatus,
+  WorkerHealth,
+} from '../core/types';
+import { PersistenceService, createDefaultHealth } from './persistenceService';
 import { StateService } from './stateService';
 
-export class HealthService {
-  constructor(private readonly state: StateService) {}
+export interface BuildHealthParams {
+  scannerRunning: boolean;
+  telegramRunning: boolean;
+  tradingEnabled: boolean;
+  positions: PositionRecord[];
+  orders: OrderRecord[];
+  workers?: WorkerHealth[];
+  notes?: string[];
+}
 
-  snapshot(params: { positions: RuntimePosition\[]; orders: RuntimeOrder\[]; hotlist: SignalCandidate\[] }): HealthSnapshot {
-    const current = this.state.get();
-    return {
-      uptimeMs: current.uptimeMs,
-      started: current.started,
-      mode: current.tradingMode,
-      positionsOpen: params.positions.filter((item) => item.status === 'open').length,
-      pendingOrders: params.orders.filter((item) => item.status === 'pending' || item.status === 'open').length,
-      hotlistCount: params.hotlist.length,
-      lastSignalAt: current.lastSignalAt,
-      lastTradeAt: current.lastTradeAt,
-      lastErrorAt: current.lastErrorAt,
-      lastErrorMessage: current.lastErrorMessage,
-      activeJobs: current.pollingStats.activeJobs,
-      tickCount: current.pollingStats.tickCount,
+export class HealthService {
+  private health: HealthSnapshot = createDefaultHealth();
+
+  constructor(
+    private readonly persistence: PersistenceService,
+    private readonly state: StateService,
+  ) {}
+
+  async load(): Promise<HealthSnapshot> {
+    this.health = await this.persistence.readHealth();
+    return this.health;
+  }
+
+  get(): HealthSnapshot {
+    return this.health;
+  }
+
+  async replace(next: HealthSnapshot): Promise<HealthSnapshot> {
+    this.health = {
+      ...next,
+      updatedAt: new Date().toISOString(),
     };
+    await this.persistence.saveHealth(this.health);
+    return this.health;
+  }
+
+  async build(params: BuildHealthParams): Promise<HealthSnapshot> {
+    const runtime = this.state.get();
+    const runtimeStatus: RuntimeStatus = runtime.status;
+
+    const openPositions = params.positions.filter(
+      (position) => position.status === 'OPEN' || position.status === 'PARTIALLY_CLOSED',
+    ).length;
+
+    const pendingOrders = params.orders.filter(
+      (order) =>
+        order.status === 'NEW' ||
+        order.status === 'OPEN' ||
+        order.status === 'PARTIALLY_FILLED',
+    ).length;
+
+    const notes = [
+      ...(params.notes ?? []),
+      `openPositions=${openPositions}`,
+      `pendingOrders=${pendingOrders}`,
+    ];
+
+    const status: HealthSnapshot['status'] =
+      runtimeStatus === 'ERROR'
+        ? 'down'
+        : params.scannerRunning && params.telegramRunning
+          ? 'healthy'
+          : 'degraded';
+
+    const next: HealthSnapshot = {
+      status,
+      updatedAt: new Date().toISOString(),
+      runtimeStatus,
+      scannerRunning: params.scannerRunning,
+      telegramRunning: params.telegramRunning,
+      tradingEnabled: params.tradingEnabled,
+      activePairsTracked: Object.keys(runtime.pairs).length,
+      workers: params.workers ?? [],
+      notes,
+    };
+
+    return this.replace(next);
   }
 }
