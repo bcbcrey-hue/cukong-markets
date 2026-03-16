@@ -1,56 +1,38 @@
 import path from 'node:path';
 import { env } from '../../config/env';
-import type { AccountCredential, AccountsMeta, LegacyAccountInput } from '../../core/types';
+import type { LegacyUploadedAccount, StoredAccount } from '../../core/types';
 import { JsonStore } from '../../storage/jsonStore';
-import { nowIso } from '../../utils/time';
-import {
-  validateAccountList,
-  validateLegacyAccountInput,
-} from './accountValidator';
+import { validateLegacyAccounts, validateStoredAccounts } from './accountValidator';
+
+type AccountsMetaSource = 'manual' | 'migration' | 'telegram_upload';
+
+export interface AccountsMeta {
+  lastUpdatedAt: string | null;
+  defaultAccountId: string | null;
+  source: AccountsMetaSource;
+  totalAccounts: number;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 function slugifyName(name: string): string {
-  return name
+  const slug = name
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'account';
+    .replace(/^-+|-+$/g, '');
+
+  return slug || 'account';
 }
 
 function createAccountId(name: string): string {
   return `${slugifyName(name)}-${Date.now()}`;
 }
 
-function ensureSingleDefault(accounts: AccountCredential[]): AccountCredential[] {
-  if (accounts.length === 0) {
-    return accounts;
-  }
-
-  let foundDefault = false;
-
-  const normalized = accounts.map((item, index) => {
-    if (item.isDefault && !foundDefault) {
-      foundDefault = true;
-      return item;
-    }
-
-    return {
-      ...item,
-      isDefault: false,
-    };
-  });
-
-  if (!foundDefault) {
-    normalized[0] = {
-      ...normalized[0],
-      isDefault: true,
-    };
-  }
-
-  return normalized;
-}
-
 export class AccountStore {
-  private readonly accountsStore = new JsonStore<AccountCredential[]>(env.accountsFile, []);
+  private readonly accountsStore = new JsonStore<StoredAccount[]>(env.accountsFile, []);
   private readonly metaStore = new JsonStore<AccountsMeta>(
     path.resolve(env.dataDir, 'accounts-meta.json'),
     {
@@ -65,9 +47,9 @@ export class AccountStore {
     return this.accountsStore.getPath();
   }
 
-  async loadAll(): Promise<AccountCredential[]> {
+  async loadAll(): Promise<StoredAccount[]> {
     const raw = await this.accountsStore.read();
-    return validateAccountList(ensureSingleDefault(raw));
+    return validateStoredAccounts(raw);
   }
 
   async loadMeta(): Promise<AccountsMeta> {
@@ -75,10 +57,10 @@ export class AccountStore {
   }
 
   async saveAll(
-    accounts: AccountCredential[],
-    source: AccountsMeta['source'] = 'manual',
-  ): Promise<AccountCredential[]> {
-    const normalized = validateAccountList(ensureSingleDefault(accounts));
+    accounts: StoredAccount[],
+    source: AccountsMetaSource = 'manual',
+  ): Promise<StoredAccount[]> {
+    const normalized = validateStoredAccounts(accounts);
     await this.accountsStore.write(normalized);
 
     const defaultAccount = normalized.find((item) => item.isDefault) ?? null;
@@ -93,19 +75,19 @@ export class AccountStore {
     return normalized;
   }
 
-  async saveLegacyUpload(input: unknown): Promise<AccountCredential[]> {
-    const parsed = validateLegacyAccountInput(input);
+  async saveLegacyUpload(input: unknown): Promise<StoredAccount[]> {
+    const parsed = validateLegacyAccounts(input);
     return this.replaceFromLegacy(parsed, 'telegram_upload');
   }
 
   async replaceFromLegacy(
-    items: LegacyAccountInput[],
-    source: AccountsMeta['source'] = 'manual',
-  ): Promise<AccountCredential[]> {
-    const parsed = validateLegacyAccountInput(items);
+    items: LegacyUploadedAccount[],
+    source: AccountsMetaSource = 'manual',
+  ): Promise<StoredAccount[]> {
+    const parsed = validateLegacyAccounts(items);
     const now = nowIso();
 
-    const accounts: AccountCredential[] = parsed.map((item, index) => ({
+    const accounts: StoredAccount[] = parsed.map((item, index) => ({
       id: createAccountId(item.name),
       name: item.name.trim(),
       apiKey: item.apiKey.trim(),
@@ -119,8 +101,8 @@ export class AccountStore {
     return this.saveAll(accounts, source);
   }
 
-  async upsertLegacyAccounts(items: LegacyAccountInput[]): Promise<AccountCredential[]> {
-    const incoming = validateLegacyAccountInput(items);
+  async upsertLegacyAccounts(items: LegacyUploadedAccount[]): Promise<StoredAccount[]> {
+    const incoming = validateLegacyAccounts(items);
     const current = await this.loadAll();
     const now = nowIso();
 
@@ -128,7 +110,7 @@ export class AccountStore {
       current.map((item) => [item.name.trim().toLowerCase(), item] as const),
     );
 
-    const next: AccountCredential[] = incoming.map((item, index) => {
+    const next: StoredAccount[] = incoming.map((item, index) => {
       const existing = currentByName.get(item.name.trim().toLowerCase());
 
       return {
@@ -146,13 +128,13 @@ export class AccountStore {
     return this.saveAll(next, 'migration');
   }
 
-  async delete(accountId: string): Promise<AccountCredential[]> {
+  async delete(accountId: string): Promise<StoredAccount[]> {
     const current = await this.loadAll();
     const next = current.filter((item) => item.id !== accountId);
     return this.saveAll(next, 'manual');
   }
 
-  async setEnabled(accountId: string, enabled: boolean): Promise<AccountCredential[]> {
+  async setEnabled(accountId: string, enabled: boolean): Promise<StoredAccount[]> {
     const current = await this.loadAll();
 
     const next = current.map((item) =>
@@ -168,7 +150,7 @@ export class AccountStore {
     return this.saveAll(next, 'manual');
   }
 
-  async setDefault(accountId: string): Promise<AccountCredential[]> {
+  async setDefault(accountId: string): Promise<StoredAccount[]> {
     const current = await this.loadAll();
 
     if (!current.some((item) => item.id === accountId)) {
