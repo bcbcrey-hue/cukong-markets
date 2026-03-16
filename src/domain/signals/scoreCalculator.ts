@@ -1,78 +1,238 @@
-import type { OrderbookSnapshot, ScoreBreakdown, StrategyResult, TickerSnapshot } from '../../core/types';
-import { breakoutRetestScore } from './strategies/breakoutRetest';
-import { hotRotationScore } from './strategies/hotRotation';
-import { orderbookImbalanceScore } from './strategies/orderbookImbalance';
-import { silentAccumulationScore } from './strategies/silentAccumulation';
-import { volumeSpikeScore } from './strategies/volumeSpike';
+import type {
+  MarketRegime,
+  ScoreContribution,
+} from '../../core/types';
+import { clamp } from '../../utils/math';
+import type { OrderbookFeatureSnapshot } from '../market/orderbookSnapshot';
+import type { PairClassification } from '../market/pairClassifier';
+import type { TickerFeatureSnapshot } from '../market/tickerSnapshot';
+import {
+  breakoutRetestScore,
+} from './strategies/breakoutRetest';
+import {
+  hotRotationScore,
+} from './strategies/hotRotation';
+import {
+  orderbookImbalanceScore,
+} from './strategies/orderbookImbalance';
+import {
+  silentAccumulationScore,
+} from './strategies/silentAccumulation';
+import {
+  volumeSpikeScore,
+} from './strategies/volumeSpike';
 
-export function calculateScore(snapshot: TickerSnapshot, orderbook: OrderbookSnapshot | null): { breakdown: ScoreBreakdown; strategies: StrategyResult\[] } {
-  const volumeAnomaly = volumeSpikeScore(snapshot);
-  const priceAcceleration = Math.max(0, Math.min(14, snapshot.velocity5m \* 1.6 + Math.max(0, snapshot.change3m) \* 2));
-  const spreadTightening = Math.max(0, Math.min(10, 10 - snapshot.spreadPct \* 10));
-  const orderbookImbalance = orderbookImbalanceScore(orderbook);
-  const tradeBurst = Math.max(0, Math.min(10, snapshot.tradeBurstScore / 10));
-  const breakoutReadiness = breakoutRetestScore(snapshot);
-  const momentumPersistence = Math.max(0, Math.min(14, hotRotationScore(snapshot) + silentAccumulationScore(snapshot, orderbook)));
-  const slippagePenalty = Math.max(0, Math.min(10, snapshot.spreadPct \* 6));
-  const liquidityPenalty = Math.max(0, Math.min(12, (50 - snapshot.liquidityScore) / 5));
-  const overextensionPenalty = Math.max(0, Math.min(12, Math.max(0, snapshot.change15m - 8) \* 1.5));
-  const spoofPenalty = orderbook \&\& Math.abs(orderbook.imbalanceTop5) > 0.92 \&\& (orderbook.bidDepthTop5 < 20 || orderbook.askDepthTop5 < 20) ? 6 : 0;
+export interface ScoreCalculationResult {
+  total: number;
+  regime: MarketRegime;
+  confidence: number;
+  breakoutPressure: number;
+  volumeAcceleration: number;
+  orderbookImbalance: number;
+  spreadPct: number;
+  reasons: string[];
+  warnings: string[];
+  contributions: ScoreContribution[];
+}
 
-  const notes: string\[] = \[];
-  if (volumeAnomaly >= 12) notes.push('volume anomaly kuat');
-  if (priceAcceleration >= 8) notes.push('akselerasi harga meningkat');
-  if (spreadTightening >= 7) notes.push('spread relatif rapat');
-  if (orderbookImbalance >= 8) notes.push('imbalance orderbook kuat');
-  if (tradeBurst >= 7) notes.push('trade burst tinggi');
-  if (breakoutReadiness >= 10) notes.push('potensi breakout + retest');
-  if (momentumPersistence >= 8) notes.push('momentum bertahan');
-  if (slippagePenalty >= 6) notes.push('slippage risk tinggi');
-  if (liquidityPenalty >= 6) notes.push('likuiditas kurang');
-  if (overextensionPenalty >= 6) notes.push('sudah overextended');
-  if (spoofPenalty > 0) notes.push('indikasi fake move / spoof');
+export interface ScoreCalculationInput {
+  classification: PairClassification;
+  ticker: TickerFeatureSnapshot;
+  orderbook: OrderbookFeatureSnapshot;
+}
 
-  const total = Math.max(
+export function calculateScore(input: ScoreCalculationInput): ScoreCalculationResult {
+  const { classification, ticker, orderbook } = input;
+
+  const volumeAnomaly = volumeSpikeScore({
+    volume1m: ticker.volume1m,
+    volume5m: ticker.volume5m,
+    volume15mAvg: ticker.volume15mAvg,
+    change1m: ticker.change1m,
+  });
+
+  const breakoutReadiness = breakoutRetestScore({
+    change1m: ticker.change1m,
+    change3m: ticker.change3m,
+    change5m: ticker.change5m,
+    spreadBps: orderbook.spreadBps,
+    orderbookImbalance: orderbook.orderbookImbalance,
+  });
+
+  const accumulation = silentAccumulationScore({
+    change1m: ticker.change1m,
+    change5m: ticker.change5m,
+    volumeAcceleration: ticker.volumeAcceleration,
+    orderbookImbalance: orderbook.orderbookImbalance,
+    spreadBps: orderbook.spreadBps,
+  });
+
+  const rotation = hotRotationScore({
+    change5m: ticker.change5m,
+    change15m: ticker.change15m,
+    volumeAcceleration: ticker.volumeAcceleration,
+    volatilityScore: ticker.volatilityScore,
+  });
+
+  const imbalance = orderbookImbalanceScore({
+    orderbookImbalance: orderbook.orderbookImbalance,
+    bestBidSize: orderbook.bestBidSize,
+    bestAskSize: orderbook.bestAskSize,
+    wallPressureScore: orderbook.wallPressureScore,
+  });
+
+  const spreadTightening = clamp(10 - orderbook.spreadBps / 8, 0, 10);
+  const priceAcceleration = clamp(Math.max(0, ticker.change3m) * 2.2, 0, 14);
+  const tradeBurst = clamp(ticker.volumeAcceleration * 0.12, 0, 10);
+
+  const slippagePenalty = clamp((orderbook.spreadBps - 45) / 10, 0, 10);
+  const liquidityPenalty = clamp(8 - orderbook.depthScore * 0.08, 0, 8);
+  const overextensionPenalty = clamp((ticker.change15m - 9) / 1.5, 0, 12);
+  const spoofPenalty =
+    orderbook.orderbookImbalance > 0.95 && orderbook.bestAskSize > 0
+      ? 4
+      : 0;
+
+  const tierBonus =
+    classification.tier === 'A' ? 2 : classification.tier === 'B' ? 1 : 0;
+
+  const total = clamp(
+    volumeAnomaly +
+      breakoutReadiness +
+      accumulation +
+      rotation +
+      imbalance +
+      spreadTightening +
+      priceAcceleration +
+      tradeBurst +
+      tierBonus -
+      slippagePenalty -
+      liquidityPenalty -
+      overextensionPenalty -
+      spoofPenalty,
     0,
-    Math.min(
-      100,
-      volumeAnomaly +
-        priceAcceleration +
-        spreadTightening +
-        orderbookImbalance +
-        tradeBurst +
-        breakoutReadiness +
-        momentumPersistence -
-        slippagePenalty -
-        liquidityPenalty -
-        overextensionPenalty -
-        spoofPenalty,
-    ),
+    100,
   );
 
-  const strategies: StrategyResult\[] = \[
-    { name: 'Volume Spike Early', passed: volumeAnomaly >= 10, weight: volumeAnomaly, note: notes.includes('volume anomaly kuat') ? 'volume terdeteksi meningkat' : 'belum dominan' },
-    { name: 'Orderbook Imbalance', passed: orderbookImbalance >= 8, weight: orderbookImbalance, note: orderbook ? `imbalance=${orderbook.imbalanceTop5.toFixed(3)}` : 'orderbook tidak tersedia' },
-    { name: 'Silent Accumulation', passed: silentAccumulationScore(snapshot, orderbook) > 0, weight: silentAccumulationScore(snapshot, orderbook), note: 'kenaikan halus dengan depth mendukung' },
-    { name: 'Breakout + Quick Retest', passed: breakoutReadiness >= 10, weight: breakoutReadiness, note: 'breakout readiness aktif' },
-    { name: 'Hot Rotation Scanner', passed: hotRotationScore(snapshot) >= 8, weight: hotRotationScore(snapshot), note: 'rotasi pair menguat' },
+  let regime: MarketRegime = classification.regimeHint;
+  if (breakoutReadiness >= 8 && imbalance >= 8) {
+    regime = 'BREAKOUT_SETUP';
+  } else if (accumulation >= 6) {
+    regime = 'ACCUMULATION';
+  } else if (overextensionPenalty >= 8) {
+    regime = 'EXHAUSTION';
+  } else if (total >= 70) {
+    regime = 'EXPANSION';
+  }
+
+  const reasons: string[] = [];
+  const warnings: string[] = [];
+
+  if (volumeAnomaly >= 8) reasons.push('volume anomaly meningkat');
+  if (imbalance >= 7) reasons.push('bid-side orderbook dominan');
+  if (breakoutReadiness >= 7) reasons.push('breakout setup mulai matang');
+  if (accumulation >= 5) reasons.push('indikasi silent accumulation');
+  if (rotation >= 5) reasons.push('rotation flow mendukung');
+  if (orderbook.spreadBps < 40) reasons.push('spread cukup rapat');
+
+  if (slippagePenalty >= 5) warnings.push('spread/slippage risk meninggi');
+  if (liquidityPenalty >= 4) warnings.push('depth orderbook masih tipis');
+  if (overextensionPenalty >= 5) warnings.push('harga mulai overextended');
+  if (spoofPenalty > 0) warnings.push('imbalance terlalu ekstrem, rawan spoof/trap');
+
+  const contributions: ScoreContribution[] = [
+    {
+      feature: 'volumeAnomaly',
+      weight: 18,
+      contribution: volumeAnomaly,
+      note: 'volume spike vs baseline',
+    },
+    {
+      feature: 'breakoutReadiness',
+      weight: 12,
+      contribution: breakoutReadiness,
+      note: 'price + retest + imbalance',
+    },
+    {
+      feature: 'silentAccumulation',
+      weight: 10,
+      contribution: accumulation,
+      note: 'tight range with hidden pressure',
+    },
+    {
+      feature: 'hotRotation',
+      weight: 10,
+      contribution: rotation,
+      note: 'short-term rotation support',
+    },
+    {
+      feature: 'orderbookImbalance',
+      weight: 14,
+      contribution: imbalance,
+      note: 'depth dominance near top of book',
+    },
+    {
+      feature: 'spreadTightening',
+      weight: 10,
+      contribution: spreadTightening,
+      note: 'tighter spread is better',
+    },
+    {
+      feature: 'priceAcceleration',
+      weight: 14,
+      contribution: priceAcceleration,
+      note: '3m acceleration',
+    },
+    {
+      feature: 'tradeBurst',
+      weight: 10,
+      contribution: tradeBurst,
+      note: 'volume acceleration proxy',
+    },
+    {
+      feature: 'slippagePenalty',
+      weight: -10,
+      contribution: -slippagePenalty,
+      note: 'wider spread penalty',
+    },
+    {
+      feature: 'liquidityPenalty',
+      weight: -8,
+      contribution: -liquidityPenalty,
+      note: 'thin orderbook penalty',
+    },
+    {
+      feature: 'overextensionPenalty',
+      weight: -12,
+      contribution: -overextensionPenalty,
+      note: 'late-move penalty',
+    },
+    {
+      feature: 'spoofPenalty',
+      weight: -4,
+      contribution: -spoofPenalty,
+      note: 'extreme imbalance penalty',
+    },
   ];
 
+  const confidence = clamp(
+    total * 0.6 +
+      Math.max(0, orderbook.depthScore - 40) * 0.25 +
+      Math.max(0, ticker.momentumScore - 20) * 0.15,
+    0,
+    100,
+  ) / 100;
+
   return {
-    breakdown: {
-      total,
-      volumeAnomaly,
-      priceAcceleration,
-      spreadTightening,
-      orderbookImbalance,
-      tradeBurst,
-      breakoutReadiness,
-      momentumPersistence,
-      slippagePenalty,
-      liquidityPenalty,
-      overextensionPenalty,
-      spoofPenalty,
-      notes,
-    },
-    strategies,
+    total,
+    regime,
+    confidence,
+    breakoutPressure: breakoutReadiness,
+    volumeAcceleration: ticker.volumeAcceleration,
+    orderbookImbalance: orderbook.orderbookImbalance,
+    spreadPct: orderbook.current.spreadPct,
+    reasons,
+    warnings,
+    contributions,
   };
 }
