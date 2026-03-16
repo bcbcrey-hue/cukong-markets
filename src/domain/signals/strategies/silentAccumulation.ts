@@ -1,10 +1,29 @@
-import type { OrderbookSnapshot, TickerSnapshot } from '../../../core/types';
+import { clamp } from '../../../utils/math';
 
-export function silentAccumulationScore(snapshot: TickerSnapshot, orderbook: OrderbookSnapshot | null): number {
-  if (!orderbook) {
+export interface SilentAccumulationInput {
+  change1m: number;
+  change5m: number;
+  volumeAcceleration: number;
+  orderbookImbalance: number;
+  spreadBps: number;
+}
+
+export function silentAccumulationScore(input: SilentAccumulationInput): number {
+  const tightRange = Math.abs(input.change1m) < 0.8 && Math.abs(input.change5m) < 2.5;
+  const hiddenPressure =
+    input.volumeAcceleration > 25 &&
+    input.orderbookImbalance > 0.12 &&
+    input.spreadBps < 80;
+
+  if (!tightRange || !hiddenPressure) {
     return 0;
   }
 
-  const condition = snapshot.change15m > 0 \&\& snapshot.change15m < 3 \&\& orderbook.imbalanceTop5 > 0.12 \&\& snapshot.spreadPct < 0.8;
-  return condition ? 10 : 0;
+  return clamp(
+    input.volumeAcceleration * 0.08 +
+      input.orderbookImbalance * 12 +
+      Math.max(0, 8 - input.spreadBps / 10),
+    0,
+    10,
+  );
 }
