@@ -1,25 +1,25 @@
-import type { AccountCredential, LegacyAccountInput } from '../../core/types';
+import type { LegacyUploadedAccount, StoredAccount } from '../../core/types';
 import { AccountStore } from './accountStore';
 
 export class AccountRegistry {
-  private accounts: AccountCredential[] = [];
+  private accounts: StoredAccount[] = [];
 
   constructor(private readonly store: AccountStore) {}
 
-  async reload(): Promise<AccountCredential[]> {
+  async initialize(): Promise<StoredAccount[]> {
+    return this.reload();
+  }
+
+  async reload(): Promise<StoredAccount[]> {
     this.accounts = await this.store.loadAll();
     return this.accounts;
   }
 
-  async initialize(): Promise<AccountCredential[]> {
-    return this.reload();
-  }
-
-  listAll(): AccountCredential[] {
+  listAll(): StoredAccount[] {
     return [...this.accounts];
   }
 
-  listEnabled(): AccountCredential[] {
+  listEnabled(): StoredAccount[] {
     return this.accounts.filter((item) => item.enabled);
   }
 
@@ -31,7 +31,7 @@ export class AccountRegistry {
     return this.accounts.length > 0;
   }
 
-  getDefault(): AccountCredential | undefined {
+  getDefault(): StoredAccount | undefined {
     return (
       this.accounts.find((item) => item.isDefault && item.enabled) ??
       this.accounts.find((item) => item.isDefault) ??
@@ -40,40 +40,40 @@ export class AccountRegistry {
     );
   }
 
-  getById(accountId: string): AccountCredential | undefined {
+  getById(accountId: string): StoredAccount | undefined {
     return this.accounts.find((item) => item.id === accountId);
   }
 
-  getByName(name: string): AccountCredential | undefined {
+  getByName(name: string): StoredAccount | undefined {
     const key = name.trim().toLowerCase();
     return this.accounts.find((item) => item.name.trim().toLowerCase() === key);
   }
 
-  async saveLegacyUpload(input: unknown): Promise<AccountCredential[]> {
+  async saveLegacyUpload(input: unknown): Promise<StoredAccount[]> {
     const saved = await this.store.saveLegacyUpload(input);
     this.accounts = saved;
     return this.accounts;
   }
 
-  async upsertLegacyAccounts(items: LegacyAccountInput[]): Promise<AccountCredential[]> {
+  async upsertLegacyAccounts(items: LegacyUploadedAccount[]): Promise<StoredAccount[]> {
     const saved = await this.store.upsertLegacyAccounts(items);
     this.accounts = saved;
     return this.accounts;
   }
 
-  async setEnabled(accountId: string, enabled: boolean): Promise<AccountCredential[]> {
+  async setEnabled(accountId: string, enabled: boolean): Promise<StoredAccount[]> {
     const saved = await this.store.setEnabled(accountId, enabled);
     this.accounts = saved;
     return this.accounts;
   }
 
-  async setDefault(accountId: string): Promise<AccountCredential[]> {
+  async setDefault(accountId: string): Promise<StoredAccount[]> {
     const saved = await this.store.setDefault(accountId);
     this.accounts = saved;
     return this.accounts;
   }
 
-  async delete(accountId: string): Promise<AccountCredential[]> {
+  async delete(accountId: string): Promise<StoredAccount[]> {
     const saved = await this.store.delete(accountId);
     this.accounts = saved;
     return this.accounts;
