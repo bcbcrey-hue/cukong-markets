@@ -1,6 +1,19 @@
-import type { TickerSnapshot } from '../../../core/types';
+import { clamp } from '../../../utils/math';
 
-export function hotRotationScore(snapshot: TickerSnapshot): number {
-  const momentum = Math.max(0, snapshot.change1m) + Math.max(0, snapshot.change3m) + Math.max(0, snapshot.change5m);
-  return Math.max(0, Math.min(14, momentum \* 2.2));
+export interface HotRotationInput {
+  change5m: number;
+  change15m: number;
+  volumeAcceleration: number;
+  volatilityScore: number;
+}
+
+export function hotRotationScore(input: HotRotationInput): number {
+  const rotationBase =
+    Math.max(0, input.change15m) * 1.5 +
+    Math.max(0, input.change5m) * 1.2 +
+    input.volumeAcceleration * 0.05;
+
+  const antiOverheatPenalty = input.volatilityScore > 70 ? 3 : 0;
+
+  return clamp(rotationBase - antiOverheatPenalty, 0, 10);
 }
