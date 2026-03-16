@@ -1,70 +1,70 @@
 import type { SignalCandidate } from '../../core/types';
-import type { MarketSnapshot } from '../market/marketWatcher';
+import { OrderbookSnapshotBuilder } from '../market/orderbookSnapshot';
+import { classifyPair } from '../market/pairClassifier';
 import type { PairUniverse } from '../market/pairUniverse';
+import { TickerSnapshotStore } from '../market/tickerSnapshot';
+import { calculateScore } from './scoreCalculator';
 
-function clamp(value: number, min = 0, max = 100): number {
-  return Math.max(min, Math.min(max, value));
+export interface MarketSnapshotBundle {
+  pair: string;
+  ticker: {
+    pair: string;
+    lastPrice: number;
+    bid: number;
+    ask: number;
+    high24h: number;
+    low24h: number;
+    volume24hBase: number;
+    volume24hQuote: number;
+    change24hPct: number;
+    timestamp: number;
+  };
+  orderbook: {
+    pair: string;
+    bids: Array<{ price: number; volume: number }>;
+    asks: Array<{ price: number; volume: number }>;
+    bestBid: number;
+    bestAsk: number;
+    spread: number;
+    spreadPct: number;
+    midPrice: number;
+    timestamp: number;
+  };
 }
 
 export class SignalEngine {
+  private readonly tickerSnapshots = new TickerSnapshotStore();
+  private readonly orderbookSnapshots = new OrderbookSnapshotBuilder();
+
   constructor(private readonly _universe: PairUniverse) {}
 
-  scoreMany(snapshots: MarketSnapshot[]): SignalCandidate[] {
-    return snapshots
-      .map((snapshot) => this.scoreOne(snapshot))
-      .sort((a, b) => b.score - a.score);
-  }
+  score(bundle: MarketSnapshotBundle): SignalCandidate {
+    const classification = classifyPair(bundle.pair);
+    const tickerFeatures = this.tickerSnapshots.buildFeatures(bundle.ticker);
+    const orderbookFeatures = this.orderbookSnapshots.build(bundle.orderbook);
 
-  scoreOne(snapshot: MarketSnapshot): SignalCandidate {
-    const spreadPenalty = snapshot.ticker.spreadPct > 1 ? 20 : snapshot.ticker.spreadPct * 10;
-    const liquidityBoost = snapshot.ticker.liquidityScore * 0.2;
-    const momentumBoost = Math.max(0, snapshot.ticker.change1m) * 4 + Math.max(0, snapshot.ticker.change5m) * 2;
-    const imbalanceBoost = Math.max(0, snapshot.orderbook.imbalanceTop5) * 25;
-    const volumeBoost = Math.min(20, Math.log10(Math.max(1, snapshot.ticker.volumeIdr)) * 2);
-
-    const score = clamp(
-      20 + liquidityBoost + momentumBoost + imbalanceBoost + volumeBoost - spreadPenalty,
-    );
-
-    const confidence = clamp(
-      (snapshot.ticker.liquidityScore * 0.35) +
-        (Math.max(0, snapshot.orderbook.imbalanceTop5) * 30) +
-        (Math.max(0, snapshot.ticker.change1m) * 2),
-      0,
-      100,
-    ) / 100;
-
-    const reasons: string[] = [];
-    const warnings: string[] = [];
-
-    if (snapshot.ticker.change1m > 0.4) {
-      reasons.push('momentum 1m positif');
-    }
-    if (snapshot.ticker.change5m > 1) {
-      reasons.push('momentum 5m menguat');
-    }
-    if (snapshot.orderbook.imbalanceTop5 > 0.2) {
-      reasons.push('bid depth dominan');
-    }
-    if (snapshot.ticker.liquidityScore > 50) {
-      reasons.push('likuiditas memadai');
-    }
-    if (snapshot.ticker.spreadPct > 0.8) {
-      warnings.push('spread masih lebar');
-    }
-    if (snapshot.orderbook.askDepthTop5 > snapshot.orderbook.bidDepthTop5 * 1.5) {
-      warnings.push('ask wall relatif berat');
-    }
+    const scored = calculateScore({
+      classification,
+      ticker: tickerFeatures,
+      orderbook: orderbookFeatures,
+    });
 
     return {
-      pair: snapshot.pair,
-      score,
-      confidence,
-      regime: score >= 70 ? 'momentum' : score >= 45 ? 'watch' : 'neutral',
-      spreadPct: snapshot.ticker.spreadPct,
-      reasons,
-      warnings,
-      observedAt: snapshot.observedAt,
+      pair: bundle.pair,
+      score: scored.total,
+      confidence: scored.confidence,
+      reasons: scored.reasons,
+      warnings: scored.warnings,
+      regime: scored.regime,
+      breakoutPressure: scored.breakoutPressure,
+      volumeAcceleration: scored.volumeAcceleration,
+      orderbookImbalance: scored.orderbookImbalance,
+      spreadPct: scored.spreadPct,
+      timestamp: bundle.ticker.timestamp,
     };
+  }
+
+  scoreMany(bundles: MarketSnapshotBundle[]): SignalCandidate[] {
+    return bundles.map((item) => this.score(item)).sort((a, b) => b.score - a.score);
   }
 }
