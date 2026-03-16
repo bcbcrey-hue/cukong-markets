@@ -1,75 +1,239 @@
 import path from 'node:path';
 
-function getString(keys: string\[], fallback = ''): string {
-  for (const key of keys) {
-    const value = process.env\[key];
-    if (typeof value === 'string' \&\& value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return fallback;
+export type TradingMode = 'OFF' | 'ALERT_ONLY' | 'SEMI_AUTO' | 'FULL_AUTO';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface EnvConfig {
+  nodeEnv: string;
+  appName: string;
+
+  telegramToken: string;
+  telegramAllowedUserIds: number[];
+
+  logLevel: LogLevel;
+
+  dataDir: string;
+  logDir: string;
+  tempDir: string;
+
+  accountsDir: string;
+  accountsFile: string;
+
+  stateDir: string;
+  stateFile: string;
+  ordersFile: string;
+  positionsFile: string;
+  tradesFile: string;
+  healthFile: string;
+  journalFile: string;
+  settingsFile: string;
+
+  historyDir: string;
+  pairHistoryFile: string;
+  anomalyEventsFile: string;
+  patternOutcomesFile: string;
+
+  backtestDir: string;
+
+  indodaxPublicBaseUrl: string;
+  indodaxPrivateBaseUrl: string;
+  indodaxTimeoutMs: number;
+
+  pollingIntervalMs: number;
+  marketWatchIntervalMs: number;
+  hotlistLimit: number;
+  maxPairsTracked: number;
+
+  defaultTradingMode: TradingMode;
+  defaultQuoteAsset: string;
+
+  riskMaxOpenPositions: number;
+  riskMaxPositionSizeIdr: number;
+  riskMaxPairSpreadPct: number;
+  riskCooldownMs: number;
+
+  workerEnabled: boolean;
+  workerPoolSize: number;
+
+  scannerHistoryLimit: number;
+  orderbookDepthLevels: number;
+  tradeClusterWindowMs: number;
+
+  probabilityThresholdAuto: number;
+  confidenceThresholdAuto: number;
+  spoofRiskBlockThreshold: number;
 }
 
-function getNumber(keys: string\[], fallback: number): number {
-  const raw = getString(keys);
+function readString(name: string, fallback = ''): string {
+  const value = process.env[name];
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  return value.trim();
+}
+
+function readRequiredString(name: string): string {
+  const value = readString(name);
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function readNumber(name: string, fallback: number): number {
+  const raw = readString(name);
   if (!raw) {
     return fallback;
   }
+
   const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid number in environment variable ${name}: "${raw}"`);
+  }
+
+  return parsed;
 }
 
-function getBoolean(keys: string\[], fallback: boolean): boolean {
-  const raw = getString(keys);
+function readBoolean(name: string, fallback: boolean): boolean {
+  const raw = readString(name);
   if (!raw) {
     return fallback;
   }
-  return \['1', 'true', 'yes', 'on'].includes(raw.toLowerCase());
+
+  const normalized = raw.toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error(`Invalid boolean in environment variable ${name}: "${raw}"`);
 }
 
-function getAllowedUserIds(): number\[] {
-  const raw = getString(\['TELEGRAM\_ALLOWED\_USER\_IDS'], '');
+function readStringEnum<T extends string>(
+  name: string,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  const raw = readString(name);
   if (!raw) {
-    return \[];
+    return fallback;
   }
+
+  if ((allowed as readonly string[]).includes(raw)) {
+    return raw as T;
+  }
+
+  throw new Error(
+    `Invalid value for ${name}: "${raw}". Allowed: ${allowed.join(', ')}`,
+  );
+}
+
+function readNumberList(name: string): number[] {
+  const raw = readString(name);
+  if (!raw) {
+    return [];
+  }
+
   return raw
     .split(',')
-    .map((item) => Number(item.trim()))
-    .filter((item) => Number.isInteger(item) \&\& item > 0);
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const parsed = Number(item);
+      if (!Number.isInteger(parsed)) {
+        throw new Error(
+          `Invalid TELEGRAM user id in ${name}: "${item}" is not an integer`,
+        );
+      }
+      return parsed;
+    });
 }
 
-const dataDir = getString(\['DATA\_DIR'], './data');
-const logDir = getString(\['LOG\_DIR'], './logs');
+const tradingModes = ['OFF', 'ALERT_ONLY', 'SEMI_AUTO', 'FULL_AUTO'] as const;
+const logLevels = ['debug', 'info', 'warn', 'error'] as const;
 
-export const env = {
-  NODE\_ENV: getString(\['NODE\_ENV'], 'development'),
-  LOG\_LEVEL: getString(\['LOG\_LEVEL'], 'info'),
+const rootDataDir = readString('DATA_DIR', path.resolve(process.cwd(), 'data'));
+const rootLogDir = readString('LOG_DIR', path.resolve(process.cwd(), 'logs'));
+const rootTempDir = readString('TEMP_DIR', path.resolve(process.cwd(), 'tmp'));
 
-  telegramToken: getString(\['TELEGRAM\_BOT\_TOKEN', 'TELEGRAM\_TOKEN']),
-  TELEGRAM\_ALLOWED\_USER\_IDS: getAllowedUserIds(),
-  TELEGRAM\_BOT\_UI\_ONLY: getBoolean(\['TELEGRAM\_BOT\_UI\_ONLY'], true),
+const accountsDir = path.resolve(rootDataDir, 'accounts');
+const stateDir = path.resolve(rootDataDir, 'state');
+const historyDir = path.resolve(rootDataDir, 'history');
+const backtestDir = path.resolve(rootDataDir, 'backtest');
 
-  INDODAX\_PUBLIC\_BASE\_URL: getString(\['INDODAX\_PUBLIC\_BASE\_URL'], 'https://indodax.com'),
-  INDODAX\_PRIVATE\_BASE\_URL: getString(\['INDODAX\_PRIVATE\_BASE\_URL'], 'https://indodax.com'),
+export const env: EnvConfig = {
+  nodeEnv: readString('NODE_ENV', 'development'),
+  appName: readString('APP_NAME', 'mafiamarkets'),
 
-  HTTP\_TIMEOUT\_MS: getNumber(\['HTTP\_TIMEOUT\_MS'], 10\_000),
-  STATE\_FLUSH\_INTERVAL\_MS: getNumber(\['STATE\_FLUSH\_INTERVAL\_MS'], 5\_000),
+  telegramToken: readRequiredString('TELEGRAM_BOT_TOKEN'),
+  telegramAllowedUserIds: readNumberList('TELEGRAM_ALLOWED_USER_IDS'),
 
-  DATA\_DIR: path.resolve(dataDir),
-  LOG\_DIR: path.resolve(logDir),
+  logLevel: readStringEnum('LOG_LEVEL', logLevels, 'info'),
 
-  DRY\_RUN: getBoolean(\['DRY\_RUN'], false),
-  PAPER\_TRADE: getBoolean(\['PAPER\_TRADE'], false),
+  dataDir: rootDataDir,
+  logDir: rootLogDir,
+  tempDir: rootTempDir,
 
-  MAX\_POSITION\_SIZE\_IDR: getNumber(\['MAX\_POSITION\_SIZE\_IDR'], 250\_000),
-  MAX\_ACTIVE\_POSITIONS: getNumber(\['MAX\_ACTIVE\_POSITIONS'], 5),
-  PAIR\_COOLDOWN\_MINUTES: getNumber(\['PAIR\_COOLDOWN\_MINUTES'], 20),
-  MAX\_SPREAD\_PCT: getNumber(\['MAX\_SPREAD\_PCT'], 0.8),
-  MAX\_SLIPPAGE\_PCT: getNumber(\['MAX\_SLIPPAGE\_PCT'], 1),
+  accountsDir,
+  accountsFile: path.resolve(accountsDir, 'accounts.json'),
+
+  stateDir,
+  stateFile: path.resolve(stateDir, 'runtime-state.json'),
+  ordersFile: path.resolve(stateDir, 'orders.json'),
+  positionsFile: path.resolve(stateDir, 'positions.json'),
+  tradesFile: path.resolve(stateDir, 'trades.json'),
+  healthFile: path.resolve(stateDir, 'health.json'),
+  journalFile: path.resolve(stateDir, 'journal.jsonl'),
+  settingsFile: path.resolve(stateDir, 'settings.json'),
+
+  historyDir,
+  pairHistoryFile: path.resolve(historyDir, 'pair-history.jsonl'),
+  anomalyEventsFile: path.resolve(historyDir, 'anomaly-events.jsonl'),
+  patternOutcomesFile: path.resolve(historyDir, 'pattern-outcomes.jsonl'),
+
+  backtestDir,
+
+  indodaxPublicBaseUrl: readString(
+    'INDODAX_PUBLIC_BASE_URL',
+    'https://indodax.com/api',
+  ),
+  indodaxPrivateBaseUrl: readString(
+    'INDODAX_PRIVATE_BASE_URL',
+    'https://indodax.com/tapi',
+  ),
+  indodaxTimeoutMs: readNumber('INDODAX_TIMEOUT_MS', 15_000),
+
+  pollingIntervalMs: readNumber('POLLING_INTERVAL_MS', 5_000),
+  marketWatchIntervalMs: readNumber('MARKET_WATCH_INTERVAL_MS', 10_000),
+  hotlistLimit: readNumber('HOTLIST_LIMIT', 15),
+  maxPairsTracked: readNumber('MAX_PAIRS_TRACKED', 250),
+
+  defaultTradingMode: readStringEnum(
+    'DEFAULT_TRADING_MODE',
+    tradingModes,
+    'ALERT_ONLY',
+  ),
+  defaultQuoteAsset: readString('DEFAULT_QUOTE_ASSET', 'idr').toLowerCase(),
+
+  riskMaxOpenPositions: readNumber('RISK_MAX_OPEN_POSITIONS', 3),
+  riskMaxPositionSizeIdr: readNumber('RISK_MAX_POSITION_SIZE_IDR', 100_000),
+  riskMaxPairSpreadPct: readNumber('RISK_MAX_PAIR_SPREAD_PCT', 1.25),
+  riskCooldownMs: readNumber('RISK_COOLDOWN_MS', 15 * 60 * 1000),
+
+  workerEnabled: readBoolean('WORKER_ENABLED', true),
+  workerPoolSize: readNumber('WORKER_POOL_SIZE', 2),
+
+  scannerHistoryLimit: readNumber('SCANNER_HISTORY_LIMIT', 300),
+  orderbookDepthLevels: readNumber('ORDERBOOK_DEPTH_LEVELS', 20),
+  tradeClusterWindowMs: readNumber('TRADE_CLUSTER_WINDOW_MS', 15_000),
+
+  probabilityThresholdAuto: readNumber('PROBABILITY_THRESHOLD_AUTO', 0.72),
+  confidenceThresholdAuto: readNumber('CONFIDENCE_THRESHOLD_AUTO', 0.68),
+  spoofRiskBlockThreshold: readNumber('SPOOF_RISK_BLOCK_THRESHOLD', 0.55),
 };
 
-export function assertCriticalEnv(): void {
-  if (!env.telegramToken) {
-    throw new Error('TELEGRAM\_BOT\_TOKEN / TELEGRAM\_TOKEN wajib diisi');
-  }
+export function isProductionEnv(): boolean {
+  return env.nodeEnv === 'production';
 }
