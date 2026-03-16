@@ -1,35 +1,77 @@
 import crypto from 'node:crypto';
-import { env } from '../../config/env';
-import { HttpClient } from '../http/httpClient';
 
-interface PrivateApiCredential {
+export interface IndodaxPrivateApiOptions {
+  baseUrl?: string;
   apiKey: string;
   apiSecret: string;
 }
 
-export interface IndodaxPrivateResponse<T> {
-  success: 0 | 1;
-  return?: T;
-  error?: string;
-}
+export class PrivateApi {
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+  private readonly apiSecret: string;
 
-export class IndodaxPrivateApi {
-  constructor(private readonly http = new HttpClient({ baseURL: env.INDODAX\_PRIVATE\_BASE\_URL, timeoutMs: env.HTTP\_TIMEOUT\_MS })) {}
-
-  private sign(secret: string, body: string): string {
-    return crypto.createHmac('sha512', secret).update(body).digest('hex');
+  constructor(options: IndodaxPrivateApiOptions) {
+    this.baseUrl = options.baseUrl ?? 'https://indodax.com/tapi';
+    this.apiKey = options.apiKey;
+    this.apiSecret = options.apiSecret;
   }
 
-  async call<T>(credential: PrivateApiCredential, method: string, params: Record<string, string | number> = {}): Promise<IndodaxPrivateResponse<T>> {
-    const nonce = Date.now();
-    const payload = new URLSearchParams({ method, nonce: String(nonce), ...Object.fromEntries(Object.entries(params).map((\[k, v]) => \[k, String(v)])) });
-    const sign = this.sign(credential.apiSecret, payload.toString());
+  private sign(payload: string): string {
+    return crypto.createHmac('sha512', this.apiSecret).update(payload).digest('hex');
+  }
 
-    return this.http.postForm<IndodaxPrivateResponse<T>>('/tapi', payload, {
-      headers: {
-        Key: credential.apiKey,
-        Sign: sign,
-      },
+  private async post<T>(method: string, params: Record<string, string | number> = {}): Promise<T> {
+    const nonce = Date.now();
+    const body = new URLSearchParams({
+      method,
+      nonce: String(nonce),
+      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
     });
+
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: {
+        Key: this.apiKey,
+        Sign: this.sign(body.toString()),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Private API ${method} failed: ${response.status}`);
+    }
+
+    return (await response.json()) as T;
+  }
+
+  getInfo<T>(): Promise<T> {
+    return this.post<T>('getInfo');
+  }
+
+  trade<T>(pair: string, type: 'buy' | 'sell', price: number, idr: number): Promise<T> {
+    return this.post<T>('trade', {
+      pair,
+      type,
+      price,
+      idr,
+    });
+  }
+
+  cancelOrder<T>(pair: string, orderId: string | number, type: 'buy' | 'sell'): Promise<T> {
+    return this.post<T>('cancelOrder', {
+      pair,
+      order_id: orderId,
+      type,
+    });
+  }
+
+  openOrders<T>(pair?: string): Promise<T> {
+    return this.post<T>('openOrders', pair ? { pair } : {});
+  }
+
+  orderHistory<T>(pair?: string): Promise<T> {
+    return this.post<T>('orderHistory', pair ? { pair } : {});
   }
 }
