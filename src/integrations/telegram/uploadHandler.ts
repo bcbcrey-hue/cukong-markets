@@ -9,25 +9,40 @@ export class UploadHandler {
   ) {}
 
   async handleDocument(ctx: Context): Promise<string> {
-    const message = ctx.message as { document?: { file\_name?: string; file\_id: string } } | undefined;
-    const doc = message?.document;
-    if (!doc?.file\_name?.toLowerCase().endsWith('.json')) {
-      throw new Error('Hanya file .json yang diizinkan');
+    const message = ctx.message as
+      | {
+          document?: {
+            file_name?: string;
+            file_id: string;
+          };
+        }
+      | undefined;
+
+    const document = message?.document;
+
+    if (!document?.file_name?.toLowerCase().endsWith('.json')) {
+      throw new Error('Hanya file .json yang diizinkan.');
     }
 
-    const url = await ctx.telegram.getFileLink(doc.file\_id);
-    const response = await fetch(url.toString());
+    const fileLink = await ctx.telegram.getFileLink(document.file_id);
+    const response = await fetch(fileLink.toString());
+
+    if (!response.ok) {
+      throw new Error(`Gagal mengunduh file Telegram: HTTP ${response.status}`);
+    }
+
     const text = await response.text();
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new Error('File JSON tidak valid');
+      throw new Error('File JSON tidak valid.');
     }
 
     const accounts = await this.store.saveLegacyUpload(parsed);
     await this.registry.reload();
-    return `Upload berhasil. ${accounts.length} account tersimpan di data/accounts/accounts.json`;
+
+    return `Upload berhasil.\n${accounts.length} account tersimpan di data/accounts/accounts.json`;
   }
 }
