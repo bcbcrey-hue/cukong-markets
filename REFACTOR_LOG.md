@@ -246,6 +246,297 @@ Urutan paling aman setelah progres sesi ini:
 5. `src/app.ts`
 6. `src/bootstrap.ts`
 
+# REFACTOR LOG
+
+Project: mafiamarkets
+Repository: https://github.com/masreykangtrade-oss/mafiamarkets
+
+Fokus log ini:
+- Hanya merangkum progres refactor pada sesi ini
+- Dipakai sebagai konteks untuk sesi berikutnya
+- Tidak mengulang batch lama di luar sesi ini
+
+## Batch yang selesai pada sesi ini
+
+1. Batch 1E — Foundation contract alignment + runtime wiring
+2. Batch 2A — Indodax + market baseline connection
+3. Batch 2B — Market feature builders + scoring alignment
+4. Batch 2C — Trading layer contract reset
+
+---
+
+## File yang direfactor pada sesi ini
+
+### Foundation / wiring
+- src/services/reportService.ts
+- src/domain/accounts/accountValidator.ts
+- src/domain/accounts/accountStore.ts
+- src/domain/accounts/accountRegistry.ts
+- src/app.ts
+- src/bootstrap.ts
+
+### Indodax / integrations
+- src/integrations/indodax/publicApi.ts
+- src/integrations/indodax/privateApi.ts
+- src/integrations/indodax/client.ts
+
+### Market pipeline
+- src/domain/market/pairUniverse.ts
+- src/domain/market/marketWatcher.ts
+- src/domain/market/hotlistService.ts
+- src/domain/market/tickerSnapshot.ts
+- src/domain/market/orderbookSnapshot.ts
+- src/domain/market/pairClassifier.ts
+
+### Signal pipeline
+- src/domain/signals/strategies/volumeSpike.ts
+- src/domain/signals/strategies/orderbookImbalance.ts
+- src/domain/signals/strategies/silentAccumulation.ts
+- src/domain/signals/strategies/breakoutRetest.ts
+- src/domain/signals/strategies/hotRotation.ts
+- src/domain/signals/scoreCalculator.ts
+- src/domain/signals/signalEngine.ts
+
+### Trading pipeline
+- src/domain/trading/orderManager.ts
+- src/domain/trading/positionManager.ts
+- src/domain/trading/riskEngine.ts
+- src/domain/trading/executionEngine.ts
+
+---
+
+## Ringkasan perubahan per batch
+
+### Batch 1E — Foundation contract alignment + runtime wiring
+
+Tujuan:
+- Menyambungkan semua hasil refactor sebelumnya ke jalur runtime yang lebih konsisten
+- Menutup mismatch contract pada env, accounts, report, app, dan bootstrap
+
+Perubahan utama:
+- Menyelaraskan path env ke pola camelCase aktif seperti:
+  - dataDir
+  - accountsDir
+  - accountsFile
+  - stateDir
+  - historyDir
+  - backtestDir
+  - logDir
+- Mempertahankan keputusan arsitektur yang sudah final:
+  - Telegram button UI tetap jadi UI utama
+  - whitelist TELEGRAM_ALLOWED_USER_IDS tetap dipakai
+  - legacy upload JSON account tetap didukung
+  - runtime accounts tetap disimpan di data/accounts/accounts.json
+- Menulis ulang account validator agar:
+  - validasi legacy upload JSON lebih tegas
+  - nama account dinormalisasi
+  - duplicate account name ditolak
+  - duplicate account id ditolak
+  - default account tetap tunggal dan konsisten
+- Menulis ulang accountStore agar:
+  - storage account sinkron ke env.accountsFile
+  - ada metadata account
+  - mendukung save legacy upload
+  - mendukung replace / upsert / set default / enable-disable / delete
+- Menulis ulang accountRegistry agar:
+  - menjadi façade operasional untuk account runtime
+  - mendukung initialize, reload, loadMeta, saveLegacyUpload, upsertLegacyAccounts, setEnabled, setDefault, delete
+- Menulis ulang reportService untuk output Telegram yang lebih stabil dan sederhana
+- Menulis ulang app.ts sebagai wiring utama runtime
+- Menulis ulang bootstrap.ts agar tipis dan fokus pada startup runtime directories + createApp/start
+
+Status:
+- Batch 1E dianggap selesai sebagai contract alignment baseline
+
+---
+
+### Batch 2A — Indodax + market baseline connection
+
+Tujuan:
+- Menyambungkan jalur runtime ke sumber data market Indodax
+- Menyiapkan baseline scanner yang benar-benar bisa memberi input ke signal pipeline
+
+Perubahan utama:
+- Menulis ulang publicApi.ts untuk:
+  - getTickers
+  - getDepth
+  - safeGetDepth
+- Menulis ulang privateApi.ts untuk:
+  - getInfo
+  - trade
+  - cancelOrder
+  - openOrders
+  - orderHistory
+- Menulis ulang client.ts untuk:
+  - akses public API
+  - pembuatan private API client per account
+- Menulis ulang pairUniverse.ts untuk:
+  - menyimpan pair metrics terbaru
+  - ranking pair berdasarkan volume
+  - export metrics untuk persistence
+- Menulis ulang marketWatcher.ts untuk:
+  - membangun market snapshot dari ticker + orderbook
+  - menyimpan history price pendek
+  - menghitung spread, liquidity score, change 1m/5m, depth, imbalance
+- Menulis ulang hotlistService.ts sebagai hotlist baseline updater
+- Menyambungkan hasil market snapshot ke jalur scoring awal di runtime
+
+Status:
+- Batch 2A selesai sebagai scanner/market baseline yang sudah nyambung ke app wiring
+
+---
+
+### Batch 2B — Market feature builders + scoring alignment
+
+Tujuan:
+- Mengubah placeholder market/scoring layer menjadi feature-driven signal pipeline
+- Menyelaraskan output signal ke type SignalCandidate yang aktif
+
+Perubahan utama:
+- Menulis ulang tickerSnapshot.ts menjadi feature builder yang menghasilkan:
+  - change1m
+  - change3m
+  - change5m
+  - change15m
+  - volume1m
+  - volume3m
+  - volume5m
+  - volume15mAvg
+  - volumeAcceleration
+  - volatilityScore
+  - momentumScore
+- Menulis ulang orderbookSnapshot.ts menjadi feature builder yang menghasilkan:
+  - bestBidSize
+  - bestAskSize
+  - bidDepthTop5
+  - askDepthTop5
+  - bidDepthTop10
+  - askDepthTop10
+  - orderbookImbalance
+  - depthScore
+  - spreadBps
+  - wallPressureScore
+- Menulis ulang pairClassifier.ts untuk:
+  - classify pair
+  - tier
+  - pair class
+  - quote/base asset
+  - regime hint
+- Menulis ulang strategi scoring:
+  - volumeSpike.ts
+  - orderbookImbalance.ts
+  - silentAccumulation.ts
+  - breakoutRetest.ts
+  - hotRotation.ts
+- Menulis ulang scoreCalculator.ts untuk menghasilkan:
+  - total score
+  - regime
+  - confidence
+  - breakoutPressure
+  - volumeAcceleration
+  - orderbookImbalance
+  - spreadPct
+  - reasons
+  - warnings
+  - contributions
+- Menulis ulang signalEngine.ts agar:
+  - menerima market snapshot bundle
+  - membangun ticker features + orderbook features
+  - menjalankan calculateScore
+  - mengembalikan SignalCandidate yang sesuai dengan core/types aktif
+
+Status:
+- Batch 2B selesai sebagai baseline signal/scoring pipeline yang sudah lebih sesuai dengan type aktif
+
+---
+
+### Batch 2C — Trading layer contract reset
+
+Tujuan:
+- Menyelaraskan seluruh trading layer ke type aktif
+- Menghubungkan hasil signal 2B ke jalur order/position/risk/execution
+
+Perubahan utama:
+- Menulis ulang orderManager.ts agar:
+  - memakai OrderRecord aktif
+  - status order uppercase
+  - mendukung create, update, markOpen, markPartiallyFilled, markFilled, cancel, reject, cancelAll
+- Menulis ulang positionManager.ts agar:
+  - memakai PositionRecord aktif
+  - mendukung open
+  - updateMark
+  - closePartial
+  - forceClose
+- Menulis ulang riskEngine.ts agar:
+  - memakai SignalCandidate aktif
+  - memakai BotSettings aktif
+  - mengecek spread, confidence, score, max open positions, max position size, cooldown, anti-spoof threshold
+  - membangun stopLossPrice dan takeProfitPrice
+  - mengevaluasi exit position
+- Menulis ulang executionEngine.ts agar:
+  - terhubung ke accountRegistry
+  - settingsService
+  - stateService
+  - riskEngine
+  - IndodaxClient
+  - positionManager
+  - orderManager
+  - journalService
+  - mendukung auto buy
+  - mendukung manual order
+  - mendukung manual sell
+  - mendukung evaluateOpenPositions
+  - mendukung cancelAllOrders
+  - mendukung sellAllPositions
+- Menambahkan bridge sementara inferEntryPrice() karena SignalCandidate aktif belum membawa payload harga entry yang eksplisit
+
+Status:
+- Batch 2C selesai sebagai trading baseline yang sudah nyambung ke hasil 2B
+
+---
+
+## Catatan penting hasil sesi ini
+
+1. Semua hasil refactor pada sesi ini diposisikan sebagai jalur runtime yang saling terhubung:
+   app/bootstrap -> market -> signal -> trading
+
+2. Keputusan yang harus tetap dijaga:
+- Telegram button UI tetap utama
+- whitelist user tetap aktif
+- legacy upload JSON accounts tetap didukung
+- account runtime tetap di data/accounts/accounts.json
+- src/app.ts tetap menjadi wiring utama
+
+3. Mismatch besar yang sudah ditutup pada sesi ini:
+- env contract lama vs camelCase env aktif
+- account layer lama vs runtime account store baru
+- signal output lama vs SignalCandidate aktif
+- trading layer lama vs OrderRecord/PositionRecord/BotSettings aktif
+
+4. Keterbatasan yang masih tersisa:
+- SignalCandidate saat ini belum membawa execution-ready entry price yang eksplisit
+- inferEntryPrice() masih bridge sementara
+- intelligence / microstructure / history / backtest / workers belum direfactor pada sesi ini
+
+---
+
+## Next target untuk sesi berikutnya
+
+Prioritas lanjutan:
+1. Batch 3A
+   - domain/intelligence/*
+   - domain/microstructure/*
+   - domain/history/*
+
+2. Batch 3B
+   - workers/*
+   - domain/backtest/*
+
+Tujuan batch berikutnya:
+- menambahkan validasi signal yang lebih matang
+- menilai trap/spoof/cluster/flow
+- menghubungkan scoring ke opportunity/execution-quality decision
+- mengurangi ketergantungan pada inferEntryPrice() bridge sementara
 Setelah itu baru lanjut ke:
 - `src/integrations/http/httpClient.ts`
 - `src/integrations/indodax/*`
