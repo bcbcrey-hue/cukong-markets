@@ -5,13 +5,17 @@ import { createApp } from './app';
 import { env } from './config/env';
 import { logger } from './core/logger';
 
-async function main(): Promise<void> {
+async function ensureRuntimeDirs(): Promise<void> {
   await mkdir(env.dataDir, { recursive: true });
-  await mkdir(env.logDir, { recursive: true });
   await mkdir(env.accountsDir, { recursive: true });
   await mkdir(env.stateDir, { recursive: true });
   await mkdir(env.historyDir, { recursive: true });
   await mkdir(env.backtestDir, { recursive: true });
+  await mkdir(env.logDir, { recursive: true });
+}
+
+async function main(): Promise<void> {
+  await ensureRuntimeDirs();
 
   const app = await createApp();
   await app.start();
