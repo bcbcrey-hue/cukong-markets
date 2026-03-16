@@ -1,23 +1,60 @@
-import type { TradeJournalEntry } from '../core/types';
+import type { JournalEntry } from '../core/types';
 import { PersistenceService } from './persistenceService';
 
 export class JournalService {
-  private trades: TradeJournalEntry\[] = \[];
+  private entries: JournalEntry[] = [];
 
   constructor(private readonly persistence: PersistenceService) {}
 
-  async load(): Promise<TradeJournalEntry\[]> {
-    const snapshot = await this.persistence.loadAll();
-    this.trades = snapshot.trades;
-    return this.trades;
+  async load(): Promise<JournalEntry[]> {
+    this.entries = await this.persistence.readJournal();
+    return this.entries;
   }
 
-  list(): TradeJournalEntry\[] {
-    return this.trades;
+  list(): JournalEntry[] {
+    return this.entries;
   }
 
-  async append(entry: TradeJournalEntry): Promise<void> {
-    this.trades = \[entry, ...this.trades].slice(0, 1000);
-    await this.persistence.saveTrades(this.trades);
+  recent(limit = 100): JournalEntry[] {
+    return this.entries.slice(-limit).reverse();
+  }
+
+  async append(entry: JournalEntry): Promise<JournalEntry> {
+    this.entries.push(entry);
+    await this.persistence.appendJournal(entry);
+    return entry;
+  }
+
+  async info(title: string, message: string, payload?: Record<string, unknown>): Promise<void> {
+    await this.append({
+      id: crypto.randomUUID(),
+      type: 'INFO',
+      title,
+      message,
+      payload,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  async warn(title: string, message: string, payload?: Record<string, unknown>): Promise<void> {
+    await this.append({
+      id: crypto.randomUUID(),
+      type: 'WARN',
+      title,
+      message,
+      payload,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  async error(title: string, message: string, payload?: Record<string, unknown>): Promise<void> {
+    await this.append({
+      id: crypto.randomUUID(),
+      type: 'ERROR',
+      title,
+      message,
+      payload,
+      createdAt: new Date().toISOString(),
+    });
   }
 }
