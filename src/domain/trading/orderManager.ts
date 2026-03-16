@@ -1,91 +1,147 @@
 import { randomUUID } from 'node:crypto';
-import type { OrderSide, OrderStatus, RuntimeOrder } from '../../core/types';
-import { nowIso } from '../../utils/time';
+import type { OrderRecord, OrderSide, OrderType } from '../../core/types';
 import { PersistenceService } from '../../services/persistenceService';
+import { nowIso } from '../../utils/time';
+
+export interface CreateOrderInput {
+  accountId: string;
+  pair: string;
+  side: OrderSide;
+  type: OrderType;
+  price: number;
+  quantity: number;
+  source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO';
+  status?: OrderRecord['status'];
+  averageFillPrice?: number | null;
+  filledQuantity?: number;
+  notes?: string;
+}
 
 export class OrderManager {
-  private orders: RuntimeOrder\[] = \[];
+  private orders: OrderRecord[] = [];
 
   constructor(private readonly persistence: PersistenceService) {}
 
-  async load(): Promise<RuntimeOrder\[]> {
+  async load(): Promise<OrderRecord[]> {
     const snapshot = await this.persistence.loadAll();
-    this.orders = snapshot.orders;
+    this.orders = Array.isArray(snapshot.orders) ? snapshot.orders : [];
     return this.orders;
   }
 
-  list(): RuntimeOrder\[] {
-    return this.orders;
+  list(): OrderRecord[] {
+    return [...this.orders];
   }
 
-  listActive(): RuntimeOrder\[] {
-    return this.orders.filter((item) => item.status === 'pending' || item.status === 'open' || item.status === 'partial');
+  listActive(): OrderRecord[] {
+    return this.orders.filter(
+      (item) =>
+        item.status === 'NEW' ||
+        item.status === 'OPEN' ||
+        item.status === 'PARTIALLY_FILLED',
+    );
   }
 
-  getById(orderId: string): RuntimeOrder | undefined {
+  getById(orderId: string): OrderRecord | undefined {
     return this.orders.find((item) => item.id === orderId);
   }
 
-  async create(input: {
-    accountId: string;
-    pair: string;
-    side: OrderSide;
-    type?: 'market' | 'limit';
-    price: number;
-    quantity: number;
-    status?: OrderStatus;
-    reason?: string;
-    externalOrderId?: string;
-  }): Promise<RuntimeOrder> {
+  async create(input: CreateOrderInput): Promise<OrderRecord> {
     const now = nowIso();
-    const order: RuntimeOrder = {
+
+    const order: OrderRecord = {
       id: randomUUID(),
-      accountId: input.accountId,
       pair: input.pair,
+      accountId: input.accountId,
       side: input.side,
-      type: input.type ?? 'limit',
+      type: input.type,
+      status: input.status ?? 'NEW',
       price: input.price,
       quantity: input.quantity,
-      filledQuantity: 0,
-      status: input.status ?? 'pending',
+      filledQuantity: input.filledQuantity ?? 0,
+      averageFillPrice: input.averageFillPrice ?? null,
+      notionalIdr: input.price * input.quantity,
       createdAt: now,
       updatedAt: now,
-      externalOrderId: input.externalOrderId,
-      reason: input.reason,
+      source: input.source,
+      notes: input.notes,
     };
-    this.orders = \[order, ...this.orders];
+
+    this.orders = [order, ...this.orders];
     await this.persistence.saveOrders(this.orders);
     return order;
   }
 
-  async update(orderId: string, patch: Partial<RuntimeOrder>): Promise<RuntimeOrder | undefined> {
+  async update(
+    orderId: string,
+    patch: Partial<OrderRecord>,
+  ): Promise<OrderRecord | undefined> {
     const current = this.getById(orderId);
     if (!current) {
       return undefined;
     }
-    const next: RuntimeOrder = { ...current, ...patch, updatedAt: nowIso() };
+
+    const next: OrderRecord = {
+      ...current,
+      ...patch,
+      updatedAt: nowIso(),
+      notionalIdr:
+        (patch.price ?? current.price) * (patch.quantity ?? current.quantity),
+    };
+
     this.orders = this.orders.map((item) => (item.id === orderId ? next : item));
     await this.persistence.saveOrders(this.orders);
     return next;
   }
 
-  async markFilled(orderId: string, filledQuantity: number, avgPrice?: number): Promise<RuntimeOrder | undefined> {
+  async markOpen(orderId: string): Promise<OrderRecord | undefined> {
+    return this.update(orderId, { status: 'OPEN' });
+  }
+
+  async markPartiallyFilled(
+    orderId: string,
+    filledQuantity: number,
+    averageFillPrice?: number,
+  ): Promise<OrderRecord | undefined> {
     return this.update(orderId, {
+      status: 'PARTIALLY_FILLED',
       filledQuantity,
-      price: avgPrice ?? this.getById(orderId)?.price ?? 0,
-      status: 'filled',
+      averageFillPrice: averageFillPrice ?? this.getById(orderId)?.averageFillPrice ?? null,
     });
   }
 
-  async cancel(orderId: string, reason = 'manual cancel'): Promise<RuntimeOrder | undefined> {
-    return this.update(orderId, { status: 'canceled', reason });
+  async markFilled(
+    orderId: string,
+    filledQuantity: number,
+    averageFillPrice?: number,
+  ): Promise<OrderRecord | undefined> {
+    return this.update(orderId, {
+      status: 'FILLED',
+      filledQuantity,
+      averageFillPrice: averageFillPrice ?? this.getById(orderId)?.averageFillPrice ?? null,
+    });
   }
 
-  async cancelAll(reason = 'emergency cancel'): Promise<number> {
+  async cancel(orderId: string, notes = 'manual cancel'): Promise<OrderRecord | undefined> {
+    return this.update(orderId, {
+      status: 'CANCELED',
+      notes,
+    });
+  }
+
+  async reject(orderId: string, notes = 'order rejected'): Promise<OrderRecord | undefined> {
+    return this.update(orderId, {
+      status: 'REJECTED',
+      notes,
+    });
+  }
+
+  async cancelAll(notes = 'emergency cancel all'): Promise<number> {
     const active = this.listActive();
+
     for (const order of active) {
-      await this.cancel(order.id, reason);
+      await this.cancel(order.id, notes);
     }
+
     return active.length;
   }
 }
