@@ -1,47 +1,116 @@
-import type { BotSettings, TradingMode } from '../../core/types';
-import { PersistenceService } from '../../services/persistenceService';
+import type {
+  BacktestSettings,
+  BotSettings,
+  RiskSettings,
+  ScannerSettings,
+  StrategySettings,
+  TradingMode,
+  WorkerSettings,
+} from '../../core/types';
+import {
+  PersistenceService,
+  createDefaultSettings,
+} from '../../services/persistenceService';
 
 export class SettingsService {
-  private settings: BotSettings | null = null;
+  private settings: BotSettings = createDefaultSettings();
 
   constructor(private readonly persistence: PersistenceService) {}
 
   async load(): Promise<BotSettings> {
-    const snapshot = await this.persistence.loadAll();
-    this.settings = snapshot.settings;
+    this.settings = await this.persistence.readSettings();
     return this.settings;
   }
 
   get(): BotSettings {
-    if (!this.settings) {
-      throw new Error('Settings not loaded');
-    }
     return this.settings;
   }
 
-  async replace(next: BotSettings): Promise<void> {
-    this.settings = next;
-    await this.persistence.saveSettings(next);
+  async replace(next: BotSettings): Promise<BotSettings> {
+    this.settings = {
+      ...next,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.persistence.saveSettings(this.settings);
+    return this.settings;
+  }
+
+  async patch(partial: Partial<BotSettings>): Promise<BotSettings> {
+    return this.replace({
+      ...this.settings,
+      ...partial,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async setTradingMode(mode: TradingMode): Promise<BotSettings> {
-    const current = this.get();
-    const next = { ...current, tradingMode: mode };
-    await this.replace(next);
-    return next;
+    return this.patch({
+      tradingMode: mode,
+    });
   }
 
-  async patchRisk(partial: Partial<BotSettings\['risk']>): Promise<BotSettings> {
-    const current = this.get();
-    const next = { ...current, risk: { ...current.risk, ...partial } };
-    await this.replace(next);
-    return next;
+  async patchRisk(partial: Partial<RiskSettings>): Promise<BotSettings> {
+    return this.patch({
+      risk: {
+        ...this.settings.risk,
+        ...partial,
+      },
+    });
   }
 
-  async patchStrategy(partial: Partial<BotSettings\['strategy']>): Promise<BotSettings> {
-    const current = this.get();
-    const next = { ...current, strategy: { ...current.strategy, ...partial } };
-    await this.replace(next);
-    return next;
+  async patchStrategy(
+    partial: Partial<StrategySettings>,
+  ): Promise<BotSettings> {
+    return this.patch({
+      strategy: {
+        ...this.settings.strategy,
+        ...partial,
+      },
+    });
+  }
+
+  async patchScanner(
+    partial: Partial<ScannerSettings>,
+  ): Promise<BotSettings> {
+    return this.patch({
+      scanner: {
+        ...this.settings.scanner,
+        ...partial,
+      },
+    });
+  }
+
+  async patchWorkers(
+    partial: Partial<WorkerSettings>,
+  ): Promise<BotSettings> {
+    return this.patch({
+      workers: {
+        ...this.settings.workers,
+        ...partial,
+      },
+    });
+  }
+
+  async patchBacktest(
+    partial: Partial<BacktestSettings>,
+  ): Promise<BotSettings> {
+    return this.patch({
+      backtest: {
+        ...this.settings.backtest,
+        ...partial,
+      },
+    });
+  }
+
+  async setUiOnly(uiOnly: boolean): Promise<BotSettings> {
+    return this.patch({ uiOnly });
+  }
+
+  async setDryRun(dryRun: boolean): Promise<BotSettings> {
+    return this.patch({ dryRun });
+  }
+
+  async setPaperTrade(paperTrade: boolean): Promise<BotSettings> {
+    return this.patch({ paperTrade });
   }
 }
