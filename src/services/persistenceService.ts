@@ -1,125 +1,289 @@
-import path from 'node:path';
 import { env } from '../config/env';
 import type {
-  AccountsMeta,
+  BacktestRunResult,
   BotSettings,
-  PairMetrics,
-  PersistenceSnapshot,
-  RuntimeOrder,
-  RuntimePosition,
+  HealthSnapshot,
+  HotlistEntry,
+  JournalEntry,
+  OpportunityAssessment,
+  OrderRecord,
+  PositionRecord,
   RuntimeState,
-  SignalCandidate,
-  TradeJournalEntry,
+  TradeRecord,
 } from '../core/types';
-import { JsonStore } from '../storage/jsonStore';
+import { JsonLinesStore, JsonStore } from '../storage/jsonStore';
 
-const defaultRuntimeState = (): RuntimeState => ({
-  started: false,
-  startedAt: null,
-  updatedAt: new Date().toISOString(),
-  uptimeMs: 0,
-  lastSignalAt: null,
-  lastTradeAt: null,
-  lastErrorAt: null,
-  lastErrorMessage: null,
-  marketWatcherRunning: false,
-  tradingMode: 'OFF',
-  pairCooldowns: {},
-  cacheStats: { hit: 0, miss: 0 },
-  pollingStats: { activeJobs: 0, tickCount: 0, lastTickAt: null },
-});
+export interface PersistenceSnapshot {
+  state: RuntimeState;
+  settings: BotSettings;
+  health: HealthSnapshot;
+  orders: OrderRecord[];
+  positions: PositionRecord[];
+  trades: TradeRecord[];
+}
 
-const defaultAccountsMeta = (): AccountsMeta => ({
-  lastUpdatedAt: null,
-  defaultAccountId: null,
-  source: 'manual',
-  totalAccounts: 0,
-});
+export function createDefaultRuntimeState(): RuntimeState {
+  return {
+    status: 'IDLE',
+    startedAt: null,
+    stoppedAt: null,
+    lastUpdatedAt: new Date().toISOString(),
+    activeTradingMode: env.defaultTradingMode,
+    pairCooldowns: {},
+    pairs: {},
+    lastHotlist: [],
+    lastSignals: [],
+    lastOpportunities: [],
+    emergencyStop: false,
+  };
+}
 
-const defaultSettings = (): BotSettings => ({
-  tradingMode: 'OFF',
-  dryRun: env.DRY\_RUN,
-  paperTrade: env.PAPER\_TRADE,
-  uiOnly: env.TELEGRAM\_BOT\_UI\_ONLY,
-  strategy: {
-    scoreWatchlistThreshold: 60,
-    scoreAlertThreshold: 75,
-    scoreAutoEntryThreshold: 85,
-    enableVolumeSpike: true,
-    enableOrderbookImbalance: true,
-    enableSilentAccumulation: true,
-    enableBreakoutRetest: true,
-    enableHotRotation: true,
-  },
-  risk: {
-    maxModalPerTrade: env.MAX\_POSITION\_SIZE\_IDR,
-    maxActivePositionsTotal: env.MAX\_ACTIVE\_POSITIONS,
-    maxActivePositionsPerAccount: 2,
-    maxExposurePerPair: 1,
-    cooldownMinutesPerPair: env.PAIR\_COOLDOWN\_MINUTES,
-    maxSlippagePct: env.MAX\_SLIPPAGE\_PCT,
-    maxSpreadPct: env.MAX\_SPREAD\_PCT,
-    minLiquidityScore: 25,
-    orderFillTimeoutMs: 15\_000,
-    cancelStaleOrderMs: 30\_000,
-    maxConsecutiveLosses: 3,
-  },
-});
+export function createDefaultSettings(): BotSettings {
+  return {
+    tradingMode: env.defaultTradingMode,
+    dryRun: true,
+    paperTrade: true,
+    uiOnly: false,
+    defaultQuoteAsset: env.defaultQuoteAsset,
+    risk: {
+      maxOpenPositions: env.riskMaxOpenPositions,
+      maxPositionSizeIdr: env.riskMaxPositionSizeIdr,
+      maxPairSpreadPct: env.riskMaxPairSpreadPct,
+      cooldownMs: env.riskCooldownMs,
+      maxDailyLossIdr: 500_000,
+      takeProfitPct: 3,
+      stopLossPct: 1.5,
+      trailingStopPct: 1,
+    },
+    strategy: {
+      minScoreToAlert: 60,
+      minScoreToBuy: 75,
+      minPumpProbability: env.probabilityThresholdAuto,
+      minConfidence: env.confidenceThresholdAuto,
+      spoofRiskBlockThreshold: env.spoofRiskBlockThreshold,
+      useAntiSpoof: true,
+      useHistoricalContext: true,
+      usePatternMatching: true,
+      useEntryTiming: true,
+    },
+    scanner: {
+      enabled: true,
+      pollingIntervalMs: env.pollingIntervalMs,
+      marketWatchIntervalMs: env.marketWatchIntervalMs,
+      hotlistLimit: env.hotlistLimit,
+      maxPairsTracked: env.maxPairsTracked,
+      orderbookDepthLevels: env.orderbookDepthLevels,
+      scannerHistoryLimit: env.scannerHistoryLimit,
+    },
+    workers: {
+      enabled: env.workerEnabled,
+      poolSize: env.workerPoolSize,
+    },
+    backtest: {
+      enabled: true,
+      maxReplayItems: 20_000,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function createDefaultHealth(): HealthSnapshot {
+  return {
+    status: 'healthy',
+    updatedAt: new Date().toISOString(),
+    runtimeStatus: 'IDLE',
+    scannerRunning: false,
+    telegramRunning: false,
+    tradingEnabled: false,
+    activePairsTracked: 0,
+    workers: [],
+    notes: [],
+  };
+}
 
 export class PersistenceService {
-  private readonly stateStore = new JsonStore<RuntimeState>(path.join(env.DATA\_DIR, 'state.json'), defaultRuntimeState());
-  private readonly positionsStore = new JsonStore<RuntimePosition\[]>(path.join(env.DATA\_DIR, 'positions.json'), \[]);
-  private readonly ordersStore = new JsonStore<RuntimeOrder\[]>(path.join(env.DATA\_DIR, 'orders.json'), \[]);
-  private readonly tradesStore = new JsonStore<TradeJournalEntry\[]>(path.join(env.DATA\_DIR, 'trades.json'), \[]);
-  private readonly pairMetricsStore = new JsonStore<PairMetrics\[]>(path.join(env.DATA\_DIR, 'pair-metrics.json'), \[]);
-  private readonly hotlistStore = new JsonStore<SignalCandidate\[]>(path.join(env.DATA\_DIR, 'hotlist.json'), \[]);
-  private readonly accountsMetaStore = new JsonStore<AccountsMeta>(path.join(env.DATA\_DIR, 'accounts-meta.json'), defaultAccountsMeta());
-  private readonly settingsStore = new JsonStore<BotSettings>(path.join(env.DATA\_DIR, 'settings.json'), defaultSettings());
+  private readonly stateStore = new JsonStore<RuntimeState>({
+    filePath: env.stateFile,
+    fallback: createDefaultRuntimeState(),
+  });
+
+  private readonly settingsStore = new JsonStore<BotSettings>({
+    filePath: env.settingsFile,
+    fallback: createDefaultSettings(),
+  });
+
+  private readonly healthStore = new JsonStore<HealthSnapshot>({
+    filePath: env.healthFile,
+    fallback: createDefaultHealth(),
+  });
+
+  private readonly ordersStore = new JsonStore<OrderRecord[]>({
+    filePath: env.ordersFile,
+    fallback: [],
+  });
+
+  private readonly positionsStore = new JsonStore<PositionRecord[]>({
+    filePath: env.positionsFile,
+    fallback: [],
+  });
+
+  private readonly tradesStore = new JsonStore<TradeRecord[]>({
+    filePath: env.tradesFile,
+    fallback: [],
+  });
+
+  private readonly journalStore = new JsonLinesStore<JournalEntry>(env.journalFile);
+  private readonly pairHistoryStore = new JsonLinesStore<Record<string, unknown>>(env.pairHistoryFile);
+  private readonly anomalyEventsStore = new JsonLinesStore<Record<string, unknown>>(env.anomalyEventsFile);
+  private readonly patternOutcomesStore = new JsonLinesStore<Record<string, unknown>>(env.patternOutcomesFile);
+
+  async bootstrap(): Promise<void> {
+    await Promise.all([
+      this.stateStore.read(),
+      this.settingsStore.read(),
+      this.healthStore.read(),
+      this.ordersStore.read(),
+      this.positionsStore.read(),
+      this.tradesStore.read(),
+      this.journalStore.ensureDir(),
+      this.pairHistoryStore.ensureDir(),
+      this.anomalyEventsStore.ensureDir(),
+      this.patternOutcomesStore.ensureDir(),
+    ]);
+  }
 
   async loadAll(): Promise<PersistenceSnapshot> {
-    const \[state, positions, orders, trades, pairMetrics, hotlist, accountsMeta, settings] = await Promise.all(\[
+    const [state, settings, health, orders, positions, trades] = await Promise.all([
       this.stateStore.read(),
-      this.positionsStore.read(),
-      this.ordersStore.read(),
-      this.tradesStore.read(),
-      this.pairMetricsStore.read(),
-      this.hotlistStore.read(),
-      this.accountsMetaStore.read(),
       this.settingsStore.read(),
+      this.healthStore.read(),
+      this.ordersStore.read(),
+      this.positionsStore.read(),
+      this.tradesStore.read(),
     ]);
 
-    return { state, positions, orders, trades, pairMetrics, hotlist, accountsMeta, settings };
+    return {
+      state,
+      settings,
+      health,
+      orders,
+      positions,
+      trades,
+    };
+  }
+
+  readState(): Promise<RuntimeState> {
+    return this.stateStore.read();
   }
 
   saveState(state: RuntimeState): Promise<void> {
     return this.stateStore.write(state);
   }
 
-  savePositions(positions: RuntimePosition\[]): Promise<void> {
-    return this.positionsStore.write(positions);
-  }
-
-  saveOrders(orders: RuntimeOrder\[]): Promise<void> {
-    return this.ordersStore.write(orders);
-  }
-
-  saveTrades(trades: TradeJournalEntry\[]): Promise<void> {
-    return this.tradesStore.write(trades);
-  }
-
-  savePairMetrics(metrics: PairMetrics\[]): Promise<void> {
-    return this.pairMetricsStore.write(metrics);
-  }
-
-  saveHotlist(hotlist: SignalCandidate\[]): Promise<void> {
-    return this.hotlistStore.write(hotlist);
-  }
-
-  saveAccountsMeta(meta: AccountsMeta): Promise<void> {
-    return this.accountsMetaStore.write(meta);
+  readSettings(): Promise<BotSettings> {
+    return this.settingsStore.read();
   }
 
   saveSettings(settings: BotSettings): Promise<void> {
-    return this.settingsStore.write(settings);
+    return this.settingsStore.write({
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  readHealth(): Promise<HealthSnapshot> {
+    return this.healthStore.read();
+  }
+
+  saveHealth(health: HealthSnapshot): Promise<void> {
+    return this.healthStore.write({
+      ...health,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  readOrders(): Promise<OrderRecord[]> {
+    return this.ordersStore.read();
+  }
+
+  saveOrders(orders: OrderRecord[]): Promise<void> {
+    return this.ordersStore.write(orders);
+  }
+
+  readPositions(): Promise<PositionRecord[]> {
+    return this.positionsStore.read();
+  }
+
+  savePositions(positions: PositionRecord[]): Promise<void> {
+    return this.positionsStore.write(positions);
+  }
+
+  readTrades(): Promise<TradeRecord[]> {
+    return this.tradesStore.read();
+  }
+
+  saveTrades(trades: TradeRecord[]): Promise<void> {
+    return this.tradesStore.write(trades);
+  }
+
+  appendJournal(entry: JournalEntry): Promise<void> {
+    return this.journalStore.append(entry);
+  }
+
+  readJournal(): Promise<JournalEntry[]> {
+    return this.journalStore.readAll();
+  }
+
+  appendPairHistory(entry: Record<string, unknown>): Promise<void> {
+    return this.pairHistoryStore.append(entry);
+  }
+
+  readPairHistory(): Promise<Record<string, unknown>[]> {
+    return this.pairHistoryStore.readAll();
+  }
+
+  appendAnomalyEvent(entry: Record<string, unknown>): Promise<void> {
+    return this.anomalyEventsStore.append(entry);
+  }
+
+  readAnomalyEvents(): Promise<Record<string, unknown>[]> {
+    return this.anomalyEventsStore.readAll();
+  }
+
+  appendPatternOutcome(entry: Record<string, unknown>): Promise<void> {
+    return this.patternOutcomesStore.append(entry);
+  }
+
+  readPatternOutcomes(): Promise<Record<string, unknown>[]> {
+    return this.patternOutcomesStore.readAll();
+  }
+
+  async saveHotlistSnapshot(hotlist: HotlistEntry[]): Promise<void> {
+    const state = await this.readState();
+    await this.saveState({
+      ...state,
+      lastHotlist: hotlist,
+      lastUpdatedAt: new Date().toISOString(),
+    });
+  }
+
+  async saveOpportunitySnapshot(opportunities: OpportunityAssessment[]): Promise<void> {
+    const state = await this.readState();
+    await this.saveState({
+      ...state,
+      lastOpportunities: opportunities,
+      lastUpdatedAt: new Date().toISOString(),
+    });
+  }
+
+  async saveBacktestResult(result: BacktestRunResult): Promise<void> {
+    await this.appendJournal({
+      id: result.runId,
+      type: 'BACKTEST',
+      title: 'Backtest completed',
+      message: `Backtest selesai untuk ${result.pairsTested.join(', ') || 'multiple pairs'}`,
+      payload: result as unknown as Record<string, unknown>,
+      createdAt: new Date().toISOString(),
+    });
   }
 }
