@@ -1,17 +1,38 @@
-import { mkdir } from 'node:fs/promises';
-import { env } from './config/env';
+import 'dotenv/config';
 import { createApp } from './app';
-import { logger } from './core/logger';
 
 async function main(): Promise<void> {
-  await mkdir(env.DATA\_DIR, { recursive: true });
-  await mkdir(env.LOG\_DIR, { recursive: true });
-
   const app = await createApp();
   await app.start();
+
+  const shutdown = async (signal: NodeJS.Signals) => {
+    try {
+      await app.stop();
+      process.exit(0);
+    } catch (error) {
+      console.error(`Failed to shutdown on ${signal}:`, error);
+      process.exit(1);
+    }
+  };
+
+  process.once('SIGINT', () => {
+    void shutdown('SIGINT');
+  });
+
+  process.once('SIGTERM', () => {
+    void shutdown('SIGTERM');
+  });
+
+  process.once('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+  });
+
+  process.once('unhandledRejection', (reason) => {
+    console.error('Unhandled rejection:', reason);
+  });
 }
 
-main().catch((error: unknown) => {
-  logger.error({ error }, 'bootstrap failed');
+void main().catch((error) => {
+  console.error('Fatal bootstrap error:', error);
   process.exit(1);
 });
