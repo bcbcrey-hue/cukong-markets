@@ -1,36 +1,53 @@
-import type { PairTier, TickerSnapshot } from '../../core/types';
+import type { MarketRegime } from '../../core/types';
 
-const tierAKeywords = \['btc', 'eth', 'sol', 'bnb', 'idr'];
-const tierBKeywords = \['doge', 'xrp', 'ada', 'link', 'pepe', 'shib'];
+export type PairTier = 'A' | 'B' | 'C';
+export type PairClass = 'MAJOR' | 'MID' | 'MICRO';
 
-export function classifyTier(pair: string, snapshot?: TickerSnapshot | null): PairTier {
-  const normalized = pair.toLowerCase();
-
-  if (snapshot \&\& snapshot.tradeBurstScore >= 75) {
-    return 'HOT';
-  }
-
-  if (tierAKeywords.some((item) => normalized.includes(item))) {
-    return 'A';
-  }
-
-  if (tierBKeywords.some((item) => normalized.includes(item))) {
-    return 'B';
-  }
-
-  return 'C';
+export interface PairClassification {
+  pair: string;
+  tier: PairTier;
+  pairClass: PairClass;
+  quoteAsset: string;
+  baseAsset: string;
+  regimeHint: MarketRegime;
 }
 
-export function tierIntervalMs(tier: PairTier): number {
-  switch (tier) {
-    case 'HOT':
-      return 900;
-    case 'A':
-      return 2\_500;
-    case 'B':
-      return 5\_000;
-    case 'C':
-    default:
-      return 10\_000;
+const MAJORS = new Set(['btc', 'eth', 'sol']);
+const MID_CAPS = new Set(['xrp', 'ada', 'doge', 'trx', 'bnb', 'pepe', 'shib']);
+
+function splitPair(pair: string): { baseAsset: string; quoteAsset: string } {
+  const normalized = pair.toLowerCase();
+  const [baseAsset, quoteAsset = 'idr'] = normalized.split('_');
+  return { baseAsset, quoteAsset };
+}
+
+export function classifyPair(pair: string): PairClassification {
+  const { baseAsset, quoteAsset } = splitPair(pair);
+
+  let tier: PairTier = 'C';
+  let pairClass: PairClass = 'MICRO';
+  let regimeHint: MarketRegime = 'QUIET';
+
+  if (MAJORS.has(baseAsset)) {
+    tier = 'A';
+    pairClass = 'MAJOR';
+    regimeHint = 'ACCUMULATION';
+  } else if (MID_CAPS.has(baseAsset)) {
+    tier = 'B';
+    pairClass = 'MID';
+    regimeHint = 'BREAKOUT_SETUP';
   }
+
+  return {
+    pair,
+    tier,
+    pairClass,
+    quoteAsset,
+    baseAsset,
+    regimeHint,
+  };
+}
+
+export function classifyTier(pair: string): PairTier {
+  return classifyPair(pair).tier;
 }
