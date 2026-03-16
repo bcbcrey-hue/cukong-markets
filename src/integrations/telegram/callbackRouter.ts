@@ -1,29 +1,61 @@
-export interface ParsedCallback {
-  namespace: string;
+export type TelegramNamespace =
+  | 'NAV'
+  | 'ACC'
+  | 'SET'
+  | 'SIG'
+  | 'BUY'
+  | 'POS'
+  | 'EMG'
+  | 'BKT';
+
+export interface TelegramCallbackPayload {
+  namespace: TelegramNamespace;
   action: string;
-  accountId?: string;
+  value?: string;
   pair?: string;
 }
 
-export function buildCallback(namespace: string, action: string, accountId?: string, pair?: string): string {
-  const parts = \[namespace, action, accountId ?? '', pair ?? ''];
+export function buildCallback(payload: TelegramCallbackPayload): string {
+  const parts = [
+    payload.namespace,
+    payload.action,
+    payload.value ?? '',
+    payload.pair ?? '',
+  ];
+
   return parts.join('|').slice(0, 64);
 }
 
-export function parseCallback(value: string): ParsedCallback | null {
-  if (!value || value.length > 64) {
+export function parseCallback(raw: string): TelegramCallbackPayload | null {
+  if (!raw || raw.length > 64) {
     return null;
   }
 
-  const \[namespace, action, accountId, pair] = value.split('|');
+  const [namespace, action, value, pair] = raw.split('|');
+
   if (!namespace || !action) {
     return null;
   }
 
+  const allowedNamespaces: TelegramNamespace[] = [
+    'NAV',
+    'ACC',
+    'SET',
+    'SIG',
+    'BUY',
+    'POS',
+    'EMG',
+    'BKT',
+  ];
+
+  if (!allowedNamespaces.includes(namespace as TelegramNamespace)) {
+    return null;
+  }
+
   return {
-    namespace,
+    namespace: namespace as TelegramNamespace,
     action,
-    accountId: accountId || undefined,
+    value: value || undefined,
     pair: pair || undefined,
   };
 }
