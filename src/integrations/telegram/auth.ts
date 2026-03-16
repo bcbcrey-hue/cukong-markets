@@ -1,8 +1,24 @@
+import type { Context } from 'telegraf';
 import { env } from '../../config/env';
 
-export function isAllowedUser(userId: number): boolean {
-  if (!env.TELEGRAM\_ALLOWED\_USER\_IDS.length) {
+export function isTelegramUserAllowed(userId?: number): boolean {
+  if (!userId) {
     return false;
   }
-  return env.TELEGRAM\_ALLOWED\_USER\_IDS.includes(userId);
+
+  if (env.telegramAllowedUserIds.length === 0) {
+    return false;
+  }
+
+  return env.telegramAllowedUserIds.includes(userId);
+}
+
+export async function denyTelegramAccess(ctx: Context): Promise<boolean> {
+  const userId = ctx.from?.id;
+  if (isTelegramUserAllowed(userId)) {
+    return false;
+  }
+
+  await ctx.reply('Access denied.');
+  return true;
 }
