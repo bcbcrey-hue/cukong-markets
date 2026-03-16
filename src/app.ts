@@ -2,6 +2,7 @@ import { logger } from './core/logger';
 import { LightScheduler } from './core/scheduler';
 import { registerShutdown } from './core/shutdown';
 import { env } from './config/env';
+
 import { AccountRegistry } from './domain/accounts/accountRegistry';
 import { AccountStore } from './domain/accounts/accountStore';
 import { HotlistService } from './domain/market/hotlistService';
@@ -13,8 +14,10 @@ import { ExecutionEngine } from './domain/trading/executionEngine';
 import { OrderManager } from './domain/trading/orderManager';
 import { PositionManager } from './domain/trading/positionManager';
 import { RiskEngine } from './domain/trading/riskEngine';
+
 import { IndodaxClient } from './integrations/indodax/client';
 import { TelegramBot } from './integrations/telegram/bot';
+
 import { HealthService } from './services/healthService';
 import { JournalService } from './services/journalService';
 import { PersistenceService } from './services/persistenceService';
@@ -22,10 +25,12 @@ import { PollingService } from './services/pollingService';
 import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
 
-export async function createApp(): Promise<{
-  start: () => Promise<void>;
-  stop: () => Promise<void>;
-}> {
+export interface AppRuntime {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
+export async function createApp(): Promise<AppRuntime> {
   const scheduler = new LightScheduler();
   const polling = new PollingService(scheduler);
 
@@ -33,10 +38,14 @@ export async function createApp(): Promise<{
   const state = new StateService(persistence);
   const settings = new SettingsService(persistence);
   const journal = new JournalService(persistence);
-  const orderManager = new OrderManager(persistence);
-  const positionManager = new PositionManager(persistence);
+
   const accountStore = new AccountStore();
   const accountRegistry = new AccountRegistry(accountStore);
+
+  const orderManager = new OrderManager(persistence);
+  const positionManager = new PositionManager(persistence);
+  const health = new HealthService(persistence, state);
+  const report = new ReportService();
 
   await Promise.all([
     state.load(),
@@ -44,25 +53,22 @@ export async function createApp(): Promise<{
     journal.load(),
     orderManager.load(),
     positionManager.load(),
-    accountRegistry.reload(),
+    accountRegistry.initialize(),
+    health.load(),
   ]);
 
-  const report = new ReportService();
-  const health = new HealthService(persistence, state);
-  await health.load();
-
-  const universe = new PairUniverse();
+  const pairUniverse = new PairUniverse();
   const indodax = new IndodaxClient();
-  const watcher = new MarketWatcher(indodax, universe);
-  const signals = new SignalEngine(universe);
-  const hotlist = new HotlistService();
-  const risk = new RiskEngine();
+  const marketWatcher = new MarketWatcher(indodax, pairUniverse);
+  const signalEngine = new SignalEngine(pairUniverse);
+  const hotlistService = new HotlistService();
+  const riskEngine = new RiskEngine();
 
-  const execution = new ExecutionEngine(
+  const executionEngine = new ExecutionEngine(
     accountRegistry,
     settings,
     state,
-    risk,
+    riskEngine,
     indodax,
     positionManager,
     orderManager,
@@ -73,44 +79,46 @@ export async function createApp(): Promise<{
     report,
     health,
     state,
-    hotlist,
+    hotlist: hotlistService,
     positions: positionManager,
     orders: orderManager,
     accounts: accountRegistry,
     accountStore,
     settings,
-    execution,
+    execution: executionEngine,
     journal,
   });
 
-  polling.register('market-watch', env.pollingIntervalMs, async () => {
+  polling.register('market-scan', env.pollingIntervalMs, async () => {
     const runtime = state.get();
 
     if (runtime.status !== 'RUNNING' || runtime.emergencyStop) {
       return;
     }
 
-    const bundles = await watcher.batchSnapshot(4);
+    const snapshots = await marketWatcher.batchSnapshot(6);
+    const scored = signalEngine.scoreMany(snapshots);
+    const hotlist = hotlistService.update(scored);
 
-    for (const bundle of bundles) {
-      await positionManager.updateMark(bundle.pair, bundle.ticker.lastPrice);
-      await state.markPairSeen(bundle.pair);
-    }
-
-    const scored = signals.scoreMany(bundles);
-    const hotlistItems = hotlist.update(scored);
-
-    await persistence.saveHotlist(hotlistItems);
-    await persistence.savePairMetrics(universe.exportMetrics(watcher.exportHistory()));
     await state.setSignals(scored);
-    await state.setHotlist(hotlistItems);
+    await state.setHotlist(hotlist);
 
-    if (hotlistItems[0]) {
-      await state.markSignal(hotlistItems[0].pair);
+    await persistence.saveHotlist(hotlist);
+    await persistence.savePairMetrics(
+      pairUniverse.exportMetrics(marketWatcher.exportHistory()),
+    );
+
+    for (const item of snapshots) {
+      await positionManager.updateMark(item.pair, item.ticker.lastPrice);
+      await state.markPairSeen(item.pair);
     }
 
+    const top = hotlist[0];
     const currentSettings = settings.get();
-    const top = hotlistItems[0];
+
+    if (top) {
+      await state.markSignal(top.pair);
+    }
 
     if (
       top &&
@@ -118,11 +126,11 @@ export async function createApp(): Promise<{
       top.score >= currentSettings.strategy.scoreAutoEntryThreshold
     ) {
       try {
-        const result = await execution.attemptAutoBuy(top);
-        logger.info({ pair: top.pair, result }, 'auto-buy evaluated');
+        await executionEngine.attemptAutoBuy(top);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'auto-buy error';
-        await state.setStatus('ERROR');
+        const message =
+          error instanceof Error ? error.message : 'unknown auto-buy failure';
+
         await journal.error('AUTO_BUY_FAILED', message, {
           pair: top.pair,
         });
@@ -130,21 +138,17 @@ export async function createApp(): Promise<{
     }
   });
 
-  polling.register('position-exit-check', 5_000, async () => {
+  polling.register('position-monitor', 5_000, async () => {
     const runtime = state.get();
 
     if (runtime.status !== 'RUNNING' || runtime.emergencyStop) {
       return;
     }
 
-    const exits = await execution.evaluateOpenPositions();
-
-    if (exits.length > 0) {
-      logger.info({ exits }, 'position exits executed');
-    }
+    await executionEngine.evaluateOpenPositions();
   });
 
-  polling.register('heartbeat', 5_000, async () => {
+  polling.register('health-heartbeat', 5_000, async () => {
     const runtime = state.get();
 
     await state.patch({
@@ -166,38 +170,30 @@ export async function createApp(): Promise<{
       orders: orderManager.list(),
       notes: [
         `mode=${settings.get().tradingMode}`,
-        `accountsEnabled=${accountRegistry.listEnabled().length}`,
+        `accountsEnabled=${accountRegistry.countEnabled()}`,
+        `hotlistCount=${state.get().hotlist.length}`,
       ],
     });
   });
 
   const start = async (): Promise<void> => {
-    await state.setStatus('STARTING');
     await state.setTradingMode(settings.get().tradingMode);
+    await state.setStatus('STARTING');
 
-    polling.start();
     await telegram.start();
+    polling.start();
 
     await state.setStatus('RUNNING');
 
-    await health.build({
-      scannerRunning: true,
-      telegramRunning: true,
-      tradingEnabled: settings.get().tradingMode !== 'OFF',
-      positions: positionManager.list(),
-      orders: orderManager.list(),
-      notes: [`startupMode=${settings.get().tradingMode}`],
-    });
-
     await journal.info('APP_STARTED', 'mafiamarkets app started', {
-      accounts: accountRegistry.listEnabled().length,
       mode: settings.get().tradingMode,
+      activeAccounts: accountRegistry.countEnabled(),
     });
 
     logger.info(
       {
-        accounts: accountRegistry.listEnabled().length,
         mode: settings.get().tradingMode,
+        activeAccounts: accountRegistry.countEnabled(),
       },
       'mafiamarkets app started',
     );
@@ -221,7 +217,6 @@ export async function createApp(): Promise<{
     });
 
     await journal.info('APP_STOPPED', 'mafiamarkets app stopped');
-
     logger.info('mafiamarkets app stopped');
   };
 
