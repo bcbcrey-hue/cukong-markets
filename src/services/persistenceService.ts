@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { env } from '../config/env';
 import type {
   BacktestRunResult,
@@ -291,6 +293,11 @@ export class PersistenceService {
   }
 
   async saveBacktestResult(result: BacktestRunResult): Promise<void> {
+    await mkdir(env.backtestDir, { recursive: true });
+    const outputFile = path.resolve(env.backtestDir, `${result.runId}.json`);
+
+    await writeFile(outputFile, JSON.stringify(result, null, 2), 'utf8');
+
     await this.appendJournal({
       id: result.runId,
       type: 'BACKTEST',

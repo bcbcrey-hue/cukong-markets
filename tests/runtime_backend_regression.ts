@@ -19,6 +19,8 @@ import { PersistenceService, createDefaultSettings } from '../src/services/persi
 import { ReportService } from '../src/services/reportService';
 import { StateService } from '../src/services/stateService';
 import { HotlistService } from '../src/domain/market/hotlistService';
+import { WorkerPoolService } from '../src/services/workerPoolService';
+import { BacktestEngine } from '../src/domain/backtest/backtestEngine';
 import { buildCallback, parseCallback } from '../src/integrations/telegram/callbackRouter';
 
 class FakeIndodaxClient {
@@ -287,6 +289,59 @@ async function main() {
   assert.equal(state.get().tradeCount, beforeTradeCount + 1, 'tradeCount should increase by 1');
   const afterCooldown = state.get().pairCooldowns[validOpportunity.pair] ?? 0;
   assert.ok(afterCooldown > beforeCooldown, 'pair cooldown should be updated');
+
+  // Module: worker pool + backtest replay.
+  const workerPool = new WorkerPoolService(1, true);
+  await workerPool.start();
+
+  const featureTask = await workerPool.runFeatureTask({
+    snapshot: snapshots[0],
+    signal: signals[0],
+    recentSnapshots: [snapshots[0]],
+  });
+  assert.ok(
+    Number.isFinite(featureTask.accumulationScore),
+    'Feature worker should return valid microstructure features',
+  );
+
+  const backtestSettings = {
+    ...strictSettings,
+    workers: {
+      ...strictSettings.workers,
+      enabled: true,
+    },
+    strategy: {
+      ...strictSettings.strategy,
+      minScoreToBuy: 40,
+      minPumpProbability: 0.4,
+      minConfidence: 0.4,
+    },
+  };
+
+  const backtest = new BacktestEngine(persistence, workerPool);
+  const backtestResult = await backtest.run(
+    { pair: 'btc_idr', maxEvents: 100 },
+    backtestSettings,
+  );
+  assert.ok(backtestResult.signalsGenerated > 0, 'Backtest should replay at least one signal');
+
+  const backtestFiles = await fs.readdir(path.resolve(tempDataDir, 'backtest'));
+  assert.ok(
+    backtestFiles.includes(`${backtestResult.runId}.json`),
+    'Backtest result file should be persisted',
+  );
+
+  const workerStats = workerPool.snapshot();
+  assert.ok(
+    workerStats.some((worker) => worker.name === 'feature' && worker.jobsProcessed >= 1),
+    'Feature worker should process at least one task',
+  );
+  assert.ok(
+    workerStats.some((worker) => worker.name === 'backtest' && worker.jobsProcessed >= 1),
+    'Backtest worker should process at least one task',
+  );
+
+  await workerPool.stop();
 
   console.log('PASS runtime_backend_regression');
 }

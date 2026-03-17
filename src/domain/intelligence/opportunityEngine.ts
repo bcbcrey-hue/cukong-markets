@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import type { MarketSnapshot, OpportunityAssessment, SignalCandidate } from '../../core/types';
 import { clamp } from '../../utils/math';
 import { PairHistoryStore } from '../history/pairHistoryStore';
+import type { WorkerPoolService } from '../../services/workerPoolService';
 import { EdgeValidator } from './edgeValidator';
 import { EntryTimingEngine } from './entryTimingEngine';
 import { FeaturePipeline } from './featurePipeline';
@@ -16,6 +17,7 @@ export class OpportunityEngine {
     private readonly edgeValidator = new EdgeValidator(),
     private readonly scoreExplainer = new ScoreExplainer(),
     private readonly entryTimingEngine = new EntryTimingEngine(),
+    private readonly workerPool?: WorkerPoolService,
   ) {}
 
   async assess(
@@ -23,7 +25,13 @@ export class OpportunityEngine {
     signal: SignalCandidate,
   ): Promise<OpportunityAssessment> {
     const recentSnapshots = this.history.getRecentSnapshots(snapshot.pair, 20);
-    const microstructure = this.featurePipeline.build(snapshot, signal, recentSnapshots);
+    const microstructure = this.workerPool
+      ? await this.workerPool.runFeatureTask({
+          snapshot,
+          signal,
+          recentSnapshots,
+        })
+      : this.featurePipeline.build(snapshot, signal, recentSnapshots);
     const historicalContext = await this.history.buildContext(
       snapshot.pair,
       signal,

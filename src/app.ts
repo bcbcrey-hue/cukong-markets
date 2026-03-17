@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { AccountRegistry } from './domain/accounts/accountRegistry';
 import { PairHistoryStore } from './domain/history/pairHistoryStore';
 import { OpportunityEngine } from './domain/intelligence/opportunityEngine';
+import { WorkerPoolService } from './services/workerPoolService';
 import { AccountStore } from './domain/accounts/accountStore';
 import { HotlistService } from './domain/market/hotlistService';
 import { MarketWatcher } from './domain/market/marketWatcher';
@@ -42,6 +43,7 @@ export async function createApp(): Promise<AppRuntime> {
   const state = new StateService(persistence);
   const settings = new SettingsService(persistence);
   const journal = new JournalService(persistence);
+  const workerPool = new WorkerPoolService();
 
   const accountStore = new AccountStore();
   const accountRegistry = new AccountRegistry(accountStore);
@@ -66,7 +68,15 @@ export async function createApp(): Promise<AppRuntime> {
   const marketWatcher = new MarketWatcher(indodax, pairUniverse);
   const history = new PairHistoryStore(persistence);
   const signalEngine = new SignalEngine(pairUniverse);
-  const opportunityEngine = new OpportunityEngine(history);
+  const opportunityEngine = new OpportunityEngine(
+    history,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    workerPool,
+  );
   const hotlistService = new HotlistService();
   const riskEngine = new RiskEngine();
 
@@ -198,11 +208,13 @@ export async function createApp(): Promise<AppRuntime> {
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
       positions: positionManager.list(),
       orders: orderManager.list(),
+      workers: workerPool.snapshot(),
       notes: [
         `mode=${settings.get().tradingMode}`,
         `accountsEnabled=${accountRegistry.countEnabled()}`,
         `hotlistCount=${state.get().lastHotlist.length}`,
         `tradeCount=${state.get().tradeCount}`,
+        `workersEnabled=${settings.get().workers.enabled}`,
       ],
     });
   });
@@ -210,6 +222,10 @@ export async function createApp(): Promise<AppRuntime> {
   const start = async (): Promise<void> => {
     await state.setTradingMode(settings.get().tradingMode);
     await state.setStatus('STARTING');
+
+    if (settings.get().workers.enabled) {
+      await workerPool.start();
+    }
 
     await telegram.start();
     polling.start();
@@ -225,6 +241,7 @@ export async function createApp(): Promise<AppRuntime> {
       {
         mode: settings.get().tradingMode,
         activeAccounts: accountRegistry.countEnabled(),
+        workers: workerPool.snapshot().length,
       },
       'mafiamarkets app started',
     );
@@ -235,6 +252,7 @@ export async function createApp(): Promise<AppRuntime> {
 
     polling.stop();
     await telegram.stop();
+    await workerPool.stop();
 
     await state.setStatus('STOPPED');
 
@@ -244,6 +262,7 @@ export async function createApp(): Promise<AppRuntime> {
       tradingEnabled: false,
       positions: positionManager.list(),
       orders: orderManager.list(),
+      workers: workerPool.snapshot(),
       notes: ['shutdown'],
     });
 
