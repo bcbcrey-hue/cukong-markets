@@ -19,23 +19,39 @@ export class HttpClient {
   }
 
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return withRetry(async () => {
-      const response = await this.client.get<T>(url, config);
-      return response.data;
-    }, { retries: 2, baseDelayMs: 250 });
+    return withRetry(
+      async () => {
+        const response = await this.client.get<T>(url, config);
+        return response.data;
+      },
+      { retries: 2, baseDelayMs: 250 },
+    );
   }
 
-  async postForm<T>(url: string, body: URLSearchParams | Record<string, string | number>, config?: AxiosRequestConfig): Promise<T> {
-    const payload = body instanceof URLSearchParams ? body : new URLSearchParams(Object.entries(body).map((\[key, value]) => \[key, String(value)]));
-    return withRetry(async () => {
-      const response = await this.client.post<T>(url, payload, {
-        ...config,
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          ...(config?.headers ?? {}),
-        },
-      });
-      return response.data;
-    }, { retries: 2, baseDelayMs: 250 });
+  async postForm<T>(
+    url: string,
+    body: URLSearchParams | Record<string, string | number>,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
+    const payload =
+      body instanceof URLSearchParams
+        ? body
+        : new URLSearchParams(
+            Object.entries(body).map(([key, value]) => [key, String(value)]),
+          );
+
+    return withRetry(
+      async () => {
+        const response = await this.client.post<T>(url, payload, {
+          ...config,
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            ...(config?.headers ?? {}),
+          },
+        });
+        return response.data;
+      },
+      { retries: 2, baseDelayMs: 250 },
+    );
   }
 }

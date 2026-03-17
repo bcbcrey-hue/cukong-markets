@@ -79,7 +79,7 @@ export class JsonStore<T> {
   }
 }
 
-export class JsonLinesStore<T extends Record<string, unknown>> {
+export class JsonLinesStore<T extends object> {
   constructor(private readonly filePath: string) {}
 
   getPath(): string {

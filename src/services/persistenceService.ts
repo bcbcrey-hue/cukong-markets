@@ -28,12 +28,20 @@ export function createDefaultRuntimeState(): RuntimeState {
     startedAt: null,
     stoppedAt: null,
     lastUpdatedAt: new Date().toISOString(),
+    uptimeMs: 0,
     activeTradingMode: env.defaultTradingMode,
     pairCooldowns: {},
     pairs: {},
     lastHotlist: [],
     lastSignals: [],
     lastOpportunities: [],
+    tradeCount: 0,
+    lastTradeAt: null,
+    pollingStats: {
+      activeJobs: 0,
+      tickCount: 0,
+      lastTickAt: null,
+    },
     emergencyStop: false,
   };
 }
@@ -133,9 +141,15 @@ export class PersistenceService {
   });
 
   private readonly journalStore = new JsonLinesStore<JournalEntry>(env.journalFile);
-  private readonly pairHistoryStore = new JsonLinesStore<Record<string, unknown>>(env.pairHistoryFile);
-  private readonly anomalyEventsStore = new JsonLinesStore<Record<string, unknown>>(env.anomalyEventsFile);
-  private readonly patternOutcomesStore = new JsonLinesStore<Record<string, unknown>>(env.patternOutcomesFile);
+  private readonly pairHistoryStore = new JsonLinesStore<Record<string, unknown>>(
+    env.pairHistoryFile,
+  );
+  private readonly anomalyEventsStore = new JsonLinesStore<Record<string, unknown>>(
+    env.anomalyEventsFile,
+  );
+  private readonly patternOutcomesStore = new JsonLinesStore<Record<string, unknown>>(
+    env.patternOutcomesFile,
+  );
 
   async bootstrap(): Promise<void> {
     await Promise.all([

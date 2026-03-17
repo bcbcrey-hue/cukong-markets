@@ -329,7 +329,19 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     if (parsed.namespace === 'POS' && parsed.action.startsWith('SELL') && parsed.value) {
       const fraction = getSellFraction(parsed.action);
-      const result = await deps.execution.manualSell(parsed.value, fraction, 'manual');
+      const position = deps.positions.getById(parsed.value);
+
+      if (!position) {
+        await ctx.reply('Posisi tidak ditemukan.');
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      const result = await deps.execution.manualSell(
+        parsed.value,
+        position.quantity * fraction,
+        'MANUAL',
+      );
       await ctx.reply(result);
       await ctx.answerCbQuery();
       return;
@@ -403,7 +415,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     const userFlow = getUserFlow(userId);
-    const text = 'text' in ctx.message ? ctx.message.text.trim() : '';
+    const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
 
     if (!userFlow.pendingBuyPair) {
       return;
@@ -424,7 +436,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
-    const result = await deps.execution.buy(account.id, signal, amountIdr, 'manual-buy');
+    const result = await deps.execution.buy(account.id, signal, amountIdr, 'MANUAL');
     userFlow.pendingBuyPair = undefined;
     await ctx.reply(result, mainMenuKeyboard);
   });

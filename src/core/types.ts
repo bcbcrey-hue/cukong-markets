@@ -148,6 +148,13 @@ export interface SignalCandidate {
   volumeAcceleration: number;
   orderbookImbalance: number;
   spreadPct: number;
+  marketPrice: number;
+  bestBid: number;
+  bestAsk: number;
+  liquidityScore: number;
+  change1m: number;
+  change5m: number;
+  contributions: ScoreContribution[];
   timestamp: number;
 }
 
@@ -227,11 +234,24 @@ export interface OpportunityAssessment {
   spoofRisk: number;
   edgeValid: boolean;
   marketRegime: MarketRegime;
+  breakoutPressure: number;
+  volumeAcceleration: number;
+  orderbookImbalance: number;
+  change1m: number;
+  change5m: number;
   entryTiming: EntryTimingAssessment;
   reasons: string[];
   warnings: string[];
   featureBreakdown: ScoreContribution[];
   historicalContext?: HistoricalContext;
+  recommendedAction: 'WATCH' | 'PREPARE_ENTRY' | 'CONFIRM_ENTRY' | 'AVOID' | 'ENTER';
+  riskContext: string[];
+  historicalMatchSummary: string;
+  referencePrice: number;
+  bestBid: number;
+  bestAsk: number;
+  spreadPct: number;
+  liquidityScore: number;
   timestamp: number;
 }
 
@@ -300,12 +320,20 @@ export interface RuntimeState {
   startedAt: string | null;
   stoppedAt: string | null;
   lastUpdatedAt: string;
+  uptimeMs: number;
   activeTradingMode: TradingMode;
   pairCooldowns: Record<string, number>;
   pairs: Record<string, PairRuntimeState>;
   lastHotlist: HotlistEntry[];
   lastSignals: SignalCandidate[];
   lastOpportunities: OpportunityAssessment[];
+  tradeCount: number;
+  lastTradeAt: string | null;
+  pollingStats: {
+    activeJobs: number;
+    tickCount: number;
+    lastTickAt: string | null;
+  };
   emergencyStop: boolean;
 }
 
@@ -366,7 +394,14 @@ export interface ManualOrderRequest {
 export interface AutoExecutionDecision {
   shouldEnter: boolean;
   shouldExit: boolean;
-  action: 'NONE' | 'WATCH' | 'PREPARE_ENTRY' | 'ENTER' | 'EXIT' | 'AVOID';
+  action:
+    | 'NONE'
+    | 'WATCH'
+    | 'PREPARE_ENTRY'
+    | 'CONFIRM_ENTRY'
+    | 'ENTER'
+    | 'EXIT'
+    | 'AVOID';
   reasons: string[];
 }
 

@@ -1,0 +1,48 @@
+{
+  "summary": "Backend-only verification completed for TypeScript compile/build, runtime market->signal->opportunity pipeline, persistence/history writes, risk checks, simulated execution, and telegram/report contract smoke tests.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "riskEngine.evaluateExit",
+        "issue": "Trailing-stop branch is logically unreachable: condition uses pnlPct >= trailingTrigger AND pnlPct <= trailingTrigger - trailingStopPct. With positive trailingStopPct this can never be true, so TRAILING_STOP exits never trigger.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "marketWatcher.batchSnapshot",
+        "issue": "change24hPct is computed with reversed arguments (using low24h as current and lastPrice as previous), which biases result toward zero/negative and does not represent real 24h change."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/runtime_backend_regression.ts"
+  ],
+  "action_items": [
+    "Fix trailing-stop formula/logic in src/domain/trading/riskEngine.ts evaluateExit() so drawdown-from-peak behavior can actually trigger.",
+    "Fix 24h change calculation direction in src/domain/market/marketWatcher.ts and ensure it reflects actual historical reference.",
+    "Re-run runtime regression script after fixes with isolated DATA_DIR."
+  ],
+  "critical_code_review_comments": [
+    "Core exit-risk control is currently incomplete due to unreachable trailing-stop branch.",
+    "Market snapshot change24hPct computation does not align with expected financial semantics and can mislead downstream scoring/analytics."
+  ],
+  "updated_files": [
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/test_reports/iteration_1.json"
+  ],
+  "success_rate": {
+    "backend": "90%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data. Tests used isolated temp DATA_DIR (/tmp/mafiamarkets-regression-*).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Compile and lint pass (yarn build, yarn lint). Runtime regression passes via: TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-regression-2 yarn tsx /app/tests/runtime_backend_regression.ts. Keep backend-only scope.",
+  "rca of the issue": "RCA#1 trailing-stop: implementation compares pnlPct to a static trigger and a lower bound derived from the same trigger, creating an impossible interval; likely intended trailing logic needs peak-profit tracking or inverse comparison. RCA#2 24h change: percentChange(current, previous) helper is called with low24h as current and lastPrice as previous, effectively reversing direction and distorting the metric."
+}

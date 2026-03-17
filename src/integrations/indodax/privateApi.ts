@@ -6,6 +6,11 @@ export interface IndodaxPrivateApiOptions {
   apiSecret: string;
 }
 
+function getSellAssetKey(pair: string): string {
+  const [baseAsset] = pair.toLowerCase().split('_');
+  return baseAsset || 'amount';
+}
+
 export class PrivateApi {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -50,12 +55,14 @@ export class PrivateApi {
     return this.post<T>('getInfo');
   }
 
-  trade<T>(pair: string, type: 'buy' | 'sell', price: number, idr: number): Promise<T> {
+  trade<T>(pair: string, type: 'buy' | 'sell', price: number, amount: number): Promise<T> {
+    const amountField = type === 'buy' ? 'idr' : getSellAssetKey(pair);
+
     return this.post<T>('trade', {
       pair,
       type,
       price,
-      idr,
+      [amountField]: amount,
     });
   }
 

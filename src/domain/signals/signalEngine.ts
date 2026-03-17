@@ -1,36 +1,9 @@
-import type { SignalCandidate } from '../../core/types';
+import type { MarketSnapshot, SignalCandidate } from '../../core/types';
 import { OrderbookSnapshotBuilder } from '../market/orderbookSnapshot';
 import { classifyPair } from '../market/pairClassifier';
 import type { PairUniverse } from '../market/pairUniverse';
 import { TickerSnapshotStore } from '../market/tickerSnapshot';
 import { calculateScore } from './scoreCalculator';
-
-export interface MarketSnapshotBundle {
-  pair: string;
-  ticker: {
-    pair: string;
-    lastPrice: number;
-    bid: number;
-    ask: number;
-    high24h: number;
-    low24h: number;
-    volume24hBase: number;
-    volume24hQuote: number;
-    change24hPct: number;
-    timestamp: number;
-  };
-  orderbook: {
-    pair: string;
-    bids: Array<{ price: number; volume: number }>;
-    asks: Array<{ price: number; volume: number }>;
-    bestBid: number;
-    bestAsk: number;
-    spread: number;
-    spreadPct: number;
-    midPrice: number;
-    timestamp: number;
-  };
-}
 
 export class SignalEngine {
   private readonly tickerSnapshots = new TickerSnapshotStore();
@@ -38,10 +11,28 @@ export class SignalEngine {
 
   constructor(private readonly _universe: PairUniverse) {}
 
-  score(bundle: MarketSnapshotBundle): SignalCandidate {
+  score(bundle: MarketSnapshot): SignalCandidate {
     const classification = classifyPair(bundle.pair);
     const tickerFeatures = this.tickerSnapshots.buildFeatures(bundle.ticker);
-    const orderbookFeatures = this.orderbookSnapshots.build(bundle.orderbook);
+    const orderbookFeatures = this.orderbookSnapshots.build(
+      bundle.orderbook ?? {
+        pair: bundle.pair,
+        bids: [],
+        asks: [],
+        bestBid: bundle.ticker.bid,
+        bestAsk: bundle.ticker.ask,
+        spread: Math.max(0, bundle.ticker.ask - bundle.ticker.bid),
+        spreadPct:
+          bundle.ticker.ask > 0
+            ? ((bundle.ticker.ask - bundle.ticker.bid) / bundle.ticker.ask) * 100
+            : 0,
+        midPrice:
+          bundle.ticker.ask > 0 && bundle.ticker.bid > 0
+            ? (bundle.ticker.ask + bundle.ticker.bid) / 2
+            : bundle.ticker.lastPrice,
+        timestamp: bundle.timestamp,
+      },
+    );
 
     const scored = calculateScore({
       classification,
@@ -60,11 +51,18 @@ export class SignalEngine {
       volumeAcceleration: scored.volumeAcceleration,
       orderbookImbalance: scored.orderbookImbalance,
       spreadPct: scored.spreadPct,
+      marketPrice: bundle.ticker.lastPrice,
+      bestBid: bundle.ticker.bid,
+      bestAsk: bundle.ticker.ask,
+      liquidityScore: orderbookFeatures.depthScore,
+      change1m: tickerFeatures.change1m,
+      change5m: tickerFeatures.change5m,
+      contributions: scored.contributions,
       timestamp: bundle.ticker.timestamp,
     };
   }
 
-  scoreMany(bundles: MarketSnapshotBundle[]): SignalCandidate[] {
+  scoreMany(bundles: MarketSnapshot[]): SignalCandidate[] {
     return bundles.map((item) => this.score(item)).sort((a, b) => b.score - a.score);
   }
 }

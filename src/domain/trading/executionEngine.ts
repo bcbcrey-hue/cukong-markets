@@ -2,6 +2,7 @@ import type {
   AutoExecutionDecision,
   BotSettings,
   ManualOrderRequest,
+  OpportunityAssessment,
   PositionRecord,
   SignalCandidate,
   TradingMode,
@@ -17,11 +18,7 @@ import { OrderManager } from './orderManager';
 import { PositionManager } from './positionManager';
 import { RiskEngine } from './riskEngine';
 
-function inferEntryPrice(signal: SignalCandidate): number {
-  const spreadMultiplier = 1 + Math.max(0.0005, signal.spreadPct / 100);
-  const baseAnchor = Math.max(1, signal.breakoutPressure + signal.volumeAcceleration);
-  return baseAnchor * spreadMultiplier;
-}
+type ExecutionCandidate = SignalCandidate | OpportunityAssessment;
 
 export class ExecutionEngine {
   constructor(
@@ -45,7 +42,35 @@ export class ExecutionEngine {
     );
   }
 
-  decideAutoExecution(signal: SignalCandidate): AutoExecutionDecision {
+  private getExecutionPrice(candidate: ExecutionCandidate): number {
+    if ('referencePrice' in candidate) {
+      return candidate.bestAsk > 0 ? candidate.bestAsk : candidate.referencePrice;
+    }
+
+    return candidate.bestAsk > 0 ? candidate.bestAsk : candidate.marketPrice;
+  }
+
+  private getCandidateScore(candidate: ExecutionCandidate): number {
+    return 'finalScore' in candidate ? candidate.finalScore : candidate.score;
+  }
+
+  private getCandidateNotes(candidate: ExecutionCandidate): string {
+    if ('finalScore' in candidate) {
+      return [
+        `finalScore=${candidate.finalScore.toFixed(2)}`,
+        `pumpProbability=${candidate.pumpProbability.toFixed(3)}`,
+        `confidence=${candidate.confidence.toFixed(3)}`,
+        `action=${candidate.recommendedAction}`,
+      ].join('; ');
+    }
+
+    return [
+      `score=${candidate.score.toFixed(2)}`,
+      `confidence=${candidate.confidence.toFixed(3)}`,
+    ].join('; ');
+  }
+
+  decideAutoExecution(candidate: ExecutionCandidate): AutoExecutionDecision {
     const settings = this.settings.get();
 
     if (settings.tradingMode === 'OFF') {
@@ -57,7 +82,7 @@ export class ExecutionEngine {
       };
     }
 
-    if (signal.score < settings.strategy.minScoreToAlert) {
+    if (this.getCandidateScore(candidate) < settings.strategy.minScoreToAlert) {
       return {
         shouldEnter: false,
         shouldExit: false,
@@ -66,7 +91,7 @@ export class ExecutionEngine {
       };
     }
 
-    if (signal.score < settings.strategy.minScoreToBuy) {
+    if (this.getCandidateScore(candidate) < settings.strategy.minScoreToBuy) {
       return {
         shouldEnter: false,
         shouldExit: false,
@@ -75,7 +100,7 @@ export class ExecutionEngine {
       };
     }
 
-    if (signal.confidence < settings.strategy.minConfidence) {
+    if (candidate.confidence < settings.strategy.minConfidence) {
       return {
         shouldEnter: false,
         shouldExit: false,
@@ -84,15 +109,44 @@ export class ExecutionEngine {
       };
     }
 
+    if ('finalScore' in candidate) {
+      if (!candidate.edgeValid) {
+        return {
+          shouldEnter: false,
+          shouldExit: false,
+          action: 'AVOID',
+          reasons: ['Opportunity belum lolos edge validation'],
+        };
+      }
+
+      if (candidate.pumpProbability < settings.strategy.minPumpProbability) {
+        return {
+          shouldEnter: false,
+          shouldExit: false,
+          action: 'PREPARE_ENTRY',
+          reasons: ['Pump probability belum cukup tinggi'],
+        };
+      }
+
+      if (candidate.entryTiming.state === 'LATE' || candidate.entryTiming.state === 'AVOID') {
+        return {
+          shouldEnter: false,
+          shouldExit: false,
+          action: 'AVOID',
+          reasons: ['Timing entry tidak layak'],
+        };
+      }
+    }
+
     return {
       shouldEnter: true,
       shouldExit: false,
-      action: settings.tradingMode === 'FULL_AUTO' ? 'ENTER' : 'PREPARE_ENTRY',
+      action: settings.tradingMode === 'FULL_AUTO' ? 'ENTER' : 'CONFIRM_ENTRY',
       reasons: ['Signal memenuhi syarat entry'],
     };
   }
 
-  async attemptAutoBuy(signal: SignalCandidate): Promise<string> {
+  async attemptAutoBuy(signal: ExecutionCandidate): Promise<string> {
     const settings = this.settings.get();
     const decision = this.decideAutoExecution(signal);
 
@@ -110,7 +164,7 @@ export class ExecutionEngine {
 
   async buy(
     accountId: string,
-    signal: SignalCandidate,
+    signal: ExecutionCandidate,
     amountIdr: number,
     source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO' = 'MANUAL',
   ): Promise<string> {
@@ -134,7 +188,7 @@ export class ExecutionEngine {
       throw new Error(riskResult.reasons.join('; '));
     }
 
-    const entryPrice = inferEntryPrice(signal);
+    const entryPrice = this.getExecutionPrice(signal);
     const quantity = entryPrice > 0 ? amountIdr / entryPrice : 0;
     const stops = this.risk.buildStops(entryPrice, settings);
 
@@ -147,7 +201,7 @@ export class ExecutionEngine {
       quantity,
       source,
       status: 'OPEN',
-      notes: `score=${signal.score}; confidence=${signal.confidence}`,
+      notes: this.getCandidateNotes(signal),
     });
 
     if (this.shouldSimulate(settings.tradingMode, settings)) {
@@ -173,7 +227,7 @@ export class ExecutionEngine {
           accountId,
           entryPrice,
           quantity,
-          signalScore: signal.score,
+          signalScore: this.getCandidateScore(signal),
           signalConfidence: signal.confidence,
           source,
         },
@@ -221,6 +275,13 @@ export class ExecutionEngine {
       volumeAcceleration: 10,
       orderbookImbalance: 0.2,
       spreadPct: 0.2,
+      marketPrice: request.price ?? 0,
+      bestBid: request.price ?? 0,
+      bestAsk: request.price ?? 0,
+      liquidityScore: 100,
+      change1m: 0,
+      change5m: 0,
+      contributions: [],
       timestamp: Date.now(),
     };
 

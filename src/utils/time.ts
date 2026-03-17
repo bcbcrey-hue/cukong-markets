@@ -7,7 +7,7 @@ export function nowMs(): number {
 }
 
 export function minutesToMs(minutes: number): number {
-  return Math.max(0, minutes) \* 60\_000;
+  return Math.max(0, minutes) * 60_000;
 }
 
 export function sleep(ms: number): Promise<void> {

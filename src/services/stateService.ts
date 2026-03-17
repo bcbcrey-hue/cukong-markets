@@ -170,4 +170,11 @@ export class StateService {
       pairs: nextPairs,
     });
   }
+
+  async markTrade(): Promise<RuntimeState> {
+    return this.patch({
+      tradeCount: this.state.tradeCount + 1,
+      lastTradeAt: new Date().toISOString(),
+    });
+  }
 }

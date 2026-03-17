@@ -15,7 +15,10 @@ export class PollingService {
     this.scheduler.stop(name);
   }
 
-  stats(): { activeJobs: number; jobs: { name: string; intervalMs: number; running: boolean }\[] } {
+  stats(): {
+    activeJobs: number;
+    jobs: { name: string; intervalMs: number; running: boolean }[];
+  } {
     const jobs = this.scheduler.list();
     return {
       activeJobs: jobs.length,

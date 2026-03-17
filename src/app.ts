@@ -4,6 +4,8 @@ import { registerShutdown } from './core/shutdown';
 import { env } from './config/env';
 
 import { AccountRegistry } from './domain/accounts/accountRegistry';
+import { PairHistoryStore } from './domain/history/pairHistoryStore';
+import { OpportunityEngine } from './domain/intelligence/opportunityEngine';
 import { AccountStore } from './domain/accounts/accountStore';
 import { HotlistService } from './domain/market/hotlistService';
 import { MarketWatcher } from './domain/market/marketWatcher';
@@ -35,6 +37,8 @@ export async function createApp(): Promise<AppRuntime> {
   const polling = new PollingService(scheduler);
 
   const persistence = new PersistenceService();
+  await persistence.bootstrap();
+
   const state = new StateService(persistence);
   const settings = new SettingsService(persistence);
   const journal = new JournalService(persistence);
@@ -60,7 +64,9 @@ export async function createApp(): Promise<AppRuntime> {
   const pairUniverse = new PairUniverse();
   const indodax = new IndodaxClient();
   const marketWatcher = new MarketWatcher(indodax, pairUniverse);
+  const history = new PairHistoryStore(persistence);
   const signalEngine = new SignalEngine(pairUniverse);
+  const opportunityEngine = new OpportunityEngine(history);
   const hotlistService = new HotlistService();
   const riskEngine = new RiskEngine();
 
@@ -91,30 +97,50 @@ export async function createApp(): Promise<AppRuntime> {
 
   polling.register('market-scan', env.pollingIntervalMs, async () => {
     const runtime = state.get();
+    const currentSettings = settings.get();
 
-    if (runtime.status !== 'RUNNING' || runtime.emergencyStop) {
+    if (
+      runtime.status !== 'RUNNING' ||
+      runtime.emergencyStop ||
+      !currentSettings.scanner.enabled
+    ) {
       return;
     }
 
-    const snapshots = await marketWatcher.batchSnapshot(6);
-    const scored = signalEngine.scoreMany(snapshots);
-    const hotlist = hotlistService.update(scored);
-
-    await state.setSignals(scored);
-    await state.setHotlist(hotlist);
-
-    await persistence.saveHotlist(hotlist);
-    await persistence.savePairMetrics(
-      pairUniverse.exportMetrics(marketWatcher.exportHistory()),
+    const scanLimit = Math.min(
+      currentSettings.scanner.maxPairsTracked,
+      Math.max(currentSettings.scanner.hotlistLimit * 2, 12),
     );
 
-    for (const item of snapshots) {
-      await positionManager.updateMark(item.pair, item.ticker.lastPrice);
-      await state.markPairSeen(item.pair);
+    const snapshots = await marketWatcher.batchSnapshot(scanLimit);
+    for (const snapshot of snapshots) {
+      await history.recordSnapshot(snapshot);
     }
 
-    const top = hotlist[0];
-    const currentSettings = settings.get();
+    const scored = signalEngine.scoreMany(snapshots);
+    for (const signal of scored) {
+      await history.recordSignal(signal);
+    }
+
+    const opportunities = await opportunityEngine.assessMany(snapshots, scored);
+    for (const opportunity of opportunities) {
+      await history.recordOpportunity(opportunity);
+    }
+
+    const hotlist = hotlistService.update(opportunities);
+
+    await state.setSignals(scored);
+    await state.setOpportunities(opportunities);
+    await state.setHotlist(hotlist);
+    await persistence.saveHotlistSnapshot(hotlist);
+    await persistence.saveOpportunitySnapshot(opportunities);
+
+    for (const snapshot of snapshots) {
+      await positionManager.updateMark(snapshot.pair, snapshot.ticker.lastPrice);
+      await state.markPairSeen(snapshot.pair);
+    }
+
+    const top = opportunities[0];
 
     if (top) {
       await state.markSignal(top.pair);
@@ -123,7 +149,10 @@ export async function createApp(): Promise<AppRuntime> {
     if (
       top &&
       currentSettings.tradingMode === 'FULL_AUTO' &&
-      top.score >= currentSettings.strategy.scoreAutoEntryThreshold
+      top.edgeValid &&
+      top.recommendedAction === 'ENTER' &&
+      top.pumpProbability >= currentSettings.strategy.minPumpProbability &&
+      top.confidence >= currentSettings.strategy.minConfidence
     ) {
       try {
         await executionEngine.attemptAutoBuy(top);
@@ -133,6 +162,7 @@ export async function createApp(): Promise<AppRuntime> {
 
         await journal.error('AUTO_BUY_FAILED', message, {
           pair: top.pair,
+          action: top.recommendedAction,
         });
       }
     }
@@ -171,7 +201,8 @@ export async function createApp(): Promise<AppRuntime> {
       notes: [
         `mode=${settings.get().tradingMode}`,
         `accountsEnabled=${accountRegistry.countEnabled()}`,
-        `hotlistCount=${state.get().hotlist.length}`,
+        `hotlistCount=${state.get().lastHotlist.length}`,
+        `tradeCount=${state.get().tradeCount}`,
       ],
     });
   });

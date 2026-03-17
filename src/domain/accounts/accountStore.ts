@@ -32,16 +32,19 @@ function createAccountId(name: string): string {
 }
 
 export class AccountStore {
-  private readonly accountsStore = new JsonStore<StoredAccount[]>(env.accountsFile, []);
-  private readonly metaStore = new JsonStore<AccountsMeta>(
-    path.resolve(env.dataDir, 'accounts-meta.json'),
-    {
+  private readonly accountsStore = new JsonStore<StoredAccount[]>({
+    filePath: env.accountsFile,
+    fallback: [],
+  });
+  private readonly metaStore = new JsonStore<AccountsMeta>({
+    filePath: path.resolve(env.accountsDir, 'accounts-meta.json'),
+    fallback: {
       lastUpdatedAt: null,
       defaultAccountId: null,
       source: 'manual',
       totalAccounts: 0,
     },
-  );
+  });
 
   getFilePath(): string {
     return this.accountsStore.getPath();

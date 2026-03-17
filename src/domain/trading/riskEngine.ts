@@ -1,5 +1,6 @@
 import type {
   BotSettings,
+  OpportunityAssessment,
   PositionRecord,
   RiskCheckResult,
   SignalCandidate,
@@ -9,7 +10,7 @@ import type {
 export interface RiskEntryCheckInput {
   account: StoredAccount;
   settings: BotSettings;
-  signal: SignalCandidate;
+  signal: SignalCandidate | OpportunityAssessment;
   openPositions: PositionRecord[];
   amountIdr: number;
   cooldownUntil?: number | null;
@@ -29,6 +30,30 @@ function pctChange(from: number, to: number): number {
 }
 
 export class RiskEngine {
+  private getPair(signal: SignalCandidate | OpportunityAssessment): string {
+    return signal.pair;
+  }
+
+  private getScore(signal: SignalCandidate | OpportunityAssessment): number {
+    return 'finalScore' in signal ? signal.finalScore : signal.score;
+  }
+
+  private getConfidence(signal: SignalCandidate | OpportunityAssessment): number {
+    return signal.confidence;
+  }
+
+  private getSpread(signal: SignalCandidate | OpportunityAssessment): number {
+    return signal.spreadPct;
+  }
+
+  private getSpoofRisk(signal: SignalCandidate | OpportunityAssessment): number {
+    if ('spoofRisk' in signal) {
+      return signal.spoofRisk;
+    }
+
+    return signal.orderbookImbalance >= 0.95 ? 1 : 0;
+  }
+
   checkCanEnter(input: RiskEntryCheckInput): RiskCheckResult {
     const reasons: string[] = [];
     const warnings: string[] = [];
@@ -37,15 +62,15 @@ export class RiskEngine {
       reasons.push('Account nonaktif');
     }
 
-    if (input.signal.score < input.settings.strategy.minScoreToBuy) {
+    if (this.getScore(input.signal) < input.settings.strategy.minScoreToBuy) {
       reasons.push('Score di bawah minimum buy');
     }
 
-    if (input.signal.confidence < input.settings.strategy.minConfidence) {
+    if (this.getConfidence(input.signal) < input.settings.strategy.minConfidence) {
       reasons.push('Confidence di bawah minimum');
     }
 
-    if (input.signal.spreadPct > input.settings.risk.maxPairSpreadPct) {
+    if (this.getSpread(input.signal) > input.settings.risk.maxPairSpreadPct) {
       reasons.push('Spread pair melebihi batas risiko');
     }
 
@@ -57,7 +82,9 @@ export class RiskEngine {
       reasons.push('Jumlah posisi terbuka mencapai batas');
     }
 
-    const samePairOpen = input.openPositions.some((item) => item.pair === input.signal.pair);
+    const samePairOpen = input.openPositions.some(
+      (item) => item.pair === this.getPair(input.signal),
+    );
     if (samePairOpen) {
       reasons.push('Masih ada posisi terbuka pada pair yang sama');
     }
@@ -70,17 +97,35 @@ export class RiskEngine {
       reasons.push('Pair masih cooldown');
     }
 
-    if (input.signal.orderbookImbalance < 0) {
+    if (!('finalScore' in input.signal) && input.signal.orderbookImbalance < 0) {
       warnings.push('Orderbook belum mendukung bias buy');
     }
 
-    if (input.signal.breakoutPressure < 5) {
+    if (!('finalScore' in input.signal) && input.signal.breakoutPressure < 5) {
       warnings.push('Breakout pressure masih lemah');
+    }
+
+    if ('finalScore' in input.signal) {
+      if (!input.signal.edgeValid) {
+        reasons.push('Opportunity belum lolos edge validation');
+      }
+
+      if (input.signal.pumpProbability < input.settings.strategy.minPumpProbability) {
+        reasons.push('Pump probability di bawah minimum auto entry');
+      }
+
+      if (input.signal.entryTiming.state === 'LATE' || input.signal.entryTiming.state === 'AVOID') {
+        reasons.push('Timing entry tidak layak');
+      }
+
+      if (input.signal.trapProbability >= 0.45) {
+        warnings.push('Trap probability relatif tinggi');
+      }
     }
 
     if (
       input.settings.strategy.useAntiSpoof &&
-      input.signal.orderbookImbalance >= input.settings.strategy.spoofRiskBlockThreshold
+      this.getSpoofRisk(input.signal) >= input.settings.strategy.spoofRiskBlockThreshold
     ) {
       reasons.push('Spoof/trap risk threshold terlewati');
     }
