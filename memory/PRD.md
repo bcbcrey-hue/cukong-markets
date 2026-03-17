@@ -22,12 +22,13 @@ Gunakan informasi repo GitHub mafiamarkets, REFACTOR_LOG.md, SESSION_CONTEXT_NEX
 - Perbaikan bug trailing stop unreachable dan perhitungan `change24hPct` yang terbalik.
 - Penambahan regression test backend: `tests/runtime_backend_regression.ts`.
 - `REFACTOR_LOG.md` dan `SESSION_CONTEXT_NEXT.md` dibersihkan menjadi status final yang konsisten untuk repo aktif `bcbcrey-hue/mafiamarkets`.
+- Batch 3B ditambahkan: `WorkerPoolService`, worker runtime (`feature`, `pattern`, `backtest`), `BacktestEngine`, replay loader, metrics, persist hasil backtest, dan recovery timeout worker pool.
 
 ## Prioritized Backlog
 ### P0
-- Implement `src/workers/*` dan `src/services/workerPoolService.ts` untuk analytics berat.
-- Implement `src/domain/backtest/*` untuk replay/evaluasi historis.
 - Hardening live Indodax order semantics (respons, fill behavior, sell quantity mapping, cancellation lifecycle).
+- Integrasi report Telegram untuk intelligence/backtest output yang lebih operasional.
+- Sinkronisasi lifecycle worker/backtest dengan flow operasional app/Telegram.
 
 ### P1
 - Tambah intelligence report / spoof radar / pattern match di Telegram handlers & report service.
@@ -40,6 +41,6 @@ Gunakan informasi repo GitHub mafiamarkets, REFACTOR_LOG.md, SESSION_CONTEXT_NEX
 - Dokumentasi README dan `.env.example` final sesuai contract aktif.
 
 ## Next Tasks
-1. Kerjakan Batch 3B (workers + backtest) tanpa mematahkan contract opportunity yang sekarang sudah aktif.
-2. Perkaya report Telegram untuk menampilkan opportunity reasoning, spoof risk, dan historical match.
-3. Hardening live execution path Indodax setelah worker/backtest baseline siap.
+1. Hardening live execution path Indodax setelah worker/backtest baseline siap.
+2. Perkaya report Telegram untuk menampilkan opportunity reasoning, spoof risk, pattern match, dan backtest summary.
+3. Tambahkan hook operasional untuk menjalankan backtest dari flow aplikasi/Telegram.

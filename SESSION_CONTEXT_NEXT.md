@@ -15,6 +15,7 @@ Status yang harus dianggap benar:
 - regression test backend lulus
 - jalur runtime aktif sekarang adalah:
   `market snapshot -> signal -> feature pipeline -> historical context -> probability -> edge validation -> entry timing -> opportunity -> hotlist -> execution`
+- worker runtime dan backtest baseline sudah tersedia
 
 Jangan lagi memakai asumsi lama bahwa progres masih berupa draft atau belum diterapkan.
 
@@ -32,6 +33,7 @@ Sudah selesai dan harus dianggap baseline:
 - Batch 2B — Market feature builders + scoring alignment
 - Batch 2C — Trading layer contract reset
 - Batch 3A — Intelligence/history runtime integration + contract finalization
+- Batch 3B — Worker runtime + backtest baseline
 
 ---
 
@@ -51,6 +53,8 @@ Contract aktif yang wajib dipertahankan:
 - `OpportunityAssessment` adalah contract final sebelum execution
 - `PositionRecord` menyimpan `peakPrice` untuk trailing stop
 - hotlist boleh diranking dari output opportunity, bukan hanya signal baseline
+- hasil backtest disimpan ke `data/backtest/*.json`
+- worker pool memprioritaskan `dist/workers/*.js` bila hasil build tersedia
 
 ---
 
@@ -64,15 +68,13 @@ Sudah ditutup, jangan diulang kecuali ada bug baru nyata:
 - formula entry price bridge lama yang tidak realistis
 - trailing-stop unreachable logic
 - arah `change24hPct` yang terbalik
+- worker timeout deadlock / pool starvation risk
 
 ---
 
 ## 5. Fokus backlog yang belum selesai
 
 Masih belum selesai:
-- `src/workers/*`
-- `src/services/workerPoolService.ts`
-- `src/domain/backtest/*`
 - hardening live Indodax execution semantics
 - enrichment report/menu Telegram:
   - Intelligence Report
@@ -85,20 +87,16 @@ Masih belum selesai:
 
 ## 6. Next target paling logis
 
-Mulai langsung dari **Batch 3B**:
+Mulai langsung dari hardening tahap berikutnya:
 
-1. `src/workers/*`
-2. `src/services/workerPoolService.ts`
-3. `src/domain/backtest/*`
+1. hardening live Indodax execution
+2. enrichment report/menu Telegram berbasis output opportunity
+3. finalisasi README / `.env.example`
 
-Tujuan Batch 3B:
-- memindahkan analitik berat ke worker runtime
-- menambahkan replay/backtest untuk validasi stack signal-intelligence
-- menjaga main runtime tetap ringan saat polling market berjalan
-
-Setelah Batch 3B stabil, lanjut ke:
-- hardening live Indodax execution
-- enrichment report Telegram berbasis output opportunity
+Target praktis berikutnya:
+- sinkronkan live order lifecycle dengan runtime state
+- tampilkan reasoning opportunity / spoof risk / pattern match / backtest summary di Telegram
+- rapikan dokumentasi runtime aktif agar onboarding sesi berikutnya makin cepat
 
 ---
 

@@ -26,8 +26,6 @@ Artinya:
 - persistence sudah menyimpan snapshot, signal, opportunity, dan anomaly event
 
 Fokus yang **belum selesai** saat ini:
-- worker runtime (`src/workers/*`, `src/services/workerPoolService.ts`)
-- backtest engine (`src/domain/backtest/*`)
 - hardening live Indodax execution semantics
 - enrichment report/menu Telegram untuk intelligence report yang lebih kaya
 
@@ -112,6 +110,17 @@ Hasil utama:
 - persistence JSONL untuk snapshot/signal/opportunity/anomaly event sudah dipakai runtime
 - `PositionRecord` menyimpan `peakPrice` agar trailing stop valid
 - mismatch support files / utils / report / telegram contract yang tersisa sudah ditutup
+
+### Batch 3B — Worker runtime + backtest baseline
+Selesai.
+
+Hasil utama:
+- `WorkerPoolService` aktif dengan worker nyata untuk `feature`, `pattern`, dan `backtest`
+- worker sekarang memprioritaskan `dist/workers/*.js` bila hasil build tersedia agar runtime stabil
+- `OpportunityEngine` bisa meng-offload feature task ke worker pool
+- `BacktestEngine` dapat load replay dari pair-history JSONL, menjalankan replay signal->opportunity, dan menyimpan hasil ke `data/backtest/*.json`
+- app runtime sekarang membawa lifecycle worker (start/stop) dan worker health snapshot ke heartbeat
+- regression test backend sekarang mencakup worker pool, backtest replay, persist file hasil, dan probe timeout recovery
 
 ---
 
@@ -218,6 +227,20 @@ Hasil utama:
 - `src/integrations/telegram/handlers.ts`
 - `src/integrations/indodax/privateApi.ts`
 
+### Batch 3B
+- `src/services/workerPoolService.ts`
+- `src/workers/featureWorker.ts`
+- `src/workers/patternWorker.ts`
+- `src/workers/backtestWorker.ts`
+- `src/domain/backtest/replayLoader.ts`
+- `src/domain/backtest/metrics.ts`
+- `src/domain/backtest/backtestEngine.ts`
+- `src/app.ts`
+- `src/services/persistenceService.ts`
+- `src/domain/intelligence/opportunityEngine.ts`
+- `tests/runtime_backend_regression.ts`
+- `tests/worker_timeout_probe.ts`
+
 ---
 
 ## 4. Keputusan arsitektur / final contract yang harus dipertahankan
@@ -296,15 +319,13 @@ Blocker/bug penting yang sudah ditutup sampai status terbaru:
 - formula `inferEntryPrice()` yang tidak realistis sudah dieliminasi dari jalur execution aktif
 - trailing-stop branch yang sebelumnya unreachable di `src/domain/trading/riskEngine.ts`
 - arah perhitungan `change24hPct` yang terbalik di `src/domain/market/marketWatcher.ts`
+- deadlock/starvation risk pada timeout path `WorkerPoolService.enqueue()`
 
 ---
 
 ## 6. Backlog yang belum selesai
 
 Belum selesai dan tetap menjadi backlog aktif:
-- `src/workers/*`
-- `src/services/workerPoolService.ts`
-- `src/domain/backtest/*`
 - enrichment report Telegram:
   - Intelligence Report
   - Spoof Radar
@@ -321,23 +342,22 @@ Belum selesai dan tetap menjadi backlog aktif:
 
 ## 7. Next target paling logis
 
-Prioritas paling logis berikutnya adalah **Batch 3B**:
+Prioritas paling logis berikutnya adalah **hardening live integration + intelligence report integration**:
 
-1. `src/workers/*`
-2. `src/services/workerPoolService.ts`
-3. `src/domain/backtest/*`
-
-Tujuan Batch 3B:
-- memindahkan analitik berat ke worker runtime
-- menambahkan replay/backtest untuk memvalidasi stack signal-intelligence
-- menjaga agar main runtime tetap ringan saat market scan berjalan
-
-Setelah Batch 3B stabil, lanjut ke:
-- hardening live Indodax execution
-- enrichment report/menu Telegram berbasis output opportunity
+1. hardening live Indodax execution
+   - response mapping live order
+   - fill / partial fill semantics
+   - cancel lifecycle
+   - sinkronisasi order live vs runtime state
+2. enrichment report/menu Telegram berbasis output opportunity
+   - Intelligence Report
+   - Spoof Radar
+   - Pattern Match
+   - Backtest Summary
+3. finalisasi README dan `.env.example` sesuai contract aktif terbaru
 
 ---
 
 ## 8. Ringkasan satu paragraf
 
-Repo aktif `bcbcrey-hue/mafiamarkets` sekarang sudah berada pada status refactor terimplementasi yang konsisten dari fondasi contract, runtime core, persistence/state, Telegram, wiring app, market baseline, signal pipeline, trading baseline, sampai intelligence/history runtime. Status lama yang menyatakan refactor “baru draft/belum diterapkan” **tidak lagi berlaku**. Sumber kebenaran yang harus dipakai ke depan adalah state runtime aktif saat ini: `scanner -> signal -> intelligence -> execution`, dengan `OpportunityAssessment` sebagai contract final sebelum execution dan Batch 3B sebagai target lanjut paling logis.
+Repo aktif `bcbcrey-hue/mafiamarkets` sekarang sudah berada pada status refactor terimplementasi yang konsisten dari fondasi contract, runtime core, persistence/state, Telegram, wiring app, market baseline, signal pipeline, trading baseline, intelligence/history runtime, sampai worker runtime dan backtest baseline. Status lama yang menyatakan refactor “baru draft/belum diterapkan” **tidak lagi berlaku**. Sumber kebenaran yang harus dipakai ke depan adalah state runtime aktif saat ini: `scanner -> signal -> intelligence -> execution`, dengan `OpportunityAssessment` sebagai contract final sebelum execution, worker/backtest baseline sudah tersedia, dan fokus berikutnya bergeser ke live hardening + report integration.

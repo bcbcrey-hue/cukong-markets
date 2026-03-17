@@ -250,6 +250,30 @@ export class WorkerPoolService {
     this.dispatch();
   }
 
+  private async respawnWorker(wrapper: WorkerWrapper): Promise<void> {
+    const index = this.workers.findIndex((item) => item.workerId === wrapper.workerId);
+    if (index < 0) {
+      return;
+    }
+
+    wrapper.busy = false;
+    wrapper.currentJobId = null;
+
+    try {
+      await wrapper.worker.terminate();
+    } catch {
+      // best effort cleanup
+    }
+
+    if (!this.started) {
+      this.workers.splice(index, 1);
+      return;
+    }
+
+    this.workers.splice(index, 1, this.createWorker(wrapper.type));
+    this.dispatch();
+  }
+
   private onWorkerMessage(wrapper: WorkerWrapper, message: WorkerMessage<unknown>): void {
     const job = this.jobs.get(message.id);
     if (!job) {
@@ -328,6 +352,13 @@ export class WorkerPoolService {
         if (index >= 0) {
           this.queue.splice(index, 1);
         }
+
+        const owner = this.workers.find((worker) => worker.currentJobId === id);
+        if (owner) {
+          owner.lastError = `worker task timeout: ${type}`;
+          void this.respawnWorker(owner);
+        }
+
         reject(new Error(`Worker task timeout: ${type}`));
       }, timeoutMs);
 
