@@ -15,6 +15,8 @@ Validasi yang sudah diverifikasi pada repo lokal:
   `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-audit-regression LOG_DIR=/tmp/mafiamarkets-audit-regression/logs TEMP_DIR=/tmp/mafiamarkets-audit-regression/tmp yarn tsx /app/tests/runtime_backend_regression.ts`
 - probe recovery worker timeout lulus via:
   `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-audit-timeout LOG_DIR=/tmp/mafiamarkets-audit-timeout/logs TEMP_DIR=/tmp/mafiamarkets-audit-timeout/tmp yarn tsx /app/tests/worker_timeout_probe.ts`
+- probe live execution hardening lulus via:
+  `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-live-hardening-probe-self LOG_DIR=/tmp/mafiamarkets-live-hardening-probe-self/logs TEMP_DIR=/tmp/mafiamarkets-live-hardening-probe-self/tmp yarn tsx /app/tests/live_execution_hardening_probe.ts`
 
 Jalur runtime aktual yang berlaku sekarang:
 
@@ -29,8 +31,9 @@ Catatan penting tentang status aktual:
 - backtest replay sudah berjalan dari pair-history JSONL dan menyimpan hasil ke `data/backtest/*.json`
 
 Hal yang **belum selesai** dan jangan di-overclaim:
-- hardening live order semantics Indodax belum lengkap
-- live sell / cancel / fill reconciliation belum end-to-end
+- hardening live order semantics Indodax **sudah naik dari baseline lama**, tetapi reconciliation lanjutan masih belum sepenuhnya end-to-end
+- repeated partial fill buy saat ini masih bisa tercatat sebagai slice posisi tambahan, belum diagregasi menjadi satu posisi logis per pair/account
+- fee, trade history exchange, dan recovery setelah restart belum dipakai penuh sebagai sumber rekonsiliasi akhir
 - `recentTrades` pada runtime masih **inferred flow** dari delta volume lokal, belum trade print native exchange
 - README root dan `.env.example` masih belum ada
 
@@ -104,12 +107,16 @@ Catatan audit penting:
 - `OrderManager` dan `PositionManager` sudah persist ke state storage aktif.
 - `ExecutionEngine` membaca `OpportunityAssessment` untuk FULL_AUTO.
 - flow simulasi buy/sell sudah lengkap: order terbuat, fill ditandai, posisi dibuka/ditutup, journal ditulis, `tradeCount` naik, cooldown pair di-set.
+- `OrderRecord` sekarang bisa menyimpan metadata live exchange: `exchangeOrderId`, `exchangeStatus`, `exchangeUpdatedAt`, dan `relatedPositionId`.
+- `ExecutionEngine.syncActiveOrders()` sudah ada dan dipanggil oleh `position-monitor` loop di `src/app.ts` sebelum evaluasi exit.
 
 Catatan batas implementasi live yang harus dipahami dengan benar:
 - live **buy** baseline sudah ada melalui `PrivateApi.trade(...)`
-- order live buy saat ini masih ditandai filled secara optimistis di runtime lokal, belum memakai reconciliation fill/partial fill exchange
-- flow **sell live** belum disambungkan ke private API exchange; `manualSell()` saat ini masih state-driven di runtime lokal
-- `cancelAllOrders()` masih membatalkan order aktif pada state runtime, belum sinkron penuh ke cancel lifecycle exchange
+- live **sell** sekarang juga sudah dikirim ke private API exchange
+- status live order sekarang disinkronkan ke runtime lewat `getOrder(...)` dan bisa bergerak `OPEN -> PARTIALLY_FILLED -> FILLED/CANCELED`
+- `cancelAllOrders()` sekarang mencoba `cancelOrder(...)` ke exchange untuk order aktif yang punya `exchangeOrderId`
+- duplicate guard sudah ada untuk mencegah BUY aktif ganda pada pair/account yang sama dan SELL aktif ganda pada posisi yang sama
+- partial fill delta sekarang bisa diaplikasikan ke runtime position melalui `syncActiveOrders()`, tetapi agregasi posisi buy berulang masih belum final
 
 ### 3.6 Telegram flow
 - whitelist tetap berbasis `TELEGRAM_ALLOWED_USER_IDS`
@@ -123,6 +130,7 @@ Catatan batas implementasi live yang harus dipahami dengan benar:
 - path preference ke `dist/workers/*.js` tetap dipertahankan bila hasil build ada
 - bug timeout deadlock/starvation pada worker pool sudah tertutup dan diverifikasi lewat `tests/worker_timeout_probe.ts`
 - `BacktestEngine` sudah bisa load replay dari `pair-history.jsonl`, menjalankan replay signal -> opportunity -> risk exit, dan persist hasil JSON
+- regression tambahan `tests/live_execution_hardening_probe.ts` sekarang menjaga live order sync / duplicate guard / cancel-all flow
 
 ---
 
@@ -199,6 +207,10 @@ Sudah tertutup dan jangan dianggap backlog lagi:
 - timeout deadlock / starvation risk di `src/services/workerPoolService.ts`
 - sinkronisasi baseline worker + backtest regression
 - sinkronisasi base URL Indodax ke contract env melalui `IndodaxClient`
+- live order metadata tracking di runtime order state
+- baseline sync exchange -> runtime order state via `getOrder(...)`
+- baseline cancel-all exchange path untuk order aktif live
+- duplicate guard untuk live buy/sell order submission
 
 ---
 
@@ -207,11 +219,10 @@ Sudah tertutup dan jangan dianggap backlog lagi:
 Backlog nyata saat ini:
 
 ### P0 — hardening live execution
-- response mapping live order Indodax
-- fill / partial fill semantics
-- sell live path ke exchange
-- cancel lifecycle exchange
-- sinkronisasi order live vs runtime state lokal
+- reconciliation yang lebih kaya antara trade response, `getOrder`, `openOrders`, `orderHistory`, dan runtime state lokal
+- agregasi partial fill buy menjadi satu posisi logis per pair/account
+- capture fee / executed trade detail / average fill yang lebih akurat dari exchange
+- recovery sinkronisasi order live setelah restart runtime
 
 ### P1 — penguatan intelligence/runtime
 - pindahkan pattern matching live path ke worker runtime bila memang dibutuhkan CPU offload konsisten
@@ -230,10 +241,10 @@ Backlog nyata saat ini:
 Prioritas berikutnya yang paling rasional:
 
 1. hardening live Indodax execution end-to-end
-   - buy confirmation
-   - partial fill
-   - sell live
-   - cancel reconciliation
+   - reconciliation multi-sumber (`trade`, `getOrder`, `openOrders`, `orderHistory`)
+   - agregasi partial fill
+   - fee / executed-trade accounting
+   - restart recovery
 2. finalisasi README dan `.env.example`
 3. bila diperlukan, integrasikan pattern worker ke jalur live intelligence agar offload analytics lebih konsisten
 
@@ -241,4 +252,4 @@ Prioritas berikutnya yang paling rasional:
 
 ## 8. Ringkasan final satu paragraf
 
-Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-dua` sudah berada pada status refactor backend yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, sampai Telegram operational hooks. Status lama yang menyebut progres masih draft atau belum diterapkan **tidak berlaku lagi**. Namun sumber kebenaran yang benar untuk sesi berikutnya harus mengakui batas implementasi aktual: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, tetapi live Indodax semantics masih perlu hardening, sell/cancel live belum end-to-end, dan trade-flow masih inferred, bukan native trade stream.
+Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-dua` sudah berada pada status refactor backend yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, sampai Telegram operational hooks. Status lama yang menyebut progres masih draft atau belum diterapkan **tidak berlaku lagi**. Sumber kebenaran terbaru sekarang adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, live order baseline buy/sell/cancel/sync sudah ada, duplicate guard sudah aktif, dan polling runtime sudah menyinkronkan order live; tetapi trade-flow market masih inferred dan reconciliation exchange masih perlu pendalaman untuk partial fill aggregation, fee capture, serta recovery pasca-restart.

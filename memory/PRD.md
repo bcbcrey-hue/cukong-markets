@@ -18,18 +18,26 @@ Gunakan informasi repo GitHub mafiamarkets-refactor-dua, REFACTOR_LOG.md, SESSIO
   - `PairUniverse` sekarang membawa `high24h` / `low24h` dari ticker exchange.
   - `MarketWatcher` memakai nilai 24h tersebut untuk snapshot aktif.
   - `IndodaxClient` sekarang mengambil base URL public/private dari `env`.
+- Hardening live execution baseline sudah ditambahkan:
+  - `OrderRecord` menyimpan metadata exchange (`exchangeOrderId`, `exchangeStatus`, `exchangeUpdatedAt`, `relatedPositionId`).
+  - live buy dan live sell sekarang sama-sama submit ke private API exchange.
+  - `ExecutionEngine.syncActiveOrders()` menyinkronkan status order live dan menerapkan delta fill ke runtime position.
+  - `cancelAllOrders()` sekarang mencoba cancel ke exchange untuk order live aktif.
+  - duplicate active BUY/SELL guard ditambahkan.
+  - `src/app.ts` position-monitor sekarang memanggil sync order live sebelum evaluasi exit.
 - Status validasi terbaru sudah diverifikasi:
   - `yarn lint` lulus
   - `yarn build` lulus
   - `tests/runtime_backend_regression.ts` lulus
   - `tests/worker_timeout_probe.ts` lulus
+  - `tests/live_execution_hardening_probe.ts` lulus
 
 ## Prioritized Backlog
 ### P0
-- Hardening live Indodax execution end-to-end.
-- Response mapping live order, fill / partial fill semantics, dan cancel lifecycle exchange.
-- Sinkronisasi runtime order/position state dengan state order exchange.
-- Live sell path yang benar-benar terhubung ke exchange.
+- Reconciliation multi-sumber antara `trade`, `getOrder`, `openOrders`, `orderHistory`, dan runtime state.
+- Agregasi partial fill buy menjadi satu posisi logis per pair/account.
+- Capture fee, executed trade detail, dan average fill yang lebih akurat dari exchange.
+- Recovery sinkronisasi order aktif setelah restart runtime.
 
 ### P1
 - Pindahkan pattern matching pada live path ke worker runtime bila dibutuhkan untuk konsistensi offload CPU.

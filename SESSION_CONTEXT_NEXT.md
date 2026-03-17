@@ -14,6 +14,7 @@ Status aktual repo:
 - `yarn build` lulus
 - `tests/runtime_backend_regression.ts` lulus
 - `tests/worker_timeout_probe.ts` lulus
+- `tests/live_execution_hardening_probe.ts` lulus
 - runtime utama berlaku:
   `tickers + depth -> MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
 - worker runtime untuk `feature`, `pattern`, dan `backtest` sudah ada
@@ -38,8 +39,11 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 ### Trading / execution
 - trailing stop sudah valid karena memakai `peakPrice`
 - flow simulasi buy/sell lengkap dan persist ke state
-- live buy baru baseline
-- live sell, partial fill, cancel reconciliation, dan sinkronisasi runtime-vs-exchange **belum selesai**
+- live buy / sell / cancel baseline sudah ada
+- order live menyimpan `exchangeOrderId` dan disinkronkan lewat `getOrder(...)`
+- `position-monitor` sekarang memanggil `syncActiveOrders()` sebelum evaluasi exit
+- duplicate active BUY/SELL guard sudah aktif
+- yang belum final: agregasi partial fill buy, fee/trade-history capture, dan recovery sinkronisasi setelah restart
 
 ### Telegram
 - Telegram button UI tetap UI utama
@@ -62,17 +66,17 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 - arah `change24hPct` yang terbalik
 - timeout deadlock / starvation pada worker pool
 - sinkronisasi base URL Indodax ke env di entry client
+- baseline live order sync / cancel / duplicate-guard
 
 ---
 
 ## 4. Backlog aktif yang nyata
 
 ### P0
-- hardening live Indodax execution end-to-end
-- sell live path
-- partial fill / fill confirmation
-- cancel lifecycle exchange
-- sinkronisasi runtime state dengan state order exchange
+- reconciliation multi-sumber antara `trade`, `getOrder`, `openOrders`, `orderHistory`, dan runtime state
+- agregasi partial fill buy menjadi satu posisi logis
+- fee / executed-trade accounting dari exchange
+- recovery sinkronisasi order aktif setelah restart runtime
 
 ### P1
 - pindahkan pattern matching live path ke worker runtime jika perlu offload konsisten
