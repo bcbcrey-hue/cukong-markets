@@ -1,5 +1,6 @@
 import type {
   BacktestRunResult,
+  ExecutionSummary,
   HealthSnapshot,
   HotlistEntry,
   OpportunityAssessment,
@@ -7,6 +8,7 @@ import type {
   PositionRecord,
   SignalCandidate,
   StoredAccount,
+  TradeOutcomeSummary,
   TradeRecord,
 } from '../core/types';
 
@@ -16,6 +18,23 @@ function asNum(value: number, digits = 4): string {
 
 function asPct(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function asMaybeNum(value: number | null | undefined, digits = 4): string {
+  return value === null || value === undefined ? '-' : asNum(value, digits);
+}
+
+function formatDuration(ms: number | null | undefined): string {
+  if (!ms || ms <= 0) {
+    return '-';
+  }
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 function truncate(text: string, max = 180): string {
@@ -282,6 +301,46 @@ export class ReportService {
       `losses=${result.losses}`,
       `netPnl=${asNum(result.netPnl, 2)}`,
       `notes=${truncate(result.notes.join('; ') || '-', 220)}`,
+    ].join('\n');
+  }
+
+  executionSummaryText(summary: ExecutionSummary): string {
+    return [
+      '🧾 EXECUTION SUMMARY',
+      `account=${summary.account}`,
+      `pair=${summary.pair}`,
+      `side=${summary.side.toUpperCase()}`,
+      `status=${summary.status}`,
+      `accuracy=${summary.accuracy}`,
+      `reference=${asMaybeNum(summary.referencePrice, 8)}`,
+      `intended=${asNum(summary.intendedOrderPrice, 8)}`,
+      `avgFill=${asMaybeNum(summary.averageFillPrice, 8)}`,
+      `filledQty=${asNum(summary.filledQuantity, 8)}`,
+      `filledNotional=${asNum(summary.filledNotional, 2)}`,
+      `fee=${asMaybeNum(summary.fee, 8)}${summary.feeAsset ? ` ${summary.feeAsset}` : ''}`,
+      `exchangeOrderId=${summary.exchangeOrderId ?? '-'}`,
+      `slippageVsRef=${summary.slippageVsReferencePricePct === null ? '-' : asPct(summary.slippageVsReferencePricePct)}`,
+      `timestamp=${summary.timestamp}`,
+      `reason=${truncate(summary.reason || '-', 180)}`,
+    ].join('\n');
+  }
+
+  tradeOutcomeSummaryText(summary: TradeOutcomeSummary): string {
+    return [
+      '📈 TRADE OUTCOME SUMMARY',
+      `account=${summary.account}`,
+      `pair=${summary.pair}`,
+      `accuracy=${summary.accuracy}`,
+      `entryAverage=${asMaybeNum(summary.entryAverage, 8)}`,
+      `exitAverage=${asMaybeNum(summary.exitAverage, 8)}`,
+      `totalQuantity=${asNum(summary.totalQuantity, 8)}`,
+      `totalFee=${asMaybeNum(summary.totalFee, 8)}`,
+      `grossPnl=${asMaybeNum(summary.grossPnl, 2)}`,
+      `netPnl=${asMaybeNum(summary.netPnl, 2)}`,
+      `return=${summary.returnPercentage === null ? '-' : asPct(summary.returnPercentage)}`,
+      `hold=${formatDuration(summary.holdDurationMs)}`,
+      `closeReason=${truncate(summary.closeReason, 140)}`,
+      `timestamp=${summary.timestamp}`,
     ].join('\n');
   }
 

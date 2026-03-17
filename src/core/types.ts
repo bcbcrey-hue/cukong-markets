@@ -4,6 +4,7 @@ export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
 export type RuntimeStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'ERROR';
 export type EntryTimingState = 'EARLY' | 'READY' | 'LATE' | 'AVOID';
+export type SummaryAccuracy = 'SIMULATED' | 'OPTIMISTIC_LIVE' | 'PARTIAL_LIVE' | 'CONFIRMED_LIVE';
 export type MarketRegime =
   | 'QUIET'
   | 'ACCUMULATION'
@@ -270,6 +271,7 @@ export interface OrderRecord {
   filledQuantity: number;
   averageFillPrice: number | null;
   notionalIdr: number;
+  referencePrice?: number | null;
   createdAt: string;
   updatedAt: string;
   source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO';
@@ -281,6 +283,7 @@ export interface OrderRecord {
   executedTradeCount?: number;
   lastExecutedAt?: string;
   relatedPositionId?: string;
+  closeReason?: string;
   notes?: string;
 }
 
@@ -293,12 +296,16 @@ export interface PositionRecord {
   quantity: number;
   entryPrice: number;
   averageEntryPrice: number;
+  averageExitPrice: number | null;
   currentPrice: number;
   peakPrice: number;
   unrealizedPnl: number;
   realizedPnl: number;
   entryFeesPaid?: number;
+  totalEntryFeesPaid: number;
   exitFeesPaid?: number;
+  totalBoughtQuantity: number;
+  totalSoldQuantity: number;
   stopLossPrice: number | null;
   takeProfitPrice: number | null;
   openedAt: string;
@@ -319,6 +326,48 @@ export interface TradeRecord {
   executedAt: string;
   sourceOrderId?: string;
   notes?: string;
+}
+
+export interface ExecutionSummary {
+  id: string;
+  orderId: string;
+  accountId: string;
+  account: string;
+  pair: string;
+  side: OrderSide;
+  status: 'SUBMITTED' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELED' | 'FAILED';
+  accuracy: SummaryAccuracy;
+  referencePrice: number | null;
+  intendedOrderPrice: number;
+  averageFillPrice: number | null;
+  filledQuantity: number;
+  filledNotional: number;
+  fee: number | null;
+  feeAsset?: string | null;
+  exchangeOrderId?: string;
+  slippageVsReferencePricePct: number | null;
+  timestamp: string;
+  reason?: string;
+}
+
+export interface TradeOutcomeSummary {
+  id: string;
+  positionId: string;
+  accountId: string;
+  account: string;
+  pair: string;
+  accuracy: SummaryAccuracy;
+  entryAverage: number | null;
+  exitAverage: number | null;
+  totalQuantity: number;
+  totalFee: number | null;
+  grossPnl: number | null;
+  netPnl: number | null;
+  returnPercentage: number | null;
+  holdDurationMs: number | null;
+  closeReason: string;
+  timestamp: string;
+  notes: string[];
 }
 
 export interface PairRuntimeState {

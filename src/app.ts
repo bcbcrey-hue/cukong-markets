@@ -28,6 +28,7 @@ import { PersistenceService } from './services/persistenceService';
 import { PollingService } from './services/pollingService';
 import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
+import { SummaryService } from './services/summaryService';
 
 export interface AppRuntime {
   start(): Promise<void>;
@@ -53,6 +54,7 @@ export async function createApp(): Promise<AppRuntime> {
   const positionManager = new PositionManager(persistence);
   const health = new HealthService(persistence, state);
   const report = new ReportService();
+  const summary = new SummaryService(persistence, journal, report, accountRegistry);
 
   await Promise.all([
     state.load(),
@@ -91,6 +93,7 @@ export async function createApp(): Promise<AppRuntime> {
     positionManager,
     orderManager,
     journal,
+    summary,
   );
 
   const telegram = new TelegramBot({
@@ -107,6 +110,7 @@ export async function createApp(): Promise<AppRuntime> {
     journal,
     backtest,
   });
+  summary.attachNotifier(telegram);
 
   polling.register('market-scan', env.pollingIntervalMs, async () => {
     const runtime = state.get();

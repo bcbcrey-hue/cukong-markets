@@ -32,6 +32,8 @@ export interface EnvConfig {
   pairHistoryFile: string;
   anomalyEventsFile: string;
   patternOutcomesFile: string;
+  executionSummaryFile: string;
+  tradeOutcomeFile: string;
 
   backtestDir: string;
 
@@ -195,6 +197,8 @@ export const env: EnvConfig = {
   pairHistoryFile: path.resolve(historyDir, 'pair-history.jsonl'),
   anomalyEventsFile: path.resolve(historyDir, 'anomaly-events.jsonl'),
   patternOutcomesFile: path.resolve(historyDir, 'pattern-outcomes.jsonl'),
+  executionSummaryFile: path.resolve(historyDir, 'execution-summaries.jsonl'),
+  tradeOutcomeFile: path.resolve(historyDir, 'trade-outcomes.jsonl'),
 
   backtestDir,
 

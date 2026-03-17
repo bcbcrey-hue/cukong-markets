@@ -21,7 +21,21 @@ export class PositionManager {
 
   async load(): Promise<PositionRecord[]> {
     const snapshot = await this.persistence.loadAll();
-    this.positions = Array.isArray(snapshot.positions) ? snapshot.positions : [];
+    this.positions = Array.isArray(snapshot.positions)
+      ? snapshot.positions.map((position) => {
+          const totalBoughtQuantity = position.totalBoughtQuantity ?? position.quantity;
+          const totalSoldQuantity = position.totalSoldQuantity ?? 0;
+          const totalEntryFeesPaid = position.totalEntryFeesPaid ?? position.entryFeesPaid ?? 0;
+
+          return {
+            ...position,
+            averageExitPrice: position.averageExitPrice ?? null,
+            totalBoughtQuantity,
+            totalSoldQuantity,
+            totalEntryFeesPaid,
+          };
+        })
+      : [];
     return this.positions;
   }
 
@@ -59,12 +73,16 @@ export class PositionManager {
       quantity: input.quantity,
       entryPrice: input.entryPrice,
       averageEntryPrice: input.entryPrice,
+      averageExitPrice: null,
       currentPrice: input.entryPrice,
       peakPrice: input.entryPrice,
       unrealizedPnl: 0,
       realizedPnl: 0,
       entryFeesPaid: input.entryFeesPaid ?? 0,
+      totalEntryFeesPaid: input.entryFeesPaid ?? 0,
       exitFeesPaid: 0,
+      totalBoughtQuantity: input.quantity,
+      totalSoldQuantity: 0,
       stopLossPrice: input.stopLossPrice,
       takeProfitPrice: input.takeProfitPrice,
       openedAt: now,
@@ -93,6 +111,7 @@ export class PositionManager {
           ) / nextQuantity
         : current.averageEntryPrice;
     const entryFeesPaid = (current.entryFeesPaid ?? 0) + (input.entryFeesPaid ?? 0);
+    const totalEntryFeesPaid = (current.totalEntryFeesPaid ?? current.entryFeesPaid ?? 0) + (input.entryFeesPaid ?? 0);
 
     const next: PositionRecord = {
       ...current,
@@ -105,6 +124,8 @@ export class PositionManager {
       unrealizedPnl:
         (current.currentPrice - weightedAverageEntryPrice) * nextQuantity - entryFeesPaid,
       entryFeesPaid,
+      totalEntryFeesPaid,
+      totalBoughtQuantity: (current.totalBoughtQuantity ?? current.quantity) + addedQuantity,
       stopLossPrice: input.stopLossPrice,
       takeProfitPrice: input.takeProfitPrice,
       updatedAt: nowIso(),
@@ -149,9 +170,17 @@ export class PositionManager {
     const safeCloseQuantity = Math.max(0, Math.min(current.quantity, closeQuantity));
     const remainingQuantity = Math.max(0, current.quantity - safeCloseQuantity);
     const currentEntryFeesPaid = current.entryFeesPaid ?? 0;
+    const currentTotalEntryFeesPaid = current.totalEntryFeesPaid ?? current.entryFeesPaid ?? 0;
     const entryFeeShare =
       current.quantity > 0 ? currentEntryFeesPaid * (safeCloseQuantity / current.quantity) : 0;
     const remainingEntryFeesPaid = Math.max(0, currentEntryFeesPaid - entryFeeShare);
+    const previousSoldQuantity = current.totalSoldQuantity ?? 0;
+    const nextTotalSoldQuantity = previousSoldQuantity + safeCloseQuantity;
+    const averageExitPrice =
+      nextTotalSoldQuantity > 0
+        ? (((current.averageExitPrice ?? 0) * previousSoldQuantity) + (exitPrice * safeCloseQuantity)) /
+          nextTotalSoldQuantity
+        : current.averageExitPrice;
     const realizedPnl =
       current.realizedPnl +
       (exitPrice - current.averageEntryPrice) * safeCloseQuantity -
@@ -162,12 +191,16 @@ export class PositionManager {
       ...current,
       quantity: remainingQuantity,
       currentPrice: exitPrice,
+      averageExitPrice: averageExitPrice ?? null,
       peakPrice: Math.max(current.peakPrice ?? current.currentPrice, exitPrice),
       realizedPnl,
       unrealizedPnl:
         (exitPrice - current.averageEntryPrice) * remainingQuantity - remainingEntryFeesPaid,
       entryFeesPaid: remainingEntryFeesPaid,
+      totalEntryFeesPaid: currentTotalEntryFeesPaid,
       exitFeesPaid: (current.exitFeesPaid ?? 0) + exitFee,
+      totalBoughtQuantity: current.totalBoughtQuantity ?? current.quantity,
+      totalSoldQuantity: nextTotalSoldQuantity,
       status:
         remainingQuantity <= 1e-8
           ? 'CLOSED'

@@ -18,6 +18,7 @@ import { JournalService } from '../src/services/journalService';
 import { PersistenceService, createDefaultSettings } from '../src/services/persistenceService';
 import { ReportService } from '../src/services/reportService';
 import { StateService } from '../src/services/stateService';
+import { SummaryService } from '../src/services/summaryService';
 import { HotlistService } from '../src/domain/market/hotlistService';
 import { WorkerPoolService } from '../src/services/workerPoolService';
 import { BacktestEngine } from '../src/domain/backtest/backtestEngine';
@@ -187,10 +188,12 @@ async function main() {
   const state = new StateService(persistence);
   const settings = new SettingsService(persistence);
   const journal = new JournalService(persistence);
+  const report = new ReportService();
   const orderManager = new OrderManager(persistence);
   const positionManager = new PositionManager(persistence);
   const accountStore = new AccountStore();
   const accountRegistry = new AccountRegistry(accountStore);
+  const summary = new SummaryService(persistence, journal, report, accountRegistry);
 
   await Promise.all([
     state.load(),
@@ -241,7 +244,6 @@ async function main() {
 
   // Module: telegram/report/hotlist contract smoke.
   const hotlistService = new HotlistService();
-  const report = new ReportService();
   const hotlist = hotlistService.update(opportunities);
   assert.ok(hotlist.length > 0, 'Hotlist should accept opportunity input');
   const reportText = report.hotlistText(hotlist);
@@ -325,6 +327,7 @@ async function main() {
     positionManager,
     orderManager,
     journal,
+    summary,
   );
 
   const beforeTradeCount = state.get().tradeCount;
@@ -341,6 +344,19 @@ async function main() {
   assert.equal(state.get().tradeCount, beforeTradeCount + 1, 'tradeCount should increase by 1');
   const afterCooldown = state.get().pairCooldowns[validOpportunity.pair] ?? 0;
   assert.ok(afterCooldown > beforeCooldown, 'pair cooldown should be updated');
+  const simulatedExecutionSummaries = await persistence.readExecutionSummaries();
+  assert.ok(
+    simulatedExecutionSummaries.some(
+      (summaryItem) => summaryItem.orderId === latestOrder.id && summaryItem.status === 'SUBMITTED',
+    ),
+    'Simulated buy should persist submitted execution summary',
+  );
+  assert.ok(
+    simulatedExecutionSummaries.some(
+      (summaryItem) => summaryItem.orderId === latestOrder.id && summaryItem.status === 'FILLED',
+    ),
+    'Simulated buy should persist filled execution summary',
+  );
 
   // Module: live order submission + sync + cancel hardening.
   const liveApi = new FakeLiveOrderApi();
@@ -353,6 +369,7 @@ async function main() {
     positionManager,
     orderManager,
     journal,
+    summary,
   );
 
   await settings.replace({
@@ -467,6 +484,14 @@ async function main() {
 
   const closedPosition = positionManager.getById(livePosition?.id ?? '');
   assert.equal(closedPosition?.status, 'CLOSED', 'Filled live sell should close the target position');
+  const tradeOutcomes = await persistence.readTradeOutcomes();
+  assert.ok(
+    tradeOutcomes.some(
+      (outcome) =>
+        outcome.positionId === livePosition?.id && outcome.closeReason === 'AUTO_EXIT',
+    ),
+    'Closed live sell should persist final trade outcome summary',
+  );
 
   const liveCancelSignal = signalEngine.score(makeSnapshot('xrp_idr', 10_000, 9_995, 10_005));
   const liveCancelOpportunity = makeOpportunity(liveCancelSignal);

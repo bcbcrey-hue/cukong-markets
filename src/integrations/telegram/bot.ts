@@ -12,6 +12,7 @@ import { SettingsService } from '../../domain/settings/settingsService';
 import { HealthService } from '../../services/healthService';
 import { JournalService } from '../../services/journalService';
 import { ReportService } from '../../services/reportService';
+import type { SummaryNotifier } from '../../services/summaryService';
 import { StateService } from '../../services/stateService';
 import { registerHandlers } from './handlers';
 import { UploadHandler } from './uploadHandler';
@@ -31,7 +32,7 @@ export interface TelegramBotDeps {
   backtest: BacktestEngine;
 }
 
-export class TelegramBot {
+export class TelegramBot implements SummaryNotifier {
   private readonly bot: Telegraf;
 
   constructor(private readonly deps: TelegramBotDeps) {
@@ -49,5 +50,15 @@ export class TelegramBot {
 
   async stop(): Promise<void> {
     this.bot.stop();
+  }
+
+  async broadcast(message: string): Promise<void> {
+    if (env.telegramAllowedUserIds.length === 0) {
+      return;
+    }
+
+    await Promise.allSettled(
+      env.telegramAllowedUserIds.map((userId) => this.bot.telegram.sendMessage(userId, message)),
+    );
   }
 }

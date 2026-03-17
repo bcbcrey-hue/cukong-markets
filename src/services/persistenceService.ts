@@ -4,6 +4,7 @@ import { env } from '../config/env';
 import type {
   BacktestRunResult,
   BotSettings,
+  ExecutionSummary,
   HealthSnapshot,
   HotlistEntry,
   JournalEntry,
@@ -11,6 +12,7 @@ import type {
   OrderRecord,
   PositionRecord,
   RuntimeState,
+  TradeOutcomeSummary,
   TradeRecord,
 } from '../core/types';
 import { JsonLinesStore, JsonStore } from '../storage/jsonStore';
@@ -155,6 +157,12 @@ export class PersistenceService {
   private readonly patternOutcomesStore = new JsonLinesStore<Record<string, unknown>>(
     env.patternOutcomesFile,
   );
+  private readonly executionSummaryStore = new JsonLinesStore<ExecutionSummary>(
+    env.executionSummaryFile,
+  );
+  private readonly tradeOutcomeStore = new JsonLinesStore<TradeOutcomeSummary>(
+    env.tradeOutcomeFile,
+  );
 
   async bootstrap(): Promise<void> {
     await Promise.all([
@@ -168,6 +176,8 @@ export class PersistenceService {
       this.pairHistoryStore.ensureDir(),
       this.anomalyEventsStore.ensureDir(),
       this.patternOutcomesStore.ensureDir(),
+      this.executionSummaryStore.ensureDir(),
+      this.tradeOutcomeStore.ensureDir(),
     ]);
   }
 
@@ -275,6 +285,22 @@ export class PersistenceService {
 
   readPatternOutcomes(): Promise<Record<string, unknown>[]> {
     return this.patternOutcomesStore.readAll();
+  }
+
+  appendExecutionSummary(entry: ExecutionSummary): Promise<void> {
+    return this.executionSummaryStore.append(entry);
+  }
+
+  readExecutionSummaries(): Promise<ExecutionSummary[]> {
+    return this.executionSummaryStore.readAll();
+  }
+
+  appendTradeOutcome(entry: TradeOutcomeSummary): Promise<void> {
+    return this.tradeOutcomeStore.append(entry);
+  }
+
+  readTradeOutcomes(): Promise<TradeOutcomeSummary[]> {
+    return this.tradeOutcomeStore.readAll();
   }
 
   async saveHotlistSnapshot(hotlist: HotlistEntry[]): Promise<void> {

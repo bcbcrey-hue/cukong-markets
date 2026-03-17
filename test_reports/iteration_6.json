@@ -1,0 +1,38 @@
+{
+  "summary": "Backend-only verification passed for execution/trade summary baseline: submitted, partially filled, filled, canceled, and failed paths are persisted and logged; final trade outcome is written only when position is CLOSED. Runtime regression and worker timeout probes also passed. Exchange flows in probes are MOCKED; Telegram delivery is NOT validated end-to-end (as requested).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/tests/live_execution_hardening_probe.ts",
+    "/app/tests/worker_timeout_probe.ts",
+    "/app/tests/execution_summary_failed_probe.ts"
+  ],
+  "action_items": [
+    "Keep execution_summary_failed_probe in CI to guard FAILED summary contract for BUY/SELL live error paths.",
+    "Keep distinguishing OPTIMISTIC_LIVE vs CONFIRMED_LIVE based on reconciliation detail availability (trade stats/fees)."
+  ],
+  "critical_code_review_comments": [
+    "executionEngine.ts remains oversized (>700 lines) and mixes execution, reconciliation, and summary side-effects; split to reduce regression risk."
+  ],
+  "updated_files": [
+    "/app/tests/execution_summary_failed_probe.ts",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data. Isolated DATA_DIR under /tmp used for each probe run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Executed and passed: yarn lint; yarn build; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-reg LOG_DIR=/tmp/mafiamarkets-it6-reg/logs TEMP_DIR=/tmp/mafiamarkets-it6-reg/tmp yarn tsx /app/tests/runtime_backend_regression.ts; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-live LOG_DIR=/tmp/mafiamarkets-it6-live/logs TEMP_DIR=/tmp/mafiamarkets-it6-live/tmp yarn tsx /app/tests/live_execution_hardening_probe.ts; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-timeout LOG_DIR=/tmp/mafiamarkets-it6-timeout/logs TEMP_DIR=/tmp/mafiamarkets-it6-timeout/tmp yarn tsx /app/tests/worker_timeout_probe.ts; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-failed LOG_DIR=/tmp/mafiamarkets-it6-failed/logs TEMP_DIR=/tmp/mafiamarkets-it6-failed/tmp yarn tsx /app/tests/execution_summary_failed_probe.ts. MOCKED APIs: FakeLiveIndodaxClient/FakeLiveOrderApi/FakeIndodaxClient. Telegram live delivery not validated.",
+  "rca of the issue": "No failing regression reproduced in this iteration. New probe confirms failure path behavior: when live trade submission throws, OrderManager marks REJECTED and SummaryService persists FAILED with CONFIRMED_LIVE; trade outcome summary is not emitted unless position status is CLOSED."
+}

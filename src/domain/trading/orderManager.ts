@@ -18,6 +18,8 @@ export interface CreateOrderInput {
   exchangeStatus?: string;
   exchangeUpdatedAt?: string;
   relatedPositionId?: string;
+  referencePrice?: number | null;
+  closeReason?: string;
   notes?: string;
 }
 
@@ -64,6 +66,7 @@ export class OrderManager {
       filledQuantity: input.filledQuantity ?? 0,
       averageFillPrice: input.averageFillPrice ?? null,
       notionalIdr: input.price * input.quantity,
+      referencePrice: input.referencePrice ?? null,
       createdAt: now,
       updatedAt: now,
       source: input.source,
@@ -71,6 +74,7 @@ export class OrderManager {
       exchangeStatus: input.exchangeStatus,
       exchangeUpdatedAt: input.exchangeUpdatedAt,
       relatedPositionId: input.relatedPositionId,
+      closeReason: input.closeReason,
       notes: input.notes,
     };
 

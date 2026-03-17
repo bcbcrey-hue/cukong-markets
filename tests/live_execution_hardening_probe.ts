@@ -12,7 +12,9 @@ import { RiskEngine } from '../src/domain/trading/riskEngine';
 import type { OpportunityAssessment, SignalCandidate } from '../src/core/types';
 import { JournalService } from '../src/services/journalService';
 import { PersistenceService, createDefaultSettings } from '../src/services/persistenceService';
+import { ReportService } from '../src/services/reportService';
 import { StateService } from '../src/services/stateService';
+import { SummaryService } from '../src/services/summaryService';
 
 class FakeLiveOrderApi {
   private readonly tradeQueue: Array<Record<string, unknown>> = [];
@@ -188,10 +190,12 @@ async function main() {
   const state = new StateService(persistence);
   const settings = new SettingsService(persistence);
   const journal = new JournalService(persistence);
+  const report = new ReportService();
   const orderManager = new OrderManager(persistence);
   const positionManager = new PositionManager(persistence);
   const accountStore = new AccountStore();
   const accountRegistry = new AccountRegistry(accountStore);
+  const summary = new SummaryService(persistence, journal, report, accountRegistry);
 
   await Promise.all([
     state.load(),
@@ -215,6 +219,7 @@ async function main() {
     positionManager,
     orderManager,
     journal,
+    summary,
   );
 
   const strictSettings = {
@@ -295,6 +300,14 @@ async function main() {
     recoveredPositionQty,
     25,
     'Startup recovery should materialize recovered filled quantity into runtime positions',
+  );
+  const recoverySummaries = await persistence.readExecutionSummaries();
+  assert.ok(
+    recoverySummaries.some(
+      (summaryItem) =>
+        summaryItem.orderId === recoveredOrder.id && summaryItem.status === 'PARTIALLY_FILLED',
+    ),
+    'Startup recovery should persist execution summary for recovered partial fill',
   );
 
   // Live buy partial->filled sync should persist exchange order id and apply fill deltas.
@@ -458,6 +471,28 @@ async function main() {
   assert.equal(dogePositions[0]?.quantity, orderQuantity, 'Merged logical position should hold total executed quantity');
   assert.equal(dogePositions[0]?.averageEntryPrice, 1006, 'Merged logical position should carry weighted average entry');
   assert.equal(dogePositions[0]?.entryFeesPaid, 25, 'Merged logical position should accumulate entry fees');
+  const buySummaries = await persistence.readExecutionSummaries();
+  assert.ok(
+    buySummaries.some(
+      (summaryItem) =>
+        summaryItem.exchangeOrderId === 'BUY-PARTIAL-1' && summaryItem.status === 'SUBMITTED',
+    ),
+    'Live buy should persist submitted execution summary',
+  );
+  assert.ok(
+    buySummaries.some(
+      (summaryItem) =>
+        summaryItem.exchangeOrderId === 'BUY-PARTIAL-1' && summaryItem.status === 'PARTIALLY_FILLED',
+    ),
+    'Live buy should persist partial execution summary',
+  );
+  assert.ok(
+    buySummaries.some(
+      (summaryItem) =>
+        summaryItem.exchangeOrderId === 'BUY-PARTIAL-1' && summaryItem.status === 'FILLED',
+    ),
+    'Live buy should persist filled execution summary',
+  );
 
   // Duplicate active buy guard should block same pair/account live submission.
   const dupBuyOpportunity = makeOpportunity('trx_idr', 5000);

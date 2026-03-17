@@ -6,6 +6,7 @@ import type {
   OrderRecord,
   PositionRecord,
   SignalCandidate,
+  SummaryAccuracy,
   TradingMode,
 } from '../../core/types';
 import { logger } from '../../core/logger';
@@ -19,6 +20,7 @@ import type {
 } from '../../integrations/indodax/privateApi';
 import { JournalService } from '../../services/journalService';
 import { StateService } from '../../services/stateService';
+import { SummaryService } from '../../services/summaryService';
 import { SettingsService } from '../settings/settingsService';
 import { AccountRegistry } from '../accounts/accountRegistry';
 import { OrderManager } from './orderManager';
@@ -58,6 +60,7 @@ export class ExecutionEngine {
     private readonly positions: PositionManager,
     private readonly orders: OrderManager,
     private readonly journal: JournalService,
+    private readonly summary: SummaryService,
   ) {}
 
   private toFiniteNumber(value: unknown): number | null {
@@ -82,6 +85,58 @@ export class ExecutionEngine {
   private getPrivateApi(accountId: string) {
     const account = this.accounts.getById(accountId);
     return account ? this.indodax.forAccount(account) : null;
+  }
+
+  private deriveExecutionAccuracy(
+    order: OrderRecord,
+    tradeStats: ExchangeTradeStats | null,
+    simulated = false,
+  ): SummaryAccuracy {
+    if (simulated) {
+      return 'SIMULATED';
+    }
+
+    if (order.status === 'PARTIALLY_FILLED') {
+      return 'PARTIAL_LIVE';
+    }
+
+    if (order.status === 'FILLED') {
+      return tradeStats ? 'CONFIRMED_LIVE' : 'OPTIMISTIC_LIVE';
+    }
+
+    if ((order.status === 'CANCELED' || order.status === 'REJECTED') && order.filledQuantity > 1e-8) {
+      return tradeStats ? 'PARTIAL_LIVE' : 'OPTIMISTIC_LIVE';
+    }
+
+    if (order.status === 'CANCELED' || order.status === 'REJECTED') {
+      return 'CONFIRMED_LIVE';
+    }
+
+    return 'OPTIMISTIC_LIVE';
+  }
+
+  private async publishExecutionSummary(
+    order: OrderRecord,
+    accuracy: SummaryAccuracy,
+    reason?: string,
+  ): Promise<void> {
+    await this.summary.publishExecutionSummary({ order, accuracy, reason });
+  }
+
+  private async publishTradeOutcomeSummary(
+    position: PositionRecord | undefined,
+    accuracy: SummaryAccuracy,
+    closeReason: string,
+  ): Promise<void> {
+    if (!position || position.status !== 'CLOSED') {
+      return;
+    }
+
+    await this.summary.publishTradeOutcomeSummary({
+      position,
+      accuracy,
+      closeReason,
+    });
   }
 
   private hasActiveOrder(
@@ -333,10 +388,17 @@ export class ExecutionEngine {
           )
         : averageFillPrice;
 
-    await this.applyFillDelta(order, nextFilledQuantity, deltaExecutionPrice, feeDelta);
+    const affectedPosition = await this.applyFillDelta(
+      order,
+      nextFilledQuantity,
+      deltaExecutionPrice,
+      feeDelta,
+    );
 
-    return this.orders.update(order.id, {
-      status: this.mapExchangeStatus(snapshot, order.quantity),
+    const nextStatus = this.mapExchangeStatus(snapshot, order.quantity);
+
+    const updatedOrder = await this.orders.update(order.id, {
+      status: nextStatus,
       filledQuantity: nextFilledQuantity,
       averageFillPrice,
       exchangeStatus: snapshot.exchangeStatus,
@@ -350,6 +412,29 @@ export class ExecutionEngine {
         `${source}=${snapshot.exchangeStatus}`,
       ),
     });
+
+    if (!updatedOrder) {
+      return updatedOrder;
+    }
+
+    const shouldPublishExecutionSummary =
+      updatedOrder.status !== order.status ||
+      Math.abs(updatedOrder.filledQuantity - order.filledQuantity) > 1e-8;
+
+    if (shouldPublishExecutionSummary) {
+      const accuracy = this.deriveExecutionAccuracy(updatedOrder, tradeStats);
+      await this.publishExecutionSummary(updatedOrder, accuracy, updatedOrder.notes);
+
+      if (updatedOrder.side === 'sell') {
+        await this.publishTradeOutcomeSummary(
+          affectedPosition,
+          accuracy,
+          updatedOrder.closeReason ?? updatedOrder.notes ?? 'SELL_FILLED',
+        );
+      }
+    }
+
+    return updatedOrder;
   }
 
   private async fetchOpenOrdersForAccount(accountId: string): Promise<Map<string, ExchangeOpenOrderMatch>> {
@@ -372,15 +457,17 @@ export class ExecutionEngine {
     nextFilledQuantity: number,
     executionPrice: number,
     feeDelta = 0,
-  ): Promise<void> {
+  ): Promise<PositionRecord | undefined> {
     const deltaFilled = Math.max(0, nextFilledQuantity - order.filledQuantity);
     if (deltaFilled <= 1e-8) {
-      return;
+      return undefined;
     }
+
+    let updatedPosition: PositionRecord | undefined;
 
     if (order.side === 'buy') {
       const stops = this.risk.buildStops(executionPrice, this.settings.get());
-      await this.positions.applyBuyFill({
+      updatedPosition = await this.positions.applyBuyFill({
         accountId: order.accountId,
         pair: order.pair,
         quantity: deltaFilled,
@@ -404,7 +491,12 @@ export class ExecutionEngine {
           deltaFilled,
         });
       } else {
-        await this.positions.closePartial(targetPosition.id, deltaFilled, executionPrice, feeDelta);
+        updatedPosition = await this.positions.closePartial(
+          targetPosition.id,
+          deltaFilled,
+          executionPrice,
+          feeDelta,
+        );
       }
     }
 
@@ -427,6 +519,7 @@ export class ExecutionEngine {
 
     await this.state.markTrade();
     await this.state.setPairCooldown(order.pair, Date.now() + this.settings.get().risk.cooldownMs);
+    return updatedPosition;
   }
 
   private async syncLiveOrder(orderId: string): Promise<OrderRecord | undefined> {
@@ -521,12 +614,22 @@ export class ExecutionEngine {
 
     await api.cancelOrder(order.pair, order.exchangeOrderId, order.side);
 
-    return this.orders.update(order.id, {
+    const canceledOrder = await this.orders.update(order.id, {
       status: 'CANCELED',
       exchangeStatus: 'canceled_after_timeout',
       exchangeUpdatedAt: nowIso(),
       notes: this.appendNotes(order.notes, 'buy remainder canceled after timeout'),
     });
+
+    if (canceledOrder) {
+      await this.publishExecutionSummary(
+        canceledOrder,
+        canceledOrder.filledQuantity > 1e-8 ? 'PARTIAL_LIVE' : 'CONFIRMED_LIVE',
+        'buy remainder canceled after timeout',
+      );
+    }
+
+    return canceledOrder;
   }
 
   private shouldSimulate(mode: TradingMode, settings: BotSettings): boolean {
@@ -690,6 +793,7 @@ export class ExecutionEngine {
     }
 
     const entryPrice = this.getAggressiveBuyLimitPrice(signal, settings);
+    const referencePrice = this.getBuyReferencePrice(signal);
     const quantity = entryPrice > 0 ? amountIdr / entryPrice : 0;
     const stops = this.risk.buildStops(entryPrice, settings);
 
@@ -701,12 +805,15 @@ export class ExecutionEngine {
       price: entryPrice,
       quantity,
       source,
+      referencePrice,
       status: 'OPEN',
       notes: this.getCandidateNotes(signal),
     });
 
     if (this.shouldSimulate(settings.tradingMode, settings)) {
-      await this.orders.markFilled(order.id, quantity, entryPrice);
+      await this.publishExecutionSummary(order, 'SIMULATED', 'simulated buy submitted');
+
+      const filledOrder = await this.orders.markFilled(order.id, quantity, entryPrice);
 
       await this.positions.open({
         accountId,
@@ -739,6 +846,10 @@ export class ExecutionEngine {
         createdAt: nowIso(),
       });
 
+      if (filledOrder) {
+        await this.publishExecutionSummary(filledOrder, 'SIMULATED', 'simulated buy filled');
+      }
+
       await this.state.markTrade();
       await this.state.setPairCooldown(signal.pair, Date.now() + settings.risk.cooldownMs);
 
@@ -755,7 +866,7 @@ export class ExecutionEngine {
         'live buy order sent',
       );
 
-      await this.orders.update(order.id, {
+      const submittedOrder = await this.orders.update(order.id, {
         exchangeOrderId,
         exchangeStatus: exchangeOrderId ? 'submitted' : 'submitted_without_order_id',
         exchangeUpdatedAt: nowIso(),
@@ -765,16 +876,27 @@ export class ExecutionEngine {
         ),
       });
 
+      if (submittedOrder) {
+        await this.publishExecutionSummary(submittedOrder, 'OPTIMISTIC_LIVE', 'buy submitted to exchange');
+      }
+
       const synced = exchangeOrderId
         ? await this.syncLiveOrder(order.id)
         : await this.orders.markOpen(order.id);
 
       return this.formatLiveOrderMessage('BUY', synced ?? order);
     } catch (error) {
-      await this.orders.reject(
+      const rejectedOrder = await this.orders.reject(
         order.id,
         error instanceof Error ? error.message : 'live buy failed',
       );
+      if (rejectedOrder) {
+        await this.publishExecutionSummary(
+          rejectedOrder,
+          'CONFIRMED_LIVE',
+          error instanceof Error ? error.message : 'live buy failed',
+        );
+      }
       throw error;
     }
   }
@@ -821,6 +943,7 @@ export class ExecutionEngine {
     positionId: string,
     quantityToSell: number,
     source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO' = 'MANUAL',
+    closeReason = source === 'AUTO' ? 'AUTO_EXIT' : 'MANUAL_SELL',
   ): Promise<string> {
     const position = this.positions.getById(positionId);
     if (!position || position.status === 'CLOSED') {
@@ -849,12 +972,16 @@ export class ExecutionEngine {
       quantity: closeQuantity,
       source,
       status: 'OPEN',
+      referencePrice: exitPrice,
       relatedPositionId: position.id,
+      closeReason,
       notes: 'manual/exit sell',
     });
 
     if (this.shouldSimulate(settings.tradingMode, settings)) {
-      await this.orders.markFilled(order.id, closeQuantity, exitPrice);
+      await this.publishExecutionSummary(order, 'SIMULATED', `${closeReason} submitted`);
+
+      const filledOrder = await this.orders.markFilled(order.id, closeQuantity, exitPrice);
       const updated = await this.positions.closePartial(position.id, closeQuantity, exitPrice);
 
       await this.journal.append({
@@ -872,6 +999,11 @@ export class ExecutionEngine {
         },
         createdAt: nowIso(),
       });
+
+      if (filledOrder) {
+        await this.publishExecutionSummary(filledOrder, 'SIMULATED', `${closeReason} filled`);
+      }
+      await this.publishTradeOutcomeSummary(updated, 'SIMULATED', closeReason);
 
       await this.state.markTrade();
       await this.state.setPairCooldown(position.pair, Date.now() + settings.risk.cooldownMs);
@@ -894,7 +1026,7 @@ export class ExecutionEngine {
         'live sell order sent',
       );
 
-      await this.orders.update(order.id, {
+      const submittedOrder = await this.orders.update(order.id, {
         exchangeOrderId,
         exchangeStatus: exchangeOrderId ? 'submitted' : 'submitted_without_order_id',
         exchangeUpdatedAt: nowIso(),
@@ -904,16 +1036,27 @@ export class ExecutionEngine {
         ),
       });
 
+      if (submittedOrder) {
+        await this.publishExecutionSummary(submittedOrder, 'OPTIMISTIC_LIVE', `${closeReason} submitted`);
+      }
+
       const synced = exchangeOrderId
         ? await this.syncLiveOrder(order.id)
         : await this.orders.markOpen(order.id);
 
       return this.formatLiveOrderMessage('SELL', synced ?? order);
     } catch (error) {
-      await this.orders.reject(
+      const rejectedOrder = await this.orders.reject(
         order.id,
         error instanceof Error ? error.message : 'live sell failed',
       );
+      if (rejectedOrder) {
+        await this.publishExecutionSummary(
+          rejectedOrder,
+          'CONFIRMED_LIVE',
+          error instanceof Error ? error.message : 'live sell failed',
+        );
+      }
       throw error;
     }
   }
@@ -1062,7 +1205,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      await this.manualSell(position.id, position.quantity, 'AUTO');
+      await this.manualSell(position.id, position.quantity, 'AUTO', exit.reason ?? 'AUTO_EXIT');
       messages.push(`${position.pair} exit by ${exit.reason}`);
     }
 
@@ -1085,14 +1228,28 @@ export class ExecutionEngine {
       if (order.exchangeOrderId && account) {
         const api = this.indodax.forAccount(account);
         await api.cancelOrder(order.pair, order.exchangeOrderId, order.side);
-        await this.orders.update(order.id, {
+        const canceledOrder = await this.orders.update(order.id, {
           status: 'CANCELED',
           exchangeStatus: 'canceled',
           exchangeUpdatedAt: nowIso(),
           notes: this.appendNotes(order.notes, 'exchange cancel requested'),
         });
+        if (canceledOrder) {
+          await this.publishExecutionSummary(
+            canceledOrder,
+            canceledOrder.filledQuantity > 1e-8 ? 'PARTIAL_LIVE' : 'CONFIRMED_LIVE',
+            'exchange cancel requested',
+          );
+        }
       } else {
-        await this.orders.cancel(order.id, 'local cancel without exchange order id');
+        const canceledOrder = await this.orders.cancel(order.id, 'local cancel without exchange order id');
+        if (canceledOrder) {
+          await this.publishExecutionSummary(
+            canceledOrder,
+            this.shouldSimulate(settings.tradingMode, settings) ? 'SIMULATED' : 'OPTIMISTIC_LIVE',
+            'local cancel without exchange order id',
+          );
+        }
       }
 
       count += 1;
@@ -1105,7 +1262,7 @@ export class ExecutionEngine {
     const openPositions: PositionRecord[] = this.positions.listOpen();
 
     for (const position of openPositions) {
-      await this.manualSell(position.id, position.quantity, 'AUTO');
+      await this.manualSell(position.id, position.quantity, 'AUTO', 'SELL_ALL_POSITIONS');
     }
 
     return `Closed ${openPositions.length} positions`;
