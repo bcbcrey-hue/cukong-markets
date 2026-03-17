@@ -294,6 +294,14 @@ async function main() {
   const workerPool = new WorkerPoolService(1, true);
   await workerPool.start();
 
+  const resolvedFeatureWorkerPath = (
+    workerPool as unknown as { resolveWorkerPath: (type: 'feature' | 'pattern' | 'backtest') => string }
+  ).resolveWorkerPath('feature');
+  assert.ok(
+    resolvedFeatureWorkerPath.includes(path.join('dist', 'workers', 'featureWorker.js')),
+    'WorkerPool should prefer dist/workers path when build output exists',
+  );
+
   const featureTask = await workerPool.runFeatureTask({
     snapshot: snapshots[0],
     signal: signals[0],
@@ -303,6 +311,20 @@ async function main() {
     Number.isFinite(featureTask.accumulationScore),
     'Feature worker should return valid microstructure features',
   );
+
+  const patternTask = await workerPool.runPatternTask({
+    pair: snapshots[0].pair,
+    signal: signals[0],
+    microstructure: featureTask,
+    probability: {
+      pumpProbability: 0.7,
+      continuationProbability: 0.62,
+      trapProbability: 0.15,
+      confidence: 0.8,
+    },
+    regime: 'BREAKOUT_SETUP',
+  });
+  assert.ok(Array.isArray(patternTask), 'Pattern worker should return array payload');
 
   const backtestSettings = {
     ...strictSettings,
@@ -324,6 +346,11 @@ async function main() {
     backtestSettings,
   );
   assert.ok(backtestResult.signalsGenerated > 0, 'Backtest should replay at least one signal');
+  assert.deepEqual(
+    backtestResult.pairsTested,
+    ['btc_idr'],
+    'Backtest replay loader should filter snapshots by config.pair',
+  );
 
   const backtestFiles = await fs.readdir(path.resolve(tempDataDir, 'backtest'));
   assert.ok(
@@ -335,6 +362,10 @@ async function main() {
   assert.ok(
     workerStats.some((worker) => worker.name === 'feature' && worker.jobsProcessed >= 1),
     'Feature worker should process at least one task',
+  );
+  assert.ok(
+    workerStats.some((worker) => worker.name === 'pattern' && worker.jobsProcessed >= 1),
+    'Pattern worker should process at least one task',
   );
   assert.ok(
     workerStats.some((worker) => worker.name === 'backtest' && worker.jobsProcessed >= 1),

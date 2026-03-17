@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { env } from '../config/env';
@@ -173,6 +174,11 @@ export class WorkerPoolService {
           ? 'patternWorker'
           : 'backtestWorker';
 
+    const distPath = path.resolve(process.cwd(), 'dist/workers', `${fileName}.js`);
+    if (existsSync(distPath)) {
+      return distPath;
+    }
+
     const directory = this.isTsRuntime()
       ? path.resolve(process.cwd(), 'src/workers')
       : path.resolve(__dirname, '../workers');
@@ -181,9 +187,17 @@ export class WorkerPoolService {
   }
 
   private createWorker(type: WorkerTaskType): WorkerWrapper {
-    const worker = new Worker(this.resolveWorkerPath(type), {
-      execArgv: this.isTsRuntime() ? ['--import=tsx'] : [],
-    });
+    const workerPath = this.resolveWorkerPath(type);
+    const useTsxCli = workerPath.endsWith('.ts');
+
+    const worker = useTsxCli
+      ? new Worker(require.resolve('tsx/cli'), {
+          argv: [workerPath],
+          execArgv: [],
+        })
+      : new Worker(workerPath, {
+          execArgv: [],
+        });
 
     const wrapper: WorkerWrapper = {
       workerId: `${type}-${randomUUID()}`,

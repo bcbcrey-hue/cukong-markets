@@ -1,0 +1,45 @@
+{
+  "summary": "Backend-only Batch 3B verification executed: lint/build pass, runtime regression pass, plus targeted worker-timeout probe exposing runtime stability bug.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "WorkerPoolService.enqueue timeout path",
+        "issue": "When a queued/dispatched worker task times out, timeout handler removes job and rejects promise but never resets worker.busy/currentJobId. Reproduced with 1ms feature-task timeout; worker remains busy=true permanently, causing pool starvation/deadlock for subsequent tasks.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/tests/worker_timeout_probe.ts"
+  ],
+  "action_items": [
+    "Fix timeout cleanup in WorkerPoolService.enqueue so timed-out dispatched jobs also release worker state (busy/currentJobId) and optionally terminate+respawn poisoned worker.",
+    "Add regression guard in worker pool tests for timeout->recovery behavior.",
+    "Re-run runtime regression and timeout probe after fix using isolated DATA_DIR."
+  ],
+  "critical_code_review_comments": [
+    "Worker runtime currently has single-failure deadlock risk: one timeout can permanently reduce effective worker capacity to zero for that worker type.",
+    "Batch 3B dist worker path preference works under current build artifacts and real worker execution."
+  ],
+  "updated_files": [
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/tests/worker_timeout_probe.ts",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "success_rate": {
+    "backend": "80%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data; isolated temp DATA_DIR paths used for each run.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Passing checks: yarn lint, yarn build, TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-regression-b3b-t1b LOG_DIR=/tmp/mafiamarkets-regression-b3b-t1b/logs TEMP_DIR=/tmp/mafiamarkets-regression-b3b-t1b/tmp yarn tsx /app/tests/runtime_backend_regression.ts. Failing probe: TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-timeout-probe LOG_DIR=/tmp/mafiamarkets-timeout-probe/logs TEMP_DIR=/tmp/mafiamarkets-timeout-probe/tmp yarn tsx /app/tests/worker_timeout_probe.ts.",
+  "rca of the issue": "RCA: timeout callback in enqueue only deletes jobs map entry + queue entry and rejects promise. It does not clear owning worker wrapper state, so onWorkerMessage ignores late response because job no longer exists, leaving wrapper.busy=true/currentJobId set forever. Reproduction: invoke private enqueue('feature', payload, 1ms) after workerPool.start(); wait ~25ms; snapshot() shows feature worker busy true. Mitigation: on timeout, locate worker by currentJobId, clear busy/currentJobId, set lastError, and preferably terminate+recreate worker to avoid stale in-flight execution."
+}
