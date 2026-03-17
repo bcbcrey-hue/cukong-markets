@@ -1,0 +1,49 @@
+{
+  "summary": "Backend-only hardening verification completed for live execution changes. Build passed, live execution hardening probe passed, runtime backend regression passed, and worker timeout probe passed. Exchange integrations in these probes are MOCKED.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "indodax/privateApi tradeHistory reconciliation path",
+        "issue": "Current reconciliation relies on tradeHistory only; Indodax official docs announce tradeHistory decommission on 2026-04-07 (migration target: /api/v2/myTrades).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "executionEngine.extractTradeStats",
+        "issue": "Fee aggregation can double-count if exchange payload includes both fee and fee_* fields in same trade object."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/live_execution_hardening_probe.ts",
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/tests/worker_timeout_probe.ts"
+  ],
+  "action_items": [
+    "Add reconciliation fallback/migration to Indodax Trade API v2 (myTrades) before tradeHistory sunset.",
+    "Harden fee parser to avoid double-counting when fee and fee_* coexist.",
+    "Keep these three probes in CI as regression gates for live-order recovery and timeout resilience."
+  ],
+  "critical_code_review_comments": [
+    "executionEngine.ts exceeds 700 lines and mixes order sync, recovery, and execution orchestration; split modules to reduce regression blast radius.",
+    "Indodax tradeHistory deprecation is time-bound and should be treated as near-term production risk for live reconciliation."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data created. Isolated DATA_DIR under /tmp used for each probe.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Executed and passed: yarn build; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it5-live LOG_DIR=/tmp/mafiamarkets-it5-live/logs TEMP_DIR=/tmp/mafiamarkets-it5-live/tmp yarn tsx /app/tests/live_execution_hardening_probe.ts; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it5-reg LOG_DIR=/tmp/mafiamarkets-it5-reg/logs TEMP_DIR=/tmp/mafiamarkets-it5-reg/tmp yarn tsx /app/tests/runtime_backend_regression.ts; TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it5-timeout LOG_DIR=/tmp/mafiamarkets-it5-timeout/logs TEMP_DIR=/tmp/mafiamarkets-it5-timeout/tmp yarn tsx /app/tests/worker_timeout_probe.ts. MOCKED APIs: FakeLiveIndodaxClient/FakeLiveOrderApi/FakeIndodaxClient.",
+  "rca of the issue": "RCA-1: Reconciliation path currently binds to legacy tradeHistory payload parsing; external API lifecycle notice indicates endpoint retirement, creating forward-compatibility outage risk. Mitigation: introduce adapter for new myTrades endpoint + dual-read fallback during transition. RCA-2: Fee rollup currently sums both direct fee and fee_* keys; if both are returned for a trade, cumulative fee inflates. Mitigation: normalize source-of-truth fee field per payload shape before accumulation."
+}

@@ -43,6 +43,9 @@ export interface StrategySettings {
   minScoreToBuy: number;
   minPumpProbability: number;
   minConfidence: number;
+  buySlippageBps: number;
+  maxBuySlippageBps: number;
+  buyOrderTimeoutMs: number;
   spoofRiskBlockThreshold: number;
   useAntiSpoof: boolean;
   useHistoricalContext: boolean;
@@ -273,6 +276,10 @@ export interface OrderRecord {
   exchangeOrderId?: string;
   exchangeStatus?: string;
   exchangeUpdatedAt?: string;
+  feeAmount?: number;
+  feeAsset?: string;
+  executedTradeCount?: number;
+  lastExecutedAt?: string;
   relatedPositionId?: string;
   notes?: string;
 }
@@ -290,6 +297,8 @@ export interface PositionRecord {
   peakPrice: number;
   unrealizedPnl: number;
   realizedPnl: number;
+  entryFeesPaid?: number;
+  exitFeesPaid?: number;
   stopLossPrice: number | null;
   takeProfitPrice: number | null;
   openedAt: string;

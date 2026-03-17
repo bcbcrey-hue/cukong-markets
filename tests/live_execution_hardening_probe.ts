@@ -18,6 +18,7 @@ class FakeLiveOrderApi {
   private readonly tradeQueue: Array<Record<string, unknown>> = [];
   private readonly orderQueue = new Map<string, Array<Record<string, unknown>>>();
   private readonly openOrdersQueue: Array<Record<string, unknown>> = [];
+  private readonly tradeHistoryQueue: Array<Record<string, unknown>> = [];
 
   queueTrade(response: Record<string, unknown>) {
     this.tradeQueue.push(response);
@@ -25,6 +26,10 @@ class FakeLiveOrderApi {
 
   queueOpenOrders(response: Record<string, unknown>) {
     this.openOrdersQueue.push(response);
+  }
+
+  queueTradeHistory(response: Record<string, unknown>) {
+    this.tradeHistoryQueue.push(response);
   }
 
   queueOrder(orderId: string, ...responses: Array<Record<string, unknown>>) {
@@ -59,6 +64,20 @@ class FakeLiveOrderApi {
         success: 1,
         return: {
           orders: {},
+        },
+      };
+    }
+
+    return next;
+  }
+
+  async tradeHistory() {
+    const next = this.tradeHistoryQueue.shift();
+    if (!next) {
+      return {
+        success: 1,
+        return: {
+          trades: [],
         },
       };
     }
@@ -210,6 +229,11 @@ async function main() {
     },
   };
   await settings.replace(strictSettings);
+  assert.equal(
+    settings.get().risk.takeProfitPct,
+    15,
+    'Default take profit baseline should be 15%',
+  );
 
   // Startup recovery should sync persisted live order via openOrders.
   const recoveredOrder = await orderManager.create({
@@ -275,10 +299,25 @@ async function main() {
 
   // Live buy partial->filled sync should persist exchange order id and apply fill deltas.
   const partialOpportunity = makeOpportunity('doge_idr', 1000);
-  const orderQuantity = 100_000 / partialOpportunity.bestAsk;
+  const aggressiveBuyPrice = partialOpportunity.bestAsk * (1 + settings.get().strategy.buySlippageBps / 10_000);
+  const orderQuantity = 100_000 / aggressiveBuyPrice;
   const firstFilled = orderQuantity * 0.4;
 
   liveApi.queueTrade({ success: 1, return: { order_id: 'BUY-PARTIAL-1' } });
+  liveApi.queueTradeHistory({
+    success: 1,
+    return: {
+      trades: [
+        {
+          order_id: 'BUY-PARTIAL-1',
+          price: '1000',
+          doge: String(firstFilled),
+          fee_idr: '10',
+          timestamp: String(Date.now()),
+        },
+      ],
+    },
+  });
   liveApi.queueOpenOrders({
     success: 1,
     return: {
@@ -340,6 +379,8 @@ async function main() {
   const partialOrder = orderManager.list().find((o) => o.exchangeOrderId === 'BUY-PARTIAL-1');
   assert.ok(partialOrder, 'Live buy should persist exchange order id');
   assert.ok((partialOrder?.filledQuantity ?? 0) > 0, 'Initial live sync should capture partial fill quantity');
+  assert.equal(partialOrder?.price, aggressiveBuyPrice, 'Buy should use aggressive limit price from best ask + slippage');
+  assert.equal(partialOrder?.feeAmount, 10, 'Initial reconciliation should capture exchange fee');
 
   const beforeSyncTotal = positionManager
     .listOpen()
@@ -361,6 +402,27 @@ async function main() {
       orders: {},
     },
   });
+  liveApi.queueTradeHistory({
+    success: 1,
+    return: {
+      trades: [
+        {
+          order_id: 'BUY-PARTIAL-1',
+          price: '1000',
+          doge: String(firstFilled),
+          fee_idr: '10',
+          timestamp: String(Date.now() - 1000),
+        },
+        {
+          order_id: 'BUY-PARTIAL-1',
+          price: '1010',
+          doge: String(orderQuantity - firstFilled),
+          fee_idr: '15',
+          timestamp: String(Date.now()),
+        },
+      ],
+    },
+  });
 
   liveApi.queueOrder('RECOVER-OPEN-1', {
     success: 1,
@@ -379,6 +441,9 @@ async function main() {
 
   const afterSyncOrder = orderManager.list().find((o) => o.exchangeOrderId === 'BUY-PARTIAL-1');
   assert.equal(afterSyncOrder?.status, 'FILLED', 'syncActiveOrders should move order to FILLED after exchange fill');
+  assert.equal(afterSyncOrder?.feeAmount, 25, 'Fee cumulative should be captured from exchange trades');
+  assert.equal(afterSyncOrder?.executedTradeCount, 2, 'Executed trade detail count should be captured');
+  assert.equal(afterSyncOrder?.averageFillPrice, 1006, 'Average fill should follow weighted exchange trades');
 
   const afterSyncTotal = positionManager
     .listOpen()
@@ -386,27 +451,18 @@ async function main() {
     .reduce((sum, p) => sum + p.quantity, 0);
   assert.ok(afterSyncTotal > beforeSyncTotal, 'syncActiveOrders should apply additional fill delta to positions');
 
+  const dogePositions = positionManager
+    .listOpen()
+    .filter((position) => position.pair === 'doge_idr' && position.accountId === defaultAccount.id);
+  assert.equal(dogePositions.length, 1, 'Repeated partial fills should remain one logical position per pair/account');
+  assert.equal(dogePositions[0]?.quantity, orderQuantity, 'Merged logical position should hold total executed quantity');
+  assert.equal(dogePositions[0]?.averageEntryPrice, 1006, 'Merged logical position should carry weighted average entry');
+  assert.equal(dogePositions[0]?.entryFeesPaid, 25, 'Merged logical position should accumulate entry fees');
+
   // Duplicate active buy guard should block same pair/account live submission.
   const dupBuyOpportunity = makeOpportunity('trx_idr', 5000);
   const dupBuyQty = 100_000 / dupBuyOpportunity.bestAsk;
   liveApi.queueTrade({ success: 1, return: { order_id: 'BUY-DUP-1' } });
-  liveApi.queueOpenOrders({
-    success: 1,
-    return: {
-      orders: {
-        trx_idr: [
-          {
-            order_id: 'BUY-DUP-1',
-            type: 'buy',
-            price: String(dupBuyOpportunity.bestAsk),
-            order_trx: String(dupBuyQty),
-            remain_trx: String(dupBuyQty),
-            status: 'open',
-          },
-        ],
-      },
-    },
-  });
   liveApi.queueOrder('BUY-DUP-1', {
     success: 1,
     return: {
@@ -437,23 +493,6 @@ async function main() {
     takeProfitPrice: null,
   });
   liveApi.queueTrade({ success: 1, return: { order_id: 'SELL-DUP-1' } });
-  liveApi.queueOpenOrders({
-    success: 1,
-    return: {
-      orders: {
-        ada_idr: [
-          {
-            order_id: 'SELL-DUP-1',
-            type: 'sell',
-            price: '10000',
-            order_ada: '20',
-            remain_ada: '20',
-            status: 'open',
-          },
-        ],
-      },
-    },
-  });
   liveApi.queueOrder('SELL-DUP-1', {
     success: 1,
     return: {
@@ -482,6 +521,52 @@ async function main() {
   const canceledSell = orderManager.list().find((o) => o.exchangeOrderId === 'SELL-DUP-1');
   assert.equal(canceledBuy?.status, 'CANCELED', 'Active buy should be marked CANCELED after cancelAllOrders');
   assert.equal(canceledSell?.status, 'CANCELED', 'Active sell should be marked CANCELED after cancelAllOrders');
+
+  // Stale aggressive buy should cancel remainder instead of hanging.
+  const staleOrder = await orderManager.create({
+    accountId: defaultAccount.id,
+    pair: 'pepe_idr',
+    side: 'buy',
+    type: 'limit',
+    price: 100,
+    quantity: 1000,
+    source: 'AUTO',
+    status: 'OPEN',
+    exchangeOrderId: 'STALE-BUY-1',
+    exchangeStatus: 'open',
+    exchangeUpdatedAt: new Date().toISOString(),
+    notes: 'stale buy order',
+  });
+  await orderManager.update(staleOrder.id, {
+    createdAt: new Date(Date.now() - settings.get().strategy.buyOrderTimeoutMs - 1_000).toISOString(),
+  });
+
+  liveApi.queueOpenOrders({
+    success: 1,
+    return: {
+      orders: {
+        pepe_idr: [
+          {
+            order_id: 'STALE-BUY-1',
+            type: 'buy',
+            price: '100',
+            order_pepe: '1000',
+            remain_pepe: '1000',
+            status: 'open',
+          },
+        ],
+      },
+    },
+  });
+
+  await execution.syncActiveOrders();
+  const staleAfterSync = orderManager.getById(staleOrder.id);
+  assert.equal(staleAfterSync?.status, 'CANCELED', 'Stale buy remainder should be canceled after timeout');
+  assert.equal(
+    staleAfterSync?.exchangeStatus,
+    'canceled_after_timeout',
+    'Timeout cancellation should be reflected in exchange status field',
+  );
 
   console.log('PASS live_execution_hardening_probe');
 }

@@ -26,6 +26,8 @@ import {
   hotlistKeyboard,
   mainMenuKeyboard,
   positionsKeyboard,
+  riskSettingsKeyboard,
+  strategySettingsKeyboard,
   tradingModeKeyboard,
 } from './keyboards';
 import { UploadHandler } from './uploadHandler';
@@ -48,6 +50,7 @@ interface HandlerDeps {
 interface UserFlowState {
   awaitingUpload: boolean;
   pendingBuyPair?: string;
+  pendingConfig?: 'BUY_SLIPPAGE_BPS' | 'TAKE_PROFIT_PCT';
 }
 
 const userFlows = new Map<number, UserFlowState>();
@@ -111,6 +114,18 @@ function renderRiskText(settings: SettingsService): string {
     `takeProfitPct=${risk.takeProfitPct}`,
     `stopLossPct=${risk.stopLossPct}`,
     `trailingStopPct=${risk.trailingStopPct}`,
+  ].join('\n');
+}
+
+function renderStrategyText(settings: SettingsService): string {
+  const strategy = settings.get().strategy;
+  return [
+    `tradingMode=${settings.get().tradingMode}`,
+    `buySlippageBps=${strategy.buySlippageBps}`,
+    `maxBuySlippageBps=${strategy.maxBuySlippageBps}`,
+    `buyOrderTimeoutMs=${strategy.buyOrderTimeoutMs}`,
+    `minPumpProbability=${strategy.minPumpProbability}`,
+    `minConfidence=${strategy.minConfidence}`,
   ].join('\n');
 }
 
@@ -262,14 +277,14 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
   bot.hears(TELEGRAM_MENU.STRATEGY, async (ctx) => {
     if (await denyTelegramAccess(ctx)) return;
     await ctx.reply(
-      `Mode saat ini: ${deps.settings.get().tradingMode}`,
-      tradingModeKeyboard(deps.settings.get().tradingMode),
+      renderStrategyText(deps.settings),
+      strategySettingsKeyboard(deps.settings.get()),
     );
   });
 
   bot.hears(TELEGRAM_MENU.RISK, async (ctx) => {
     if (await denyTelegramAccess(ctx)) return;
-    await ctx.reply(renderRiskText(deps.settings), mainMenuKeyboard);
+    await ctx.reply(renderRiskText(deps.settings), riskSettingsKeyboard(deps.settings.get()));
   });
 
   bot.hears(TELEGRAM_MENU.ACCOUNTS, async (ctx) => {
@@ -337,6 +352,28 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       await deps.settings.setTradingMode(mode);
       await deps.state.setTradingMode(mode);
       await ctx.reply(`Trading mode diubah ke ${mode}`);
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'BUY_SLIPPAGE') {
+      if (userFlow) {
+        userFlow.pendingConfig = 'BUY_SLIPPAGE_BPS';
+      }
+      await ctx.reply(
+        `Kirim buy slippage dalam bps.\nSaat ini: ${deps.settings.get().strategy.buySlippageBps} bps\nMaks aman: ${deps.settings.get().strategy.maxBuySlippageBps} bps`,
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'TAKE_PROFIT') {
+      if (userFlow) {
+        userFlow.pendingConfig = 'TAKE_PROFIT_PCT';
+      }
+      await ctx.reply(
+        `Kirim nilai take profit persen.\nSaat ini: ${deps.settings.get().risk.takeProfitPct}%`,
+      );
       await ctx.answerCbQuery();
       return;
     }
@@ -483,6 +520,38 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     const userFlow = getUserFlow(userId);
     const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+
+    if (userFlow.pendingConfig === 'BUY_SLIPPAGE_BPS') {
+      const slippageBps = Math.round(Number(text.replace(/[^0-9.]/g, '')));
+      if (!Number.isFinite(slippageBps) || slippageBps < 0) {
+        await ctx.reply('Nilai slippage tidak valid. Kirim angka bps, misalnya 25');
+        return;
+      }
+
+      const maxBuySlippageBps = deps.settings.get().strategy.maxBuySlippageBps;
+      if (slippageBps > maxBuySlippageBps) {
+        await ctx.reply(`Slippage melebihi pagar aman. Maksimum ${maxBuySlippageBps} bps.`);
+        return;
+      }
+
+      await deps.settings.patchStrategy({ buySlippageBps: slippageBps });
+      userFlow.pendingConfig = undefined;
+      await ctx.reply(`Buy slippage diubah ke ${slippageBps} bps`, mainMenuKeyboard);
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'TAKE_PROFIT_PCT') {
+      const takeProfitPct = Number(text.replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(takeProfitPct) || takeProfitPct <= 0 || takeProfitPct > 100) {
+        await ctx.reply('Take profit tidak valid. Kirim angka persen, misalnya 15');
+        return;
+      }
+
+      await deps.settings.patchRisk({ takeProfitPct });
+      userFlow.pendingConfig = undefined;
+      await ctx.reply(`Take profit diubah ke ${takeProfitPct}%`, mainMenuKeyboard);
+      return;
+    }
 
     if (!userFlow.pendingBuyPair) {
       return;

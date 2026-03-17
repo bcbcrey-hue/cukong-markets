@@ -1,5 +1,5 @@
 import { Markup } from 'telegraf';
-import type { HotlistEntry, PositionRecord, TradingMode } from '../../core/types';
+import type { BotSettings, HotlistEntry, PositionRecord, TradingMode } from '../../core/types';
 import { buildCallback } from './callbackRouter';
 
 export const TELEGRAM_MENU = {
@@ -66,6 +66,36 @@ export function tradingModeKeyboard(current: TradingMode) {
       ),
     ]),
   );
+}
+
+export function strategySettingsKeyboard(settings: BotSettings) {
+  const modes: TradingMode[] = ['OFF', 'ALERT_ONLY', 'SEMI_AUTO', 'FULL_AUTO'];
+
+  return Markup.inlineKeyboard([
+    ...modes.map((mode) => [
+      Markup.button.callback(
+        `${settings.tradingMode === mode ? '✅ ' : ''}${mode}`,
+        buildCallback({ namespace: 'SET', action: 'MODE', value: mode }),
+      ),
+    ]),
+    [
+      Markup.button.callback(
+        `Buy Slippage ${settings.strategy.buySlippageBps} bps`,
+        buildCallback({ namespace: 'SET', action: 'BUY_SLIPPAGE' }),
+      ),
+    ],
+  ]);
+}
+
+export function riskSettingsKeyboard(settings: BotSettings) {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback(
+        `Take Profit ${settings.risk.takeProfitPct}%`,
+        buildCallback({ namespace: 'SET', action: 'TAKE_PROFIT' }),
+      ),
+    ],
+  ]);
 }
 
 export function hotlistKeyboard(hotlist: HotlistEntry[]) {

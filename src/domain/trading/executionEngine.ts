@@ -14,6 +14,7 @@ import { IndodaxClient } from '../../integrations/indodax/client';
 import type {
   IndodaxGetOrderReturn,
   IndodaxOpenOrdersReturn,
+  IndodaxTradeHistoryReturn,
   IndodaxTradeReturn,
 } from '../../integrations/indodax/privateApi';
 import { JournalService } from '../../services/journalService';
@@ -38,6 +39,15 @@ interface ExchangeOpenOrderMatch {
   order: Record<string, string | number>;
 }
 
+interface ExchangeTradeStats {
+  filledQuantity: number | null;
+  averageFillPrice: number | null;
+  feeAmount: number;
+  feeAsset: string | null;
+  tradeCount: number;
+  lastExecutedAt: string | null;
+}
+
 export class ExecutionEngine {
   constructor(
     private readonly accounts: AccountRegistry,
@@ -60,8 +70,18 @@ export class ExecutionEngine {
     return baseAsset || 'amount';
   }
 
+  private quoteAsset(pair: string): string {
+    const [, quoteAsset = 'idr'] = pair.toLowerCase().split('_');
+    return quoteAsset || 'idr';
+  }
+
   private appendNotes(current: string | undefined, note: string): string {
     return current ? `${current}; ${note}` : note;
+  }
+
+  private getPrivateApi(accountId: string) {
+    const account = this.accounts.getById(accountId);
+    return account ? this.indodax.forAccount(account) : null;
   }
 
   private hasActiveOrder(
@@ -148,6 +168,21 @@ export class ExecutionEngine {
     return this.buildExchangeSnapshotFromOrderFields(order, payload.order ?? {}, 'open');
   }
 
+  private mergeTradeStatsIntoSnapshot(
+    snapshot: ExchangeOrderSnapshot,
+    tradeStats: ExchangeTradeStats | null,
+  ): ExchangeOrderSnapshot {
+    if (!tradeStats) {
+      return snapshot;
+    }
+
+    return {
+      ...snapshot,
+      filledQuantity: tradeStats.filledQuantity ?? snapshot.filledQuantity,
+      averageFillPrice: tradeStats.averageFillPrice ?? snapshot.averageFillPrice,
+    };
+  }
+
   private flattenOpenOrders(payload: IndodaxOpenOrdersReturn): Map<string, ExchangeOpenOrderMatch> {
     const matches = new Map<string, ExchangeOpenOrderMatch>();
 
@@ -165,21 +200,142 @@ export class ExecutionEngine {
     return matches;
   }
 
+  private parseTradeTimestamp(raw: Record<string, string | number>): string | null {
+    const candidates = [raw.timestamp, raw.trade_time, raw.submit_time, raw.finish_time];
+
+    for (const candidate of candidates) {
+      const value = this.toFiniteNumber(candidate);
+      if (value === null || value <= 0) {
+        continue;
+      }
+
+      const normalized = value < 1_000_000_000_000 ? value * 1000 : value;
+      return new Date(normalized).toISOString();
+    }
+
+    return null;
+  }
+
+  private extractTradeStats(
+    order: OrderRecord,
+    payload: IndodaxTradeHistoryReturn,
+  ): ExchangeTradeStats | null {
+    const exchangeOrderId = order.exchangeOrderId ? String(order.exchangeOrderId) : null;
+    if (!exchangeOrderId) {
+      return null;
+    }
+
+    const asset = this.baseAsset(order.pair);
+    const matchingTrades = (payload.trades ?? []).filter((trade) => {
+      const orderId = trade.order_id;
+      return orderId !== undefined && orderId !== null && String(orderId) === exchangeOrderId;
+    });
+
+    if (matchingTrades.length === 0) {
+      return null;
+    }
+
+    let filledQuantity = 0;
+    let weightedNotional = 0;
+    let feeAmount = 0;
+    let feeAsset: string | null = null;
+    let lastExecutedAt: string | null = null;
+
+    for (const trade of matchingTrades) {
+      const quantity =
+        this.toFiniteNumber(trade[asset]) ??
+        this.toFiniteNumber(trade[`order_${asset}`]) ??
+        this.toFiniteNumber(trade.quantity) ??
+        0;
+      const price = this.toFiniteNumber(trade.price) ?? order.price;
+
+      if (quantity > 0) {
+        filledQuantity += quantity;
+        weightedNotional += quantity * price;
+      }
+
+      const directFee = this.toFiniteNumber(trade.fee);
+      if (directFee !== null) {
+        feeAmount += directFee;
+        feeAsset ??= this.quoteAsset(order.pair);
+      }
+
+      for (const [key, value] of Object.entries(trade)) {
+        if (!key.startsWith('fee_')) {
+          continue;
+        }
+
+        const feeValue = this.toFiniteNumber(value);
+        if (feeValue === null) {
+          continue;
+        }
+
+        feeAmount += feeValue;
+        feeAsset ??= key.slice(4) || null;
+      }
+
+      const tradeTimestamp = this.parseTradeTimestamp(trade);
+      if (tradeTimestamp && (!lastExecutedAt || tradeTimestamp > lastExecutedAt)) {
+        lastExecutedAt = tradeTimestamp;
+      }
+    }
+
+    return {
+      filledQuantity: filledQuantity > 0 ? Math.min(order.quantity, filledQuantity) : null,
+      averageFillPrice:
+        filledQuantity > 0 ? weightedNotional / filledQuantity : order.averageFillPrice ?? order.price,
+      feeAmount,
+      feeAsset,
+      tradeCount: matchingTrades.length,
+      lastExecutedAt,
+    };
+  }
+
+  private async loadTradeStats(
+    order: OrderRecord,
+  ): Promise<ExchangeTradeStats | null> {
+    const api = this.getPrivateApi(order.accountId);
+    if (!api || typeof (api as { tradeHistory?: unknown }).tradeHistory !== 'function') {
+      return null;
+    }
+
+    const response = await api.tradeHistory(order.pair);
+    return this.extractTradeStats(order, response.return ?? {});
+  }
+
   private async syncOrderWithSnapshot(
     order: OrderRecord,
     snapshot: ExchangeOrderSnapshot,
     source: 'getOrder' | 'openOrders',
+    tradeStats: ExchangeTradeStats | null = null,
   ): Promise<OrderRecord | undefined> {
     const averageFillPrice = snapshot.averageFillPrice ?? order.price;
+    const nextFilledQuantity = snapshot.filledQuantity;
+    const feeAmount = tradeStats?.feeAmount ?? order.feeAmount ?? 0;
+    const feeDelta = Math.max(0, feeAmount - (order.feeAmount ?? 0));
+    const deltaFilledQuantity = Math.max(0, nextFilledQuantity - order.filledQuantity);
+    const previousAverageFillPrice = order.averageFillPrice ?? order.price;
+    const deltaExecutionPrice =
+      deltaFilledQuantity > 1e-8
+        ? Math.max(
+            0,
+            (nextFilledQuantity * averageFillPrice - order.filledQuantity * previousAverageFillPrice) /
+              deltaFilledQuantity,
+          )
+        : averageFillPrice;
 
-    await this.applyFillDelta(order, snapshot.filledQuantity, averageFillPrice);
+    await this.applyFillDelta(order, nextFilledQuantity, deltaExecutionPrice, feeDelta);
 
     return this.orders.update(order.id, {
       status: this.mapExchangeStatus(snapshot, order.quantity),
-      filledQuantity: snapshot.filledQuantity,
+      filledQuantity: nextFilledQuantity,
       averageFillPrice,
       exchangeStatus: snapshot.exchangeStatus,
       exchangeUpdatedAt: nowIso(),
+      feeAmount,
+      feeAsset: tradeStats?.feeAsset ?? order.feeAsset,
+      executedTradeCount: tradeStats?.tradeCount ?? order.executedTradeCount,
+      lastExecutedAt: tradeStats?.lastExecutedAt ?? order.lastExecutedAt,
       notes: this.appendNotes(
         order.notes,
         `${source}=${snapshot.exchangeStatus}`,
@@ -194,6 +350,10 @@ export class ExecutionEngine {
     }
 
     const api = this.indodax.forAccount(account);
+    if (typeof (api as { openOrders?: unknown }).openOrders !== 'function') {
+      return new Map();
+    }
+
     const response = await api.openOrders();
     return this.flattenOpenOrders(response.return ?? {});
   }
@@ -202,6 +362,7 @@ export class ExecutionEngine {
     order: OrderRecord,
     nextFilledQuantity: number,
     executionPrice: number,
+    feeDelta = 0,
   ): Promise<void> {
     const deltaFilled = Math.max(0, nextFilledQuantity - order.filledQuantity);
     if (deltaFilled <= 1e-8) {
@@ -210,11 +371,12 @@ export class ExecutionEngine {
 
     if (order.side === 'buy') {
       const stops = this.risk.buildStops(executionPrice, this.settings.get());
-      await this.positions.open({
+      await this.positions.applyBuyFill({
         accountId: order.accountId,
         pair: order.pair,
         quantity: deltaFilled,
         entryPrice: executionPrice,
+        entryFeesPaid: feeDelta,
         stopLossPrice: stops.stopLossPrice,
         takeProfitPrice: stops.takeProfitPrice,
         sourceOrderId: order.id,
@@ -233,7 +395,7 @@ export class ExecutionEngine {
           deltaFilled,
         });
       } else {
-        await this.positions.closePartial(targetPosition.id, deltaFilled, executionPrice);
+        await this.positions.closePartial(targetPosition.id, deltaFilled, executionPrice, feeDelta);
       }
     }
 
@@ -249,6 +411,7 @@ export class ExecutionEngine {
         exchangeOrderId: order.exchangeOrderId,
         executionPrice,
         quantity: deltaFilled,
+        feeDelta,
       },
       createdAt: nowIso(),
     });
@@ -271,7 +434,13 @@ export class ExecutionEngine {
     const api = this.indodax.forAccount(account);
     const response = await api.getOrder(order.pair, order.exchangeOrderId);
     const snapshot = this.buildExchangeSnapshot(order, response.return ?? {});
-    return this.syncOrderWithSnapshot(order, snapshot, 'getOrder');
+    const tradeStats = await this.loadTradeStats(order);
+    return this.syncOrderWithSnapshot(
+      order,
+      this.mergeTradeStatsIntoSnapshot(snapshot, tradeStats),
+      'getOrder',
+      tradeStats,
+    );
   }
 
   private extractExchangeOrderId(response: IndodaxTradeReturn | undefined): string | undefined {
@@ -282,6 +451,73 @@ export class ExecutionEngine {
   private formatLiveOrderMessage(prefix: 'BUY' | 'SELL', order: OrderRecord): string {
     const suffix = order.exchangeOrderId ? ` orderId=${order.exchangeOrderId}` : '';
     return `${prefix} live ${order.pair} status=${order.status} filled=${order.filledQuantity.toFixed(8)}/${order.quantity.toFixed(8)}${suffix}`;
+  }
+
+  private getMarketLastPrice(candidate: ExecutionCandidate): number {
+    return 'referencePrice' in candidate ? candidate.referencePrice : candidate.marketPrice;
+  }
+
+  private getBuyReferencePrice(candidate: ExecutionCandidate): number {
+    if (candidate.bestAsk > 0) {
+      return candidate.bestAsk;
+    }
+
+    const marketLast = this.getMarketLastPrice(candidate);
+    if (marketLast > 0) {
+      return marketLast;
+    }
+
+    return this.getExecutionPrice(candidate);
+  }
+
+  private getAggressiveBuyLimitPrice(
+    candidate: ExecutionCandidate,
+    settings: BotSettings,
+  ): number {
+    const referencePrice = this.getBuyReferencePrice(candidate);
+    if (referencePrice <= 0) {
+      return this.getExecutionPrice(candidate);
+    }
+
+    const slippageBps = Math.max(
+      0,
+      Math.min(settings.strategy.buySlippageBps, settings.strategy.maxBuySlippageBps),
+    );
+
+    return referencePrice * (1 + slippageBps / 10_000);
+  }
+
+  private shouldCancelStaleBuyOrder(order: OrderRecord): boolean {
+    if (order.side !== 'buy' || (order.status !== 'OPEN' && order.status !== 'PARTIALLY_FILLED')) {
+      return false;
+    }
+
+    const createdAtMs = new Date(order.createdAt).getTime();
+    if (!Number.isFinite(createdAtMs)) {
+      return false;
+    }
+
+    return Date.now() - createdAtMs >= this.settings.get().strategy.buyOrderTimeoutMs;
+  }
+
+  private async cancelStaleBuyOrder(order: OrderRecord): Promise<OrderRecord | undefined> {
+    if (!order.exchangeOrderId) {
+      return order;
+    }
+
+    const api = this.getPrivateApi(order.accountId);
+    if (!api) {
+      return order;
+    }
+
+    await api.cancelOrder(order.pair, order.exchangeOrderId, order.side);
+
+    return this.orders.update(order.id, {
+      status: 'CANCELED',
+      exchangeStatus: 'canceled_after_timeout',
+      exchangeUpdatedAt: nowIso(),
+      notes: this.appendNotes(order.notes, 'buy remainder canceled after timeout'),
+    });
   }
 
   private shouldSimulate(mode: TradingMode, settings: BotSettings): boolean {
@@ -444,7 +680,7 @@ export class ExecutionEngine {
       throw new Error(riskResult.reasons.join('; '));
     }
 
-    const entryPrice = this.getExecutionPrice(signal);
+    const entryPrice = this.getAggressiveBuyLimitPrice(signal, settings);
     const quantity = entryPrice > 0 ? amountIdr / entryPrice : 0;
     const stops = this.risk.buildStops(entryPrice, settings);
 
@@ -485,6 +721,10 @@ export class ExecutionEngine {
           quantity,
           signalScore: this.getCandidateScore(signal),
           signalConfidence: signal.confidence,
+          buySlippageBps: Math.min(
+            settings.strategy.buySlippageBps,
+            settings.strategy.maxBuySlippageBps,
+          ),
           source,
         },
         createdAt: nowIso(),
@@ -512,7 +752,7 @@ export class ExecutionEngine {
         exchangeUpdatedAt: nowIso(),
         notes: this.appendNotes(
           order.notes,
-          exchangeOrderId ? `exchangeOrderId=${exchangeOrderId}` : 'exchangeOrderId=missing',
+            exchangeOrderId ? `exchangeOrderId=${exchangeOrderId}` : 'exchangeOrderId=missing',
         ),
       });
 
@@ -706,7 +946,17 @@ export class ExecutionEngine {
           const beforeStatus = order.status;
           const beforeFilled = order.filledQuantity;
           const snapshot = this.buildExchangeSnapshotFromOrderFields(order, openOrder.order, 'open');
-          const synced = await this.syncOrderWithSnapshot(order, snapshot, 'openOrders');
+          const tradeStats = await this.loadTradeStats(order);
+          let synced = await this.syncOrderWithSnapshot(
+            order,
+            this.mergeTradeStatsIntoSnapshot(snapshot, tradeStats),
+            'openOrders',
+            tradeStats,
+          );
+
+          if (synced && this.shouldCancelStaleBuyOrder(synced)) {
+            synced = await this.cancelStaleBuyOrder(synced);
+          }
 
           if (
             synced &&
@@ -737,7 +987,11 @@ export class ExecutionEngine {
       try {
         const beforeStatus = activeOrder.status;
         const beforeFilled = activeOrder.filledQuantity;
-        const synced = await this.syncLiveOrder(activeOrder.id);
+        let synced = await this.syncLiveOrder(activeOrder.id);
+
+        if (synced && this.shouldCancelStaleBuyOrder(synced)) {
+          synced = await this.cancelStaleBuyOrder(synced);
+        }
 
         if (
           synced &&

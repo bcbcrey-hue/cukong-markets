@@ -37,6 +37,10 @@ export interface IndodaxOrderHistoryReturn {
   orders?: Array<Record<string, string | number>>;
 }
 
+export interface IndodaxTradeHistoryReturn {
+  trades?: Array<Record<string, string | number>>;
+}
+
 export interface IndodaxCancelOrderReturn {
   order_id?: string | number;
   client_order_id?: string;
@@ -135,6 +139,10 @@ export class PrivateApi {
 
   orderHistory(pair?: string): Promise<IndodaxPrivateEnvelope<IndodaxOrderHistoryReturn>> {
     return this.post<IndodaxOrderHistoryReturn>('orderHistory', pair ? { pair } : {});
+  }
+
+  tradeHistory(pair?: string): Promise<IndodaxPrivateEnvelope<IndodaxTradeHistoryReturn>> {
+    return this.post<IndodaxTradeHistoryReturn>('tradeHistory', pair ? { pair } : {});
   }
 
   getOrder(
