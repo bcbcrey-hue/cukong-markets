@@ -23,7 +23,9 @@ Validasi yang **sudah diverifikasi langsung** pada repo lokal:
 - `tests/private_api_v2_mapping_probe.ts` lulus
 - `tests/http_servers_probe.ts` lulus
 - `tests/nginx_renderer_probe.ts` lulus
+- `tests/app_lifecycle_servers_probe.ts` lulus
 - testing agent iteration 8 sebelumnya juga pass tanpa issue blocking pada scope Telegram backend
+- testing agent iteration 9 pass tanpa issue blocking pada scope P0 backend
 
 Jalur runtime aktual yang berlaku sekarang:
 
@@ -38,6 +40,7 @@ Status final yang benar saat ini:
 - mode history Indodax sekarang mendukung `v2_prefer | v2_only | legacy`
 - callback server Indodax sudah nyata, full env-driven, punya `/healthz`, path configurable, host allow-list configurable, startup/shutdown nyata, dan persist event ke disk
 - app utama sekarang punya HTTP server ringan untuk `/healthz`
+- probe lifecycle `createApp().start()/stop()` juga sudah memverifikasi app server + callback server benar-benar ikut start/stop bersama runtime
 - template nginx + renderer sudah ada dan bisa dirender ulang hanya dari `.env`
 
 Hal yang **belum final** dan jangan di-overclaim:

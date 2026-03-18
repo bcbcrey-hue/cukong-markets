@@ -14,6 +14,7 @@ Status aktual repo:
 - `yarn lint` lulus
 - `yarn build` lulus
 - probe runtime, Telegram, history v2, callback server, dan nginx renderer lulus
+- `tests/app_lifecycle_servers_probe.ts` juga lulus
 - runtime utama tetap:
   `tickers + depth -> MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
 - worker runtime untuk `feature`, `pattern`, dan `backtest` sudah ada
@@ -49,6 +50,7 @@ Status aktual repo:
   - `data/state/indodax-callback-state.json`
 - renderer nginx aktif di `scripts/render-nginx-conf.mjs`
 - template nginx aktif di `deploy/nginx/mafiamarkets.nginx.conf.template`
+- lifecycle `createApp().start()/stop()` sudah diverifikasi ikut menyalakan dan mematikan app server + callback server
 - target operasional saat ganti domain/VPS sekarang: cukup ubah `.env`, lalu render ulang config nginx
 
 ### Telegram
@@ -128,3 +130,4 @@ Status aktual repo:
 - `tests/private_api_v2_mapping_probe.ts`
 - `tests/http_servers_probe.ts`
 - `tests/nginx_renderer_probe.ts`
+- `tests/app_lifecycle_servers_probe.ts`

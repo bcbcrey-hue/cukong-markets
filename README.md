@@ -195,6 +195,7 @@ Sudah diverifikasi lulus:
 - `tests/private_api_v2_mapping_probe.ts`
 - `tests/http_servers_probe.ts`
 - `tests/nginx_renderer_probe.ts`
+- `tests/app_lifecycle_servers_probe.ts`
 
 ## Data runtime yang dihasilkan
 
