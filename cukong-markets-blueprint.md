@@ -919,6 +919,7 @@ Implementasi ideal dilakukan bertahap:
 * Tahap 2: batch intelligence core
 * Tahap 3: historical + worker
 * Tahap 4: backtest + final UI/report
+* Tahap 5: live execution hardening + entry/exit policy baseline
 * Tahap 6: execution summary + trade outcome summary
 * Tahap 7: finalisasi README root + `.env.example`
 
@@ -935,9 +936,7 @@ Setiap tahap menghasilkan:
 * checklist validasi
 * status yang jujur: sudah implementasi / end-to-end / parsial / backlog
 * sinkronisasi `REFACTOR\\\_LOG.md` dan `SESSION\\\_CONTEXT\\\_NEXT.md`
-* Tahap 5: live execution hardening + entry/exit policy baseline
-* Tahap 6: execution summary + trade outcome summary
-* Tahap 7: finalisasi README root + `.env.example`
+
 
 
 
