@@ -248,7 +248,7 @@ export async function createApp(): Promise<AppRuntime> {
 
     await state.setStatus('RUNNING');
 
-    await journal.info('APP_STARTED', 'mafiamarkets app started', {
+    await journal.info('APP_STARTED', 'cukong-markets app started', {
       mode: settings.get().tradingMode,
       activeAccounts: accountRegistry.countEnabled(),
       appPort: appServer.getPort(),
@@ -265,7 +265,7 @@ export async function createApp(): Promise<AppRuntime> {
         callbackEnabled: env.indodaxEnableCallbackServer,
         callbackPort: env.indodaxEnableCallbackServer ? callbackServer.getPort() : null,
       },
-      'mafiamarkets app started',
+      'cukong-markets app started',
     );
   };
 
@@ -290,8 +290,8 @@ export async function createApp(): Promise<AppRuntime> {
       notes: ['shutdown'],
     });
 
-    await journal.info('APP_STOPPED', 'mafiamarkets app stopped');
-    logger.info('mafiamarkets app stopped');
+    await journal.info('APP_STOPPED', 'cukong-markets app stopped');
+    logger.info('cukong-markets app stopped');
   };
 
   registerShutdown([stop]);

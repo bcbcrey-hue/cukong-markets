@@ -1,8 +1,8 @@
 {
-  "name": "mafiamarkets",
+  "name": "cukong-markets",
   "version": "1.0.0",
   "private": true,
-  "description": "Indodax scalping/anomaly Telegram trading bot with modular TypeScript architecture",
+  "description": "Cukong-Markets TypeScript backend for Indodax market operations via Telegram",
   "main": "dist/bootstrap.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",

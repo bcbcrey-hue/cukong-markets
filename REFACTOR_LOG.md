@@ -4,6 +4,8 @@ Repository aktif: `https://github.com/bcbcrey-hue/cukong-markets`
 
 Dokumen ini adalah log final yang harus dipakai sebagai source of truth untuk arsitektur config repo saat ini.
 
+Branding/package naming final yang dipakai sekarang: `cukong-markets`.
+
 ---
 
 ## 1. Kesimpulan desain saat ini
@@ -108,6 +110,7 @@ Contract V2 yang sudah diterapkan:
 
 - contoh domain `kangtrade.top` di `.env.example`, `README.md`, dan log audit sebagai contoh target runtime saat ini
 - base vendor default resmi di env/config sebagai fallback dokumentatif
+- nama file artefak tertentu seperti `deploy/nginx/mafiamarkets.nginx.conf` masih dipertahankan untuk compatibility operasional dan tidak memengaruhi source of truth config
 
 ---
 

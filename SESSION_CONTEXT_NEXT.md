@@ -4,11 +4,14 @@ Repository aktif: `https://github.com/bcbcrey-hue/cukong-markets`
 
 Gunakan file ini sebagai ringkasan cepat yang sinkron penuh dengan `REFACTOR_LOG.md`, `README.md`, `.env.example`, dan `package.json`.
 
+Branding/package naming final yang sekarang berlaku: `cukong-markets`.
+
 ---
 
 ## 1. Posisi project yang harus dianggap benar
 
 - desain repo sekarang **hampir env-driven** dan sudah jauh lebih rapi
+- package/app naming utama sudah diseragamkan ke `cukong-markets`
 - source of truth domain publik ada di `PUBLIC_BASE_URL`
 - callback final dibentuk dari `PUBLIC_BASE_URL + INDODAX_CALLBACK_PATH`
 - route internal inti tetap stabil:

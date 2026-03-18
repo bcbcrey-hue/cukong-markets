@@ -2,6 +2,8 @@
 
 Backend TypeScript untuk bot operasional market Indodax dengan UI utama di Telegram.
 
+Package/app naming final yang dipakai sekarang: `cukong-markets`.
+
 ## Prinsip arsitektur config repo ini
 
 - domain publik dibentuk dari env `PUBLIC_BASE_URL`
@@ -121,6 +123,8 @@ Output final berada di:
 ```bash
 deploy/nginx/mafiamarkets.nginx.conf
 ```
+
+Nama file artefak nginx itu masih dipertahankan untuk compatibility operasional; source of truth config-nya tetap env + template renderer.
 
 Template nginx sekarang meneruskan:
 

@@ -256,7 +256,7 @@ const backtestDir = path.resolve(rootDataDir, 'backtest');
 
 export const env: EnvConfig = {
   nodeEnv: readString('NODE_ENV', 'development'),
-  appName: readString('APP_NAME', 'mafiamarkets'),
+  appName: readString('APP_NAME', 'cukong-markets'),
   publicBaseUrl,
   appPort: readNumber('APP_PORT', 3000),
   appBindHost: readString('APP_BIND_HOST', '0.0.0.0'),

@@ -62,7 +62,7 @@ export class AppServer {
       this.writeJson(response, 200, {
         ok: true,
         app: env.appName,
-        message: 'mafiamarkets runtime server',
+        message: 'cukong-markets runtime server',
         healthz: '/healthz',
         callbackPath: env.indodaxCallbackPath,
       });
