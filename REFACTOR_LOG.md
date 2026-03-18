@@ -1,6 +1,6 @@
 # REFACTOR_LOG
 
-Repository aktif: `https://github.com/bcbcrey-hue/mafiamarkets-refactor-dua`
+Repository aktif: `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga`
 
 Dokumen ini adalah **sumber kebenaran final** untuk status repo setelah audit implementasi aktual + sinkronisasi dengan blueprint.
 
@@ -249,4 +249,4 @@ Prioritas berikutnya yang paling rasional:
 
 ## 8. Ringkasan final satu paragraf
 
-Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-dua` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, SELL / TP baseline disiplin dengan default TP 15%, accounting fee/weighted fill ditarik dari exchange saat `tradeHistory` tersedia, execution summary sudah tersedia ke Telegram/journal/log/persistence untuk seluruh event order penting, trade outcome summary final sudah ditulis hanya saat posisi benar-benar closed, dan README + `.env.example` sudah disinkronkan; backlog yang tersisa kini murni ada pada pendalaman recovery/accounting edge-case dan verifikasi live tertentu yang memang belum diizinkan pada sesi ini.
+Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, SELL / TP baseline disiplin dengan default TP 15%, accounting fee/weighted fill ditarik dari exchange saat `tradeHistory` tersedia, execution summary sudah tersedia ke Telegram/journal/log/persistence untuk seluruh event order penting, trade outcome summary final sudah ditulis hanya saat posisi benar-benar closed, dan README + `.env.example` sudah disinkronkan; backlog yang tersisa kini murni ada pada pendalaman recovery/accounting edge-case dan verifikasi live tertentu yang memang belum diizinkan pada sesi ini.
