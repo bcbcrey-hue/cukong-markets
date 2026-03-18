@@ -2,13 +2,13 @@
 
 Repository aktif: `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga`
 
-Dokumen ini adalah **sumber kebenaran final** untuk status repo setelah audit implementasi aktual + sinkronisasi dengan blueprint.
+Dokumen ini adalah **sumber kebenaran final** untuk status repo setelah audit implementasi aktual, perapian Telegram UX, dan sinkronisasi dengan blueprint.
 
 ---
 
 ## 1. Status repo setelah audit final
 
-Validasi yang sudah diverifikasi pada repo lokal:
+Validasi yang **sudah diverifikasi langsung** pada repo lokal:
 
 - `yarn install` selesai
 - `yarn lint` lulus
@@ -21,7 +21,11 @@ Validasi yang sudah diverifikasi pada repo lokal:
   `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-live-hardening-probe-self LOG_DIR=/tmp/mafiamarkets-live-hardening-probe-self/logs TEMP_DIR=/tmp/mafiamarkets-live-hardening-probe-self/tmp yarn tsx /app/tests/live_execution_hardening_probe.ts`
 - probe summary failure path lulus:
   `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-failed-self LOG_DIR=/tmp/mafiamarkets-it6-failed-self/logs TEMP_DIR=/tmp/mafiamarkets-it6-failed-self/tmp yarn tsx /app/tests/execution_summary_failed_probe.ts`
-- testing agent iteration 7 juga menyatakan backend pass tanpa issue blocking
+- probe struktur menu/callback Telegram lulus:
+  `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-telegram-menu LOG_DIR=/tmp/mafiamarkets-telegram-menu/logs TEMP_DIR=/tmp/mafiamarkets-telegram-menu/tmp yarn tsx /app/tests/telegram_menu_navigation_probe.ts`
+- probe warning + konfirmasi slippage Telegram lulus:
+  `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it8-slip-self LOG_DIR=/tmp/mafiamarkets-it8-slip-self/logs TEMP_DIR=/tmp/mafiamarkets-it8-slip-self/tmp yarn tsx /app/tests/telegram_slippage_confirmation_probe.ts`
+- testing agent iteration 8 juga menyatakan backend pass tanpa issue blocking
 
 Jalur runtime aktual yang berlaku sekarang:
 
@@ -32,17 +36,18 @@ Status final yang benar saat ini:
 - runtime utama sudah sinkron pada arsitektur `scanner -> signal -> intelligence -> execution`
 - `OpportunityAssessment` adalah contract final sebelum execution
 - persistence JSON + JSONL aktif untuk state, order, position, trade, journal, pair history, anomaly event, pattern outcome, backtest, execution summary, dan trade outcome summary
-- Telegram button UI tetap menjadi UI operasional utama
+- Telegram button UI tetap menjadi UI operasional utama, tetapi sekarang sudah **dirapikan menjadi menu hierarkis 7 kategori**
 - worker runtime nyata tersedia untuk `feature`, `pattern`, dan `backtest`
 - backtest replay aktif dari pair-history JSONL dan menyimpan hasil ke `data/backtest/*.json`
-- README root final dan `.env.example` sekarang sudah ada dan sinkron dengan implementasi aktual
+- README root, `.env.example`, `REFACTOR_LOG.md`, dan `SESSION_CONTEXT_NEXT.md` sekarang sinkron dengan implementasi aktual
 
 Hal yang **belum final** dan jangan di-overclaim:
 
 - recovery restart live order untuk edge-case tertentu masih punya backlog lanjutan jika detail exchange tidak lengkap di tengah partial fill / cancel / close
 - accounting fee / weighted fill sudah memakai `tradeHistory` bila tersedia, tetapi fallback saat endpoint detail trade tidak lengkap masih terbatas
 - `recentTrades` pada market intelligence masih **inferred flow** dari delta volume lokal, belum native trade print exchange
-- jalur broadcast summary ke Telegram sudah terpasang, tetapi delivery Telegram live **belum divalidasi end-to-end** pada sesi ini karena diminta skip
+- jalur broadcast summary ke Telegram sudah terpasang, tetapi delivery Telegram live **belum divalidasi end-to-end** pada sesi ini
+- probe backend memakai fake exchange client / fake Telegram harness, bukan validasi live exchange atau live delivery Telegram
 
 ---
 
@@ -63,6 +68,8 @@ Root aktif:
 - `tests/worker_timeout_probe.ts`
 - `tests/live_execution_hardening_probe.ts`
 - `tests/execution_summary_failed_probe.ts`
+- `tests/telegram_menu_navigation_probe.ts`
+- `tests/telegram_slippage_confirmation_probe.ts`
 
 Layer inti:
 
@@ -87,84 +94,73 @@ Layer inti:
 
 ### 3.1 Environment, core runtime, dan persistence
 
-- `src/config/env.ts` adalah contract utama untuk path runtime, threshold trading, worker settings, Telegram auth, dan base URL Indodax.
-- `src/core/types.ts` adalah pusat contract lintas layer, termasuk contract baru `ExecutionSummary`, `TradeOutcomeSummary`, dan `SummaryAccuracy`.
-- `src/storage/jsonStore.ts` dan `src/services/persistenceService.ts` stabil untuk JSON/JSONL.
-- persistence summary baru aktif di:
+- `src/config/env.ts` tetap menjadi contract utama untuk path runtime, threshold trading, worker settings, Telegram auth, dan base URL Indodax
+- `.env.example` sekarang benar-benar ada dan sinkron dengan implementasi aktual
+- `src/core/types.ts` tetap menjadi pusat contract lintas layer, termasuk `ExecutionSummary`, `TradeOutcomeSummary`, dan `SummaryAccuracy`
+- `src/storage/jsonStore.ts` dan `src/services/persistenceService.ts` stabil untuk JSON/JSONL
+- `SettingsService` sekarang menormalisasi settings legacy untuk migrasi `buySlippageBps 25 -> 60` dan `maxBuySlippageBps 80 -> 150`
+- persistence summary aktif di:
   - `data/history/execution-summaries.jsonl`
   - `data/history/trade-outcomes.jsonl`
-- `StateService`, `SettingsService`, `HealthService`, `JournalService`, dan `SummaryService` sudah sinkron ke persistence tunggal.
 
 ### 3.2 Market flow
 
-- `PairUniverse` membawa `high24h` / `low24h` dari ticker exchange.
-- `MarketWatcher` menarik ticker + depth, membentuk `MarketSnapshot`, menyimpan history lokal, dan menginfer trade flow dari delta volume.
-- `change24hPct` memakai arah yang benar terhadap baseline exchange.
-- trade-flow masih inferred, bukan native trade feed.
+- `PairUniverse` membawa `high24h` / `low24h` dari ticker exchange
+- `MarketWatcher` menarik ticker + depth, membentuk `MarketSnapshot`, menyimpan history lokal, dan menginfer trade flow dari delta volume
+- `change24hPct` memakai arah yang benar terhadap baseline exchange
+- trade-flow masih inferred, bukan native trade feed
 
 ### 3.3 Signal + intelligence + history flow
 
-- `SignalEngine` tetap sinkron ke contract `SignalCandidate` aktif.
-- `FeaturePipeline` menjalankan accumulation, spoof, iceberg, dan trade-cluster detectors.
-- `PairHistoryStore` menyimpan snapshot/signal/opportunity/anomaly ke JSONL dan membangun `HistoricalContext`.
-- `ProbabilityEngine`, `EdgeValidator`, `EntryTimingEngine`, dan `ScoreExplainer` aktif di jalur runtime.
-- `OpportunityEngine` menghasilkan `OpportunityAssessment` final untuk execution.
-- hotlist sekarang diranking dari output opportunity.
+- `SignalEngine` tetap sinkron ke contract `SignalCandidate` aktif
+- `FeaturePipeline` menjalankan accumulation, spoof, iceberg, dan trade-cluster detectors
+- `PairHistoryStore` menyimpan snapshot/signal/opportunity/anomaly ke JSONL dan membangun `HistoricalContext`
+- `ProbabilityEngine`, `EdgeValidator`, `EntryTimingEngine`, dan `ScoreExplainer` aktif di jalur runtime
+- `OpportunityEngine` menghasilkan `OpportunityAssessment` final untuk execution
+- hotlist tetap diranking dari output opportunity
 
 ### 3.4 Trading + execution hardening + summary
 
-- `ExecutionEngine` membaca `OpportunityAssessment` untuk FULL_AUTO.
-- `syncActiveOrders()` dipanggil oleh loop `position-monitor` dan mencoba `openOrders()` dulu lalu fallback ke `getOrder()`, `orderHistory()`, lalu snapshot berbasis `tradeHistory` bila diperlukan.
-- `recoverLiveOrdersOnStartup()` aktif saat start untuk recovery order live tersisa.
-- repeated partial BUY fill digabung ke **satu posisi logis per pair/account** melalui `PositionManager`.
-- reconciliation mencoba menarik executed quantity, weighted average fill, fee, executed trade count, dan last executed timestamp via `tradeHistory` jika tersedia.
-- parser fee mencegah double-count saat payload membawa `fee` dan `fee_*`.
-- BUY default memakai **aggressive limit / limit rasa market** dari `bestAsk` + slippage bps terukur, dengan timeout cancel untuk order buy yang stale.
-- SELL / TP baseline praktis untuk token pump cepat dengan **default take profit 15%** yang bisa diubah dari Telegram.
-- `attemptAutoBuy()` sekarang skip deterministik jika BUY aktif untuk pair/account yang sama masih ada.
-- `evaluateOpenPositions()` sekarang skip deterministik jika posisi sudah punya SELL aktif, sehingga restart/loop monitor tidak memicu duplicate sell atau spam error.
-- `sellAllPositions()` sekarang melaporkan jumlah submitted vs skipped secara jujur untuk rekonsiliasi operasional.
-- `PositionRecord` sekarang melacak quantity/fill lifecycle yang cukup untuk summary final: `totalBoughtQuantity`, `totalSoldQuantity`, `averageExitPrice`, `totalEntryFeesPaid`.
-- `SummaryService` sekarang menulis execution summary dan trade outcome summary ke persistence + journal + logger + Telegram broadcast hook.
-
-Execution summary yang sudah aktif:
-
-- BUY submitted
-- BUY partially filled
-- BUY filled
-- BUY canceled / failed
-- SELL submitted
-- SELL partially filled
-- SELL filled
-- SELL canceled / failed
-
-Trade outcome summary yang sudah aktif:
-
-- hanya ditulis ketika posisi benar-benar `CLOSED`
-- tidak ditulis jika SELL gagal dan posisi tetap open
-
-Semantik akurasi summary yang aktif:
-
-- `SIMULATED`
-- `OPTIMISTIC_LIVE`
-- `PARTIAL_LIVE`
-- `CONFIRMED_LIVE`
+- `ExecutionEngine` membaca `OpportunityAssessment` untuk FULL_AUTO
+- `syncActiveOrders()` dipanggil oleh loop `position-monitor` dan mencoba `openOrders()` dulu lalu fallback ke `getOrder()`, `orderHistory()`, lalu snapshot berbasis `tradeHistory` bila diperlukan
+- `recoverLiveOrdersOnStartup()` aktif saat start untuk recovery order live tersisa
+- repeated partial BUY fill digabung ke **satu posisi logis per pair/account** melalui `PositionManager`
+- reconciliation mencoba menarik executed quantity, weighted average fill, fee, executed trade count, dan last executed timestamp via `tradeHistory` jika tersedia
+- BUY default memakai **aggressive limit / limit rasa market** dari `bestAsk + slippage bps terukur`
+- slippage yang dipakai engine tetap benar-benar memengaruhi aggressive buy limit dan tetap di-clamp ke `maxBuySlippageBps`
+- SELL / TP baseline praktis untuk token pump cepat dengan **default take profit 15%** yang bisa diubah dari Telegram
+- `attemptAutoBuy()` sekarang skip deterministik jika BUY aktif untuk pair/account yang sama masih ada
+- `evaluateOpenPositions()` sekarang skip deterministik jika posisi sudah punya SELL aktif
+- `sellAllPositions()` melaporkan jumlah submitted vs skipped secara jujur
+- `SummaryService` menulis execution summary dan trade outcome summary ke persistence + journal + logger + Telegram broadcast hook
 
 ### 3.5 Telegram flow
 
 - whitelist tetap berbasis `TELEGRAM_ALLOWED_USER_IDS`
-- Telegram button UI tetap dipertahankan
+- Telegram button UI tetap dipertahankan sebagai UI utama
 - upload legacy JSON account tetap didukung
-- menu operasional aktif: `Status`, `Market Watch`, `Hotlist`, `Intelligence Report`, `Spoof Radar`, `Pattern Match`, `Backtest`, `Positions`, `Orders`, `Manual Buy`, `Manual Sell`, `Strategy`, `Risk`, `Accounts`, `Logs`, `Emergency`
+- main menu flat lama **sudah diganti** menjadi struktur hierarkis 7 kategori:
+  1. `⚡ Execute Trade`
+  2. `🚨 Emergency Controls`
+  3. `📡 Monitoring / Laporan`
+  4. `📦 Positions / Orders / Manual Trade`
+  5. `⚙️ Settings`
+  6. `👤 Accounts`
+  7. `🧪 Backtest`
+- semua submenu yang ditampilkan sekarang punya tombol `Kembali`
+- submenu nested kembali ke parent yang tepat pada `Accounts`, `Backtest`, dan jalur settings/submenu lain yang diuji
+- namespace callback baru `NAV` dipakai khusus untuk navigasi menu, sehingga tidak bentrok dengan callback aksi existing (`ACC`, `SET`, `SIG`, `BUY`, `POS`, `EMG`, `BKT`, `RUN`)
+- callback existing untuk aksi live tetap dipertahankan agar tidak memutus fitur yang sudah jalan
 - `START` / `STOP` mengubah state runtime (`RUNNING` / `STOPPED`), bukan bootstrap ulang proses
-- user bisa mengubah `buySlippageBps` dan `takeProfitPct` dari Telegram
-- `TelegramBot.broadcast()` sekarang tersedia untuk push summary ke seluruh `TELEGRAM_ALLOWED_USER_IDS`
+- `Buy Slippage X bps` sudah dipindah ke submenu `Positions / Orders / Manual Trade`
+- input slippage Telegram di atas `150 bps` sekarang memberi warning dan meminta konfirmasi; `LANJUT` menyimpan nilai aman `150 bps`
+- `TelegramBot.broadcast()` tetap tersedia untuk push summary ke seluruh `TELEGRAM_ALLOWED_USER_IDS`
 
 ### 3.6 Worker + backtest flow
 
 - `WorkerPoolService` aktif dengan worker `feature`, `pattern`, dan `backtest`
 - preference ke `dist/workers/*.js` tetap berlaku bila hasil build ada
-- bug timeout deadlock/starvation worker pool sudah tertutup dan tervalidasi
+- bug timeout deadlock/starvation worker pool tetap tertutup dan tervalidasi
 - `BacktestEngine` load replay dari `pair-history.jsonl`, menjalankan replay signal -> opportunity -> risk exit, lalu persist hasil JSON
 
 ---
@@ -211,8 +207,10 @@ Sudah tertutup dan jangan dianggap backlog lagi:
 - skip guard deterministik untuk auto-buy dan auto-sell saat order aktif masih ada
 - execution summary untuk submitted / partial / filled / canceled / failed
 - trade outcome summary final saat posisi benar-benar closed
-- guardrail failure-path lewat `tests/execution_summary_failed_probe.ts`
-- finalisasi `README.md` dan `.env.example`
+- dashboard Telegram flat lama sudah diganti dengan menu hierarkis 7 kategori
+- tombol `Kembali` dan reachability callback submenu sudah diproteksi probe khusus
+- migrasi default/max buy slippage ke `60/150` + warning/confirm flow Telegram sudah diproteksi probe khusus
+- `.env.example`, `README.md`, `REFACTOR_LOG.md`, dan `SESSION_CONTEXT_NEXT.md` sudah disinkronkan
 
 ---
 
@@ -243,10 +241,10 @@ Prioritas berikutnya yang paling rasional:
 
 1. perdalam edge-case recovery restart untuk order live parsial/terminal
 2. perkuat fallback accounting ketika detail trade exchange tidak lengkap
-3. jika perlu, kecilkan `executionEngine.ts` tanpa menggeser perilaku P0 yang sudah lolos regression
+3. kecilkan `executionEngine.ts` setelah P0 aman supaya blast radius regresi turun
 
 ---
 
 ## 8. Ringkasan final satu paragraf
 
-Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, SELL / TP baseline disiplin dengan default TP 15%, accounting fee/weighted fill ditarik dari exchange saat `tradeHistory` tersedia, execution summary sudah tersedia ke Telegram/journal/log/persistence untuk seluruh event order penting, trade outcome summary final sudah ditulis hanya saat posisi benar-benar closed, dan README + `.env.example` sudah disinkronkan; backlog yang tersisa kini murni ada pada pendalaman recovery/accounting edge-case dan verifikasi live tertentu yang memang belum diizinkan pada sesi ini.
+Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, SELL / TP baseline disiplin dengan default TP 15%, accounting fee/weighted fill ditarik dari exchange saat `tradeHistory` tersedia, execution summary sudah tersedia ke Telegram/journal/log/persistence untuk seluruh event order penting, trade outcome summary final sudah ditulis hanya saat posisi benar-benar closed, Telegram UI sudah dirapikan menjadi menu hierarkis 7 kategori dengan callback navigasi yang benar-benar terhubung, dan dokumentasi inti sudah disinkronkan; backlog yang tersisa kini murni ada pada pendalaman recovery/accounting edge-case dan verifikasi live tertentu yang memang belum dijalankan di sesi ini.

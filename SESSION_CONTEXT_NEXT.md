@@ -17,12 +17,13 @@ Status aktual repo:
 - `tests/worker_timeout_probe.ts` lulus
 - `tests/live_execution_hardening_probe.ts` lulus
 - `tests/execution_summary_failed_probe.ts` lulus
-- testing agent iteration 7 pass tanpa issue blocking
+- `tests/telegram_menu_navigation_probe.ts` lulus
+- `tests/telegram_slippage_confirmation_probe.ts` lulus
+- testing agent iteration 8 pass tanpa issue blocking
 - runtime utama berlaku:
   `tickers + depth -> MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
 - worker runtime untuk `feature`, `pattern`, dan `backtest` sudah ada
-- hook Telegram untuk `Intelligence Report`, `Spoof Radar`, `Pattern Match`, dan `Backtest` sudah aktif
-- `README.md` dan `.env.example` sudah final sesuai implementasi repo saat ini
+- `README.md`, `.env.example`, `REFACTOR_LOG.md`, dan file ini sudah sinkron dengan implementasi repo saat ini
 
 Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 
@@ -53,6 +54,9 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 - duplicate active BUY/SELL guard aktif
 - repeated partial fill BUY sudah merge ke satu posisi logis per pair/account
 - BUY default aggressive limit dari `bestAsk` + slippage bps aman; order buy stale bisa dibatalkan timeout policy
+- default buy slippage sekarang `60 bps` dan max `150 bps`
+- settings legacy `25/80` dimigrasikan ke `60/150`
+- input slippage Telegram di atas `150 bps` memberi warning + konfirmasi; `LANJUT` mengunci ke `150 bps`
 - fee / executed trade count / weighted average fill ditarik dari exchange saat `tradeHistory` tersedia
 - default take profit 15% bisa diubah dari Telegram
 - `attemptAutoBuy()` skip deterministik jika BUY aktif sudah ada
@@ -70,9 +74,20 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 - Telegram button UI tetap UI utama
 - whitelist `TELEGRAM_ALLOWED_USER_IDS` tetap aktif
 - upload legacy account JSON tetap didukung
+- main menu flat lama sudah diganti jadi **7 kategori hierarkis**:
+  - `⚡ Execute Trade`
+  - `🚨 Emergency Controls`
+  - `📡 Monitoring / Laporan`
+  - `📦 Positions / Orders / Manual Trade`
+  - `⚙️ Settings`
+  - `👤 Accounts`
+  - `🧪 Backtest`
+- semua submenu yang ditampilkan punya tombol `Kembali`
+- callback navigasi memakai namespace `NAV` dan terpisah dari callback aksi live
+- `Buy Slippage X bps` sekarang ada di submenu `Positions / Orders / Manual Trade`, bukan lagi di `Strategy Settings`
 - START/STOP di Telegram mengubah state runtime, bukan bootstrap ulang proses aplikasi
 - `TelegramBot.broadcast()` dipakai sebagai jalur push summary ke allowed users
-- delivery Telegram live belum divalidasi end-to-end pada sesi ini karena memang diminta skip
+- delivery Telegram live belum divalidasi end-to-end pada sesi ini
 
 ### Worker / backtest
 
@@ -93,7 +108,9 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 - baseline live order sync / cancel / duplicate-guard
 - merge partial BUY fill + aggressive BUY policy + Telegram TP/slippage config
 - execution summary + trade outcome summary baseline
-- finalisasi `README.md` + `.env.example`
+- flat Telegram dashboard lama sudah diganti menjadi menu hierarkis 7 kategori
+- callback reachability + tombol `Kembali` sekarang sudah diproteksi probe
+- finalisasi `README.md`, `.env.example`, `REFACTOR_LOG.md`, dan file ini
 
 ---
 
@@ -144,3 +161,5 @@ Jangan pakai lagi asumsi lama bahwa refactor masih mentah atau belum nyambung.
 - `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-audit-timeout LOG_DIR=/tmp/mafiamarkets-audit-timeout/logs TEMP_DIR=/tmp/mafiamarkets-audit-timeout/tmp yarn tsx /app/tests/worker_timeout_probe.ts`
 - `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-live-hardening-probe-self LOG_DIR=/tmp/mafiamarkets-live-hardening-probe-self/logs TEMP_DIR=/tmp/mafiamarkets-live-hardening-probe-self/tmp yarn tsx /app/tests/live_execution_hardening_probe.ts`
 - `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it6-failed-self LOG_DIR=/tmp/mafiamarkets-it6-failed-self/logs TEMP_DIR=/tmp/mafiamarkets-it6-failed-self/tmp yarn tsx /app/tests/execution_summary_failed_probe.ts`
+- `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-telegram-menu LOG_DIR=/tmp/mafiamarkets-telegram-menu/logs TEMP_DIR=/tmp/mafiamarkets-telegram-menu/tmp yarn tsx /app/tests/telegram_menu_navigation_probe.ts`
+- `TELEGRAM_BOT_TOKEN=testtoken TELEGRAM_ALLOWED_USER_IDS=1 DATA_DIR=/tmp/mafiamarkets-it8-slip-self LOG_DIR=/tmp/mafiamarkets-it8-slip-self/logs TEMP_DIR=/tmp/mafiamarkets-it8-slip-self/tmp yarn tsx /app/tests/telegram_slippage_confirmation_probe.ts`
