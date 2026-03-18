@@ -1,6 +1,6 @@
 # REFACTOR_LOG
 
-Repository aktif: `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga`
+Repository aktif: `https://github.com/bcbcrey-hue/cukong-markets`
 
 Dokumen ini adalah **sumber kebenaran final** untuk status repo setelah audit implementasi aktual, migrasi history Indodax v2, callback server env-driven, renderer nginx, perapian Telegram UX, dan sinkronisasi dokumen.
 
@@ -240,4 +240,4 @@ Sudah tertutup dan jangan dianggap backlog lagi:
 
 ## 8. Ringkasan final satu paragraf
 
-Repo aktif `https://github.com/bcbcrey-hue/mafiamarkets-refactor-tiga` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, Telegram UI sudah dirapikan menjadi menu hierarkis 7 kategori, history Indodax sekarang mendukung mode `v2_prefer | v2_only | legacy` dengan default `v2_prefer`, callback server env-driven + `/healthz` + persistence event/state sudah terpasang nyata, dan nginx config kini bisa dirender dari `.env`; backlog yang tersisa kini terpusat pada validasi live vendor dan pendalaman edge-case recovery/accounting.
+Repo aktif `https://github.com/bcbcrey-hue/cukong-markets` sekarang berada pada status backend refactor yang nyata dan saling terhubung dari env/core/persistence, market watcher, signal engine, intelligence/history, worker runtime, backtest, Telegram operational hooks, sampai execution hardening live. Sumber kebenaran terbaru adalah: runtime utama sudah memakai `OpportunityAssessment` sebelum execution, BUY baseline sudah aggressive limit dengan slippage terukur, repeated partial BUY fill digabung ke satu posisi logis per pair/account, startup recovery + openOrders-first reconciliation aktif, Telegram UI sudah dirapikan menjadi menu hierarkis 7 kategori, history Indodax sekarang mendukung mode `v2_prefer | v2_only | legacy` dengan default `v2_prefer`, callback server env-driven + `/healthz` + persistence event/state sudah terpasang nyata, dan nginx config kini bisa dirender dari `.env`; backlog yang tersisa kini terpusat pada validasi live vendor dan pendalaman edge-case recovery/accounting.
