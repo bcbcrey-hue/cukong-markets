@@ -1,4 +1,4 @@
-# Mafiamarkets Upgrade Blueprint
+# cukong-markets Upgrade Blueprint
 
 ## Prinsip utama
 
