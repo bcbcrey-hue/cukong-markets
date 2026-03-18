@@ -1,0 +1,38 @@
+{
+  "summary": "Backend-only validation completed for env-driven callback architecture. All targeted regression probes passed, and invalid INDODAX_CALLBACK_PATH correctly fails fast to protect stable internal routing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/private_api_v2_mapping_probe.ts",
+    "/app/tests/http_servers_probe.ts",
+    "/app/tests/nginx_renderer_probe.ts",
+    "/app/tests/app_lifecycle_servers_probe.ts"
+  ],
+  "action_items": [
+    "Keep INDODAX_CALLBACK_PATH stability guard (must remain /indodax/callback) as a protected regression gate.",
+    "Keep yarn render:nginx in deployment pipeline to prevent manual nginx drift from env contract.",
+    "Preserve private_api_v2_mapping_probe and app/http lifecycle probes as required checks before release."
+  ],
+  "critical_code_review_comments": [
+    "No blocking code-level regression found in this scope: env callback derivation, stable internal callback route enforcement, nginx rendering wiring, and Indodax v2 mapping are consistent."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_11.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data created. Isolated temporary DATA_DIR paths used during probes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Executed and passed: yarn lint, yarn build, yarn render:nginx, private_api_v2_mapping_probe, http_servers_probe, nginx_renderer_probe, app_lifecycle_servers_probe. Explicit negative test also confirmed: INDODAX_CALLBACK_PATH=/hooks/indodax fails fast in both app boot path and render:nginx with message 'must remain /indodax/callback to keep internal route stable'. Note: some repository probes use MOCKED exchange/telegram harnesses by design.",
+  "rca of the issue": "No defect reproduced in requested scope. Prior risk area (callback path drift) is mitigated by readStablePath validation in both src/config/env.ts and scripts/render-nginx-conf.mjs, which blocks startup/render when path deviates from /indodax/callback."
+}

@@ -23,6 +23,14 @@ function normalizePath(value, fallback) {
   return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash;
 }
 
+function readStablePath(name, stablePath) {
+  const normalized = normalizePath(readOptional(name, stablePath), stablePath);
+  if (normalized !== stablePath) {
+    throw new Error(`${name} must remain ${stablePath} to keep internal route stable`);
+  }
+  return normalized;
+}
+
 function normalizeProxyHost(value) {
   if (!value || value === '0.0.0.0' || value === '::') {
     return '127.0.0.1';
@@ -60,7 +68,7 @@ async function main() {
   const appPort = readOptional('APP_PORT', '3000');
   const callbackBindHost = normalizeProxyHost(readOptional('INDODAX_CALLBACK_BIND_HOST', '0.0.0.0'));
   const callbackPort = readOptional('INDODAX_CALLBACK_PORT', '3001');
-  const callbackPath = normalizePath(readOptional('INDODAX_CALLBACK_PATH', '/indodax/callback'), '/indodax/callback');
+  const callbackPath = readStablePath('INDODAX_CALLBACK_PATH', '/indodax/callback');
   const enableCallbackServer = ['1', 'true', 'yes', 'on'].includes(
     readOptional('INDODAX_ENABLE_CALLBACK_SERVER', 'false').toLowerCase(),
   );

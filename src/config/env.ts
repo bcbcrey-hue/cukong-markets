@@ -101,6 +101,14 @@ function normalizePath(value: string, fallback: string): string {
   return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash;
 }
 
+function readStablePath(name: string, stablePath: string): string {
+  const normalized = normalizePath(readString(name, stablePath), stablePath);
+  if (normalized !== stablePath) {
+    throw new Error(`${name} must remain ${stablePath} to keep internal route stable`);
+  }
+  return normalized;
+}
+
 function deriveHostFromUrl(value: string): string {
   if (!value) {
     return '';
@@ -239,7 +247,7 @@ const rootDataDir = readString('DATA_DIR', path.resolve(process.cwd(), 'data'));
 const rootLogDir = readString('LOG_DIR', path.resolve(process.cwd(), 'logs'));
 const rootTempDir = readString('TEMP_DIR', path.resolve(process.cwd(), 'tmp'));
 const publicBaseUrl = normalizeBaseUrl(readString('PUBLIC_BASE_URL', ''));
-const indodaxCallbackPath = normalizePath(readString('INDODAX_CALLBACK_PATH', '/indodax/callback'), '/indodax/callback');
+const indodaxCallbackPath = readStablePath('INDODAX_CALLBACK_PATH', '/indodax/callback');
 
 const accountsDir = path.resolve(rootDataDir, 'accounts');
 const stateDir = path.resolve(rootDataDir, 'state');

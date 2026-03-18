@@ -2,14 +2,22 @@
 
 Backend TypeScript untuk bot operasional market Indodax dengan UI utama di Telegram.
 
-## Target live final repo ini
+## Prinsip arsitektur config repo ini
 
-- domain publik acuan: `https://kangtrade.top`
-- callback publik final: `https://kangtrade.top/indodax/callback`
-- app utama: `APP_PORT=3000`
-- callback server: `INDODAX_CALLBACK_PORT=3001`
-- history mode default: `INDODAX_HISTORY_MODE=v2_prefer`
-- base endpoint Trade API v2: `https://tapi.indodax.com`
+- domain publik dibentuk dari env `PUBLIC_BASE_URL`
+- callback final selalu dibentuk dari env `PUBLIC_BASE_URL + INDODAX_CALLBACK_PATH`
+- route internal inti tetap statis:
+  - app health: `/healthz`
+  - callback listener: `/indodax/callback`
+- nginx hanya bertugas sebagai wiring/proxy
+- Telegram tetap panel/UI utama via long polling; tidak wajib webhook
+- vendor API Indodax dipisahkan dari config domain publik
+
+Contoh runtime saat ini:
+
+- `PUBLIC_BASE_URL=https://kangtrade.top`
+- `INDODAX_CALLBACK_PATH=/indodax/callback`
+- hasil final: `https://kangtrade.top/indodax/callback`
 
 ## Arsitektur aktif
 
@@ -54,6 +62,8 @@ Salin `.env.example` menjadi `.env`, lalu isi minimal:
 - `INDODAX_CALLBACK_ALLOWED_HOST`
 - `INDODAX_ENABLE_CALLBACK_SERVER`
 - `INDODAX_HISTORY_MODE`
+- `INDODAX_PUBLIC_BASE_URL`
+- `INDODAX_PRIVATE_BASE_URL`
 - `INDODAX_TRADE_API_V2_BASE_URL`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_ALLOWED_USER_IDS`
@@ -73,6 +83,8 @@ INDODAX_CALLBACK_BIND_HOST=0.0.0.0
 INDODAX_CALLBACK_ALLOWED_HOST=kangtrade.top
 INDODAX_ENABLE_CALLBACK_SERVER=true
 INDODAX_HISTORY_MODE=v2_prefer
+INDODAX_PUBLIC_BASE_URL=https://indodax.com/api
+INDODAX_PRIVATE_BASE_URL=https://indodax.com/tapi
 INDODAX_TRADE_API_V2_BASE_URL=https://tapi.indodax.com
 ```
 
@@ -86,12 +98,22 @@ Dengan contract target saat ini, hasil finalnya wajib menjadi:
 
 `https://kangtrade.top/indodax/callback`
 
+`INDODAX_CALLBACK_PATH` tetap dipakai sebagai source of truth pembentuk URL final, tetapi route internal repo ini sengaja dijaga tetap `/indodax/callback` agar wiring tidak berubah-ubah.
+
+## Batas concern yang harus tetap dipisah
+
+- `PUBLIC_BASE_URL` + `INDODAX_CALLBACK_PATH` = callback publik final
+- `/indodax/callback` = internal listener route yang stabil
+- `INDODAX_PUBLIC_BASE_URL`, `INDODAX_PRIVATE_BASE_URL`, `INDODAX_TRADE_API_V2_BASE_URL` = vendor API outbound
+- Telegram = UI/panel utama user via long polling
+- nginx = wiring dari domain publik ke app/callback internal
+
 ## Cara render nginx config
 
 Setelah `.env` siap, jalankan:
 
 ```bash
-node scripts/render-nginx-conf.mjs
+yarn render:nginx
 ```
 
 Output final berada di:

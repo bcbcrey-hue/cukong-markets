@@ -2,92 +2,86 @@
 
 Repository aktif: `https://github.com/bcbcrey-hue/cukong-markets`
 
-Gunakan file ini sebagai konteks cepat yang sinkron penuh dengan `REFACTOR_LOG.md`.
+Gunakan file ini sebagai ringkasan cepat yang sinkron penuh dengan `REFACTOR_LOG.md`, `README.md`, `.env.example`, dan `package.json`.
 
 ---
 
 ## 1. Posisi project yang harus dianggap benar
 
-- target domain final repo: `https://kangtrade.top`
-- target callback final repo: `https://kangtrade.top/indodax/callback`
-- contract env non-secret sekarang sinkron di `.env.example`
-- implementasi v2 Indodax sudah dipindah ke contract resmi `https://tapi.indodax.com`
-- callback server sudah di-hardening terhadap spoof `X-Forwarded-Host`
-- `README.md`, `.env.example`, `REFACTOR_LOG.md`, dan file ini sekarang sinkron
+- desain repo sekarang **hampir env-driven** dan sudah jauh lebih rapi
+- source of truth domain publik ada di `PUBLIC_BASE_URL`
+- callback final dibentuk dari `PUBLIC_BASE_URL + INDODAX_CALLBACK_PATH`
+- route internal inti tetap stabil:
+  - `/healthz`
+  - `/indodax/callback`
+- `INDODAX_CALLBACK_PATH` tetap ada di env contract, tetapi sekarang divalidasi agar tidak mengubah route internal inti
 
 ---
 
-## 2. Truth penting per modul
+## 2. Pemisahan concern yang berlaku
 
-### Trading / execution / history
+### Domain / callback publik
 
-- mode history tetap `v2_prefer | v2_only | legacy`
-- default repo tetap `v2_prefer`
-- method v2 yang dipakai sekarang:
-  - `GET /api/v2/order/histories`
-  - `GET /api/v2/myTrades`
-- contract v2 yang benar sekarang:
-  - base `https://tapi.indodax.com`
-  - header `X-APIKEY`
-  - signature query string
-  - query memakai `symbol`, `timestamp`, `recvWindow`
-- response v2 tetap dipetakan ke model internal legacy-compatible
+- `PUBLIC_BASE_URL`
+- `INDODAX_CALLBACK_PATH`
+- hasil final callback URL = keduanya digabung
 
-### Callback / HTTP / deployment helpers
+### Route internal stabil
 
-- app utama punya `/healthz`
-- callback server hidup terpisah di port sendiri
-- callback path tetap dari env (`INDODAX_CALLBACK_PATH`)
-- host allow-list tetap dari env (`INDODAX_CALLBACK_ALLOWED_HOST`)
-- callback event tetap dipersist ke JSONL + state snapshot
-- nginx renderer aktif di `scripts/render-nginx-conf.mjs`
-- nginx template aktif di `deploy/nginx/mafiamarkets.nginx.conf.template`
-- nginx sekarang meneruskan `Host` dan `X-Forwarded-Host`
+- app health = `/healthz`
+- callback listener = `/indodax/callback`
+
+### Vendor outbound Indodax
+
+- public market API = `INDODAX_PUBLIC_BASE_URL`
+- legacy private `/tapi` = `INDODAX_PRIVATE_BASE_URL`
+- Trade API 2.0 = `INDODAX_TRADE_API_V2_BASE_URL`
 
 ### Telegram
 
-- Telegram UI tetap UI utama
-- whitelist tetap strict berbasis `TELEGRAM_ALLOWED_USER_IDS`
-- token sempat tervalidasi read-only via `getMe`
-- webhook saat audit terakhir tidak terpasang
+- tetap panel/UI utama
+- tetap long polling
+- tidak dipaksa webhook
 
 ---
 
-## 3. Hal yang sudah ditutup, jangan diulang
+## 3. Status contract Indodax
 
-- mismatch doc/env target lama (`8787/8788`, `bot.example.com`, `/hooks/indodax`)
-- implementasi v2 yang masih memakai base/header/signature lama
-- callback host extraction yang terlalu percaya `X-Forwarded-Host`
+Status saat ini: **campur legacy dan V2**, tetapi pemisahannya sekarang sudah jelas.
+
+- legacy `/tapi` masih dipakai untuk compatibility/recovery tertentu
+- history baru sudah diarahkan ke Trade API 2.0:
+  - `GET /api/v2/order/histories`
+  - `GET /api/v2/myTrades`
+- contract V2 yang berlaku sekarang:
+  - base `https://tapi.indodax.com`
+  - header `X-APIKEY`
+  - signature query string
+  - param signed `symbol`, `timestamp`, `recvWindow`
+
+---
+
+## 4. Hal yang sudah ditutup
+
+- hardcode target lama `8787/8788`, `bot.example.com`, `/hooks/indodax`
+- implementasi V2 lama yang salah base/header/signature
+- callback server yang terlalu percaya `X-Forwarded-Host`
 - ketiadaan `.env.example`
+- belum adanya script `render:nginx` di `package.json`
 
 ---
 
-## 4. Backlog aktif yang nyata
+## 5. Blocker yang masih tersisa
 
 ### P0
 
-- buktikan domain `kangtrade.top` benar-benar memakai hasil render nginx terbaru
-- buktikan `/healthz` publik mengarah ke runtime repo ini, bukan frontend HTML
-- buktikan callback publik live benar-benar masuk ke callback server repo ini
-- re-run validasi live read-only v2 setelah runtime/domain sinkron
+- domain publik aktif belum terbukti memakai wiring repo ini
+- `/healthz` publik belum terbukti mengarah ke app server repo
+- `/indodax/callback` publik belum terbukti mengarah ke callback server repo
 
 ### P1
 
-- dalami recovery edge-case order live parsial/terminal
-- perkuat fallback accounting jika detail fee/fill exchange parsial
-
-### P2
-
-- tambah runbook backup/restore `data/`
-
----
-
-## 5. Rule kerja sesi berikutnya
-
-- jangan overclaim live penuh sebelum domain publik sinkron
-- pakai implementasi repo terbaru sebagai sumber utama, bukan asumsi lama
-- jika audit domain masih menunjukkan HTML di `/healthz`, anggap deploy publik belum sinkron
-- gunakan `REFACTOR_LOG.md` untuk detail lengkap dan file ini untuk ringkasan cepat
+- execution/recovery masih membawa compatibility layer legacy + V2 sehingga kompleksitas tetap ada
 
 ---
 
@@ -95,6 +89,7 @@ Gunakan file ini sebagai konteks cepat yang sinkron penuh dengan `REFACTOR_LOG.m
 
 - `yarn lint`
 - `yarn build`
+- `yarn render:nginx`
 - `tests/runtime_backend_regression.ts`
 - `tests/worker_timeout_probe.ts`
 - `tests/live_execution_hardening_probe.ts`
