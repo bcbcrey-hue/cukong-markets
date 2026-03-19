@@ -24,7 +24,10 @@ ATURAN WAJIB:
 12. Jika build/runtime path tampak mismatch, katakan jujur.
 13. Jangan overclaim.
 14. Jangan tulis asumsi seolah fakta.
-
+15. Jika ada konflik antara README, blueprint, REFACTOR_LOG, SESSION_CONTEXT_NEXT, atau narasi lain dengan source code aktual, maka source code aktual adalah sumber kebenaran tunggal.
+16. Jangan menyalin ulang narasi arsitektur dari dokumen konteks tanpa verifikasi langsung ke source code.
+17. Kerjakan audit dari nol tanpa meminta konfirmasi lanjutan.
+    
 CLAIM YANG HARUS DIAUDIT SATU PER SATU:
 - market scanning
 - scoring baseline
@@ -200,3 +203,50 @@ Kalau ada mismatch seperti method dipanggil tapi tidak ditemukan, itu wajib ditu
 
 Saya tidak mau refactor.
 Saya hanya mau AUDIT JUJUR PER-FILE, PER-WIRING, dan CHECKLIST FINAL mana yang benar-benar berfungsi dan mana yang belum.
+
+## KEWAJIBAN CAKUPAN AUDIT PER-FILE SELURUH REPO
+
+Audit tidak boleh berhenti pada level modul besar atau narasi arsitektur.
+Audit wajib mencakup penelusuran struktur repository dan pemeriksaan file per file yang relevan.
+
+Aturan tambahan wajib:
+1. Lakukan penelusuran struktur repository terlebih dahulu.
+2. Identifikasi seluruh folder dan file yang relevan terhadap claim yang diaudit.
+3. Audit file yang relevan SATU PER SATU, bukan hanya per folder besar.
+4. Jangan melewati file hanya karena nama file terlihat sekunder atau kecil.
+5. Jika sebuah folder berisi banyak file, verifikasi file-file di dalamnya satu per satu, terutama pada area:
+   - src/bootstrap.ts
+   - src/app.ts
+   - src/domain/**
+   - src/services/**
+   - src/integrations/**
+   - src/storage/**
+   - src/server/**
+   - src/workers/**
+   - scripts/**
+   - deploy/**
+6. Untuk setiap file yang diperiksa, tentukan salah satu status berikut:
+   - RELEVAN DAN SUDAH DIAUDIT
+   - RELEVAN TAPI BELUM TERBUKTI BERPERAN
+   - TIDAK RELEVAN TERHADAP CLAIM YANG DIAUDIT
+7. Jangan menyimpulkan “seluruh repo sudah diaudit” jika belum membuat daftar file yang diperiksa.
+8. Jika ada file yang tampak penting tetapi tidak dibahas, jelaskan alasannya.
+9. Jika ada file yang hanya berisi helper/contract/utilities, tetap verifikasi apakah benar dipakai atau hanya dekorasi.
+10. Jika ada export yang tampak penting tetapi tidak ditemukan pemakaian nyata, tandai secara eksplisit.
+
+Output tambahan wajib:
+1. Tambahkan section khusus bernama `CAKUPAN AUDIT PER-FILE`.
+2. Dalam section itu, daftar file-file yang diperiksa, dikelompokkan per folder.
+3. Untuk setiap file, tulis catatan singkat:
+   - fungsi file
+   - relevansi terhadap claim
+   - apakah terhubung, parsial, atau tidak terbukti terhubung
+4. Jika jumlah file terlalu banyak, tetap tampilkan seluruh file relevan yang diperiksa, jangan hanya contoh.
+5. Pastikan `AUDIT_CHECKLIST.md` juga memuat ringkasan cakupan file yang benar-benar sudah diaudit.
+
+Larangan tambahan:
+- Jangan berhenti pada audit per-modul besar saja.
+- Jangan menulis seolah seluruh repo telah diaudit jika belum ada daftar file yang diperiksa.
+- Jangan menyederhanakan audit per-file menjadi narasi umum.
+
+
