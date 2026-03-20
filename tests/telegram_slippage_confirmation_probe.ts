@@ -36,6 +36,12 @@ class FakeSettingsService {
     return this.settings;
   }
 
+  getExecutionMode() {
+    return this.settings.uiOnly || this.settings.dryRun || this.settings.paperTrade
+      ? 'SIMULATED'
+      : 'LIVE';
+  }
+
   async patchStrategy(partial: Partial<typeof this.settings.strategy>) {
     this.settings = {
       ...this.settings,
@@ -48,6 +54,16 @@ class FakeSettingsService {
   }
 
   async setTradingMode() {
+    return this.settings;
+  }
+
+  async setExecutionMode(mode: 'SIMULATED' | 'LIVE') {
+    this.settings = {
+      ...this.settings,
+      dryRun: mode === 'SIMULATED',
+      paperTrade: mode === 'SIMULATED',
+      uiOnly: false,
+    };
     return this.settings;
   }
 
@@ -178,6 +194,14 @@ async function main() {
     settings.get().strategy.buySlippageBps,
     120,
     'After warning, entering another valid number should set that number',
+  );
+
+  const setLive = buildCallback({ namespace: 'SET', action: 'EXECUTION_MODE', value: 'LIVE' });
+  await bot.actionHandler!(createActionContext(setLive, replies));
+  assert.equal(settings.getExecutionMode(), 'LIVE', 'Execution mode LIVE must disable simulation flags');
+  assert.ok(
+    replies.some((text) => text.includes('Execution mode diubah ke LIVE.')),
+    'SET|EXECUTION_MODE LIVE should confirm execution mode change',
   );
 
   console.log('PASS telegram_slippage_confirmation_probe');

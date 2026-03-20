@@ -135,6 +135,7 @@ export class ReportService {
       `scanner=${params.health.scannerRunning ? 'on' : 'off'}`,
       `telegram=${params.health.telegramRunning ? 'on' : 'off'}`,
       `trading=${params.health.tradingEnabled ? 'on' : 'off'}`,
+      `execution=${params.health.executionMode}`,
       `accounts=${params.activeAccounts}`,
       `pairs=${params.health.activePairsTracked}`,
     ];

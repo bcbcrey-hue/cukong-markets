@@ -1,5 +1,11 @@
 import { Markup } from 'telegraf';
-import type { BotSettings, HotlistEntry, PositionRecord, TradingMode } from '../../core/types';
+import type {
+  BotSettings,
+  ExecutionMode,
+  HotlistEntry,
+  PositionRecord,
+  TradingMode,
+} from '../../core/types';
 import { buildCallback } from './callbackRouter';
 
 export type TelegramMenuId =
@@ -83,6 +89,8 @@ export const TELEGRAM_ACTION = {
   MANUAL_BUY: '🟢 Manual Buy',
   MANUAL_SELL: '🔴 Manual Sell',
   BUY_SLIPPAGE: '🎯 Buy Slippage',
+  EXECUTION_SIMULATED: '🧪 Execution Simulated',
+  EXECUTION_LIVE: '💸 Execution Live',
   STRATEGY: '⚙️ Strategy Settings',
   RISK: '🛡️ Risk Settings',
   ACCOUNTS: '👤 Accounts',
@@ -179,6 +187,8 @@ export function tradingModeKeyboard(current: TradingMode) {
 
 export function strategySettingsKeyboard(settings: BotSettings) {
   const modes: TradingMode[] = ['OFF', 'ALERT_ONLY', 'SEMI_AUTO', 'FULL_AUTO'];
+  const executionMode: ExecutionMode =
+    settings.uiOnly || settings.dryRun || settings.paperTrade ? 'SIMULATED' : 'LIVE';
 
   return Markup.inlineKeyboard([
     ...modes.map((mode) => [
@@ -187,6 +197,18 @@ export function strategySettingsKeyboard(settings: BotSettings) {
         buildCallback({ namespace: 'SET', action: 'MODE', value: mode }),
       ),
     ]),
+    [
+      Markup.button.callback(
+        `${executionMode === 'SIMULATED' ? '✅ ' : ''}${TELEGRAM_ACTION.EXECUTION_SIMULATED}`,
+        buildCallback({ namespace: 'SET', action: 'EXECUTION_MODE', value: 'SIMULATED' }),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        `${executionMode === 'LIVE' ? '✅ ' : ''}${TELEGRAM_ACTION.EXECUTION_LIVE}`,
+        buildCallback({ namespace: 'SET', action: 'EXECUTION_MODE', value: 'LIVE' }),
+      ),
+    ],
     [backButton('SET')],
   ]);
 }

@@ -10,6 +10,8 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 
 - `MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
 - domain `intelligence`, `microstructure`, `history`, `backtest`, dan `workers`
+- status eksekusi live vs simulasi sekarang dipisahkan tegas lewat `executionMode` di `/healthz`, Telegram status, dan log startup
+- ada jalur resmi Telegram admin untuk mengubah `SIMULATED` ↔ `LIVE` tanpa edit file manual
 - hardening execution nyata: `openOrders`-first sync, fallback `getOrder`, fallback history, duplicate BUY/SELL guard, stale BUY timeout cancel
 - startup recovery langsung diikuti evaluasi open positions (tidak menunggu tick `position-monitor` pertama)
 - execution summary + trade outcome summary ke persistence + journal + Telegram notifier
@@ -19,6 +21,8 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 - RUN START/STOP di Telegram sekarang mengontrol polling runtime (resume/pause loop), bukan sekadar patch status state
 - history mode `v2_prefer | v2_only | legacy` benar-benar dipakai di execution/recovery
 - nginx template + renderer berbasis env
+- jalur validasi resmi repo sekarang ada: `yarn typecheck:probes`, `yarn test:probes`, `yarn verify`
+- probe callback reconciliation end-to-end sekarang tersedia: `tests/callback_reconciliation_probe.ts`
 
 ### Masih parsial
 
@@ -29,8 +33,16 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 - runtime publik `https://kangtrade.top` **bukan bukti** bahwa repo ini sudah live sesuai source saat ini
 - verifikasi publik terbaru menunjukkan:
   - `https://kangtrade.top/healthz` merespons HTML login page, bukan JSON health server repo ini
-  - `https://kangtrade.top/indodax/callback` merespons text gate `405`, bukan respons callback server repo ini
+  - `POST https://kangtrade.top/indodax/callback` merespons `fail`, bukan `ok` dari callback server repo ini
 - artinya ingress/domain publik aktif saat ini belum terbukti mengarah ke runtime repo ini
+
+### Live vs simulated sekarang dipisahkan tegas
+
+- `executionMode=SIMULATED` bila salah satu flag `dryRun`, `paperTrade`, atau `uiOnly` masih aktif
+- `executionMode=LIVE` bila ketiga flag tersebut sudah mati
+- status ini tampil di `/healthz`, Telegram status, dan log startup
+- jalur resmi operator: `Settings -> Strategy Settings -> Execution Simulated / Execution Live`
+- agar order nyata benar-benar boleh berjalan, operator tetap harus memastikan `tradingMode` bukan `OFF` atau `ALERT_ONLY`
 
 ## Kontrak arsitektur yang benar
 
@@ -80,6 +92,11 @@ Submenu saat ini sudah memecah flow utama menjadi:
 - backtest run top / run all / last result
 
 Whitelist Telegram tetap ketat lewat `TELEGRAM_ALLOWED_USER_IDS`.
+
+Jalur resmi untuk mengubah mode eksekusi:
+
+- `Settings -> Strategy Settings -> Execution Simulated`
+- `Settings -> Strategy Settings -> Execution Live`
 
 ## Storage dan persistence yang dipakai nyata
 
@@ -144,7 +161,7 @@ yarn render:nginx
 Output final:
 
 ```bash
-deploy/nginx/mafiamarkets.nginx.conf
+deploy/nginx/cukong-markets.nginx.conf
 ```
 
 Template nginx saat ini memang meneruskan header berikut:
@@ -170,15 +187,18 @@ curl http://127.0.0.1:${INDODAX_CALLBACK_PORT}/healthz
 
 ## Test / probe yang benar-benar tersedia
 
-`package.json` saat ini hanya menyediakan script:
+`package.json` sekarang menyediakan script resmi berikut:
 
 - `yarn lint`
+- `yarn typecheck:probes`
+- `yarn test:probes`
+- `yarn verify`
 - `yarn build`
 - `yarn dev`
 - `yarn start`
 - `yarn render:nginx`
 
-Probe repo memang tersedia, tetapi dijalankan langsung via `tsx`, bukan lewat script package khusus.
+Probe repo tetap bisa dijalankan langsung via `tsx`, tetapi jalur resmi audit sekarang adalah `yarn test:probes` / `yarn verify`.
 
 Contoh pola run probe:
 
@@ -202,26 +222,32 @@ Daftar probe penting yang tersedia nyata:
 - `tests/http_servers_probe.ts`
 - `tests/nginx_renderer_probe.ts`
 - `tests/app_lifecycle_servers_probe.ts`
+- `tests/callback_reconciliation_probe.ts`
 
 ## Deploy / ingress checklist
 
 1. Isi `.env` production yang benar
 2. Jalankan `yarn build`
 3. Jalankan `yarn render:nginx`
-4. Terapkan `deploy/nginx/mafiamarkets.nginx.conf` ke server ingress yang benar
+4. Terapkan `deploy/nginx/cukong-markets.nginx.conf` ke server ingress yang benar
 5. Pastikan `/healthz` menuju app server dan `/indodax/callback` menuju callback server
 6. Verifikasi publik:
 
 ```bash
 curl -i https://your-domain/healthz
-curl -i https://your-domain/indodax/callback
+curl -i -X POST https://your-domain/indodax/callback \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id":"probe","status":"filled"}'
 ```
 
-Jika `/healthz` masih mengembalikan HTML page atau `/indodax/callback` masih mengembalikan respons gate/non-repo, maka ingress publik belum memakai wiring repo ini.
+`GET /indodax/callback` yang mengembalikan `405 fail` **bukan** bukti bahwa ingress salah, karena callback server source memang menolak method non-POST.
+
+Jika `/healthz` masih mengembalikan HTML page atau `POST /indodax/callback` masih mengembalikan respons non-repo / `fail`, maka ingress publik belum memakai wiring repo ini.
 
 ## Catatan jujur
 
-- repo internal saat ini sudah sinkron dan tervalidasi lewat lint, build, dan seluruh probe utama
+- repo internal saat ini sudah sinkron dan tervalidasi lewat `yarn lint`, `yarn typecheck:probes`, `yarn build`, dan `yarn test:probes`
+- live exchange probe nyata via `ExecutionEngine` sudah berhasil melakukan round-trip BUY lalu SELL pada `xrp_idr` dengan status `CONFIRMED_LIVE`
 - repo ini **siap dipakai sebagai source of truth internal**, tetapi **belum boleh diklaim live publik** selama ingress/domain aktif belum benar-benar diarahkan ke runtime repo ini
 - untuk audit teknis final dan status komponen blueprint, lihat `REFACTOR_LOG.md`
 - untuk ringkasan sesi berikutnya, lihat `SESSION_CONTEXT_NEXT.md`

@@ -21,7 +21,7 @@ export class PollingService {
   } {
     const jobs = this.scheduler.list();
     return {
-      activeJobs: jobs.length,
+      activeJobs: jobs.filter((job) => job.active).length,
       jobs,
     };
   }

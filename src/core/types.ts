@@ -1,4 +1,5 @@
 export type TradingMode = 'OFF' | 'ALERT_ONLY' | 'SEMI_AUTO' | 'FULL_AUTO';
+export type ExecutionMode = 'SIMULATED' | 'LIVE';
 export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
@@ -445,6 +446,7 @@ export interface HealthSnapshot {
   scannerRunning: boolean;
   telegramRunning: boolean;
   tradingEnabled: boolean;
+  executionMode: ExecutionMode;
   activePairsTracked: number;
   workers: WorkerHealth[];
   notes: string[];

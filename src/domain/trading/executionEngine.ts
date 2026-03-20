@@ -1175,6 +1175,10 @@ export class ExecutionEngine {
   }
 
   async manualOrder(request: ManualOrderRequest): Promise<string> {
+    if (request.quantity <= 0) {
+      throw new Error('Quantity order harus lebih besar dari 0');
+    }
+
     const signalLike: SignalCandidate = {
       pair: request.pair,
       score: 100,
@@ -1197,7 +1201,11 @@ export class ExecutionEngine {
     };
 
     if (request.side === 'buy') {
-      const notional = (request.price ?? 0) * request.quantity;
+      if (!request.price || request.price <= 0) {
+        throw new Error('Manual BUY wajib menyertakan price yang valid agar notional tidak nol');
+      }
+
+      const notional = request.price * request.quantity;
       return this.buy(request.accountId, signalLike, notional, 'MANUAL');
     }
 

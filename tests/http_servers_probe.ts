@@ -29,6 +29,7 @@ async function main() {
     scannerRunning: true,
     telegramRunning: true,
     tradingEnabled: true,
+    executionMode: 'SIMULATED',
     positions: [],
     orders: [],
   });

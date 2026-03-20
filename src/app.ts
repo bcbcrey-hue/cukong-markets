@@ -151,7 +151,10 @@ export async function createApp(): Promise<AppRuntime> {
   });
   summary.attachNotifier(telegram);
 
-  polling.register('market-scan', env.pollingIntervalMs, async () => {
+  const runtimePollingIntervalMs = settings.get().scanner.pollingIntervalMs;
+  const marketScanIntervalMs = settings.get().scanner.marketWatchIntervalMs;
+
+  polling.register('market-scan', marketScanIntervalMs, async () => {
     const runtime = state.get();
     const currentSettings = settings.get();
 
@@ -224,7 +227,7 @@ export async function createApp(): Promise<AppRuntime> {
     }
   });
 
-  polling.register('position-monitor', 5_000, async () => {
+  polling.register('position-monitor', runtimePollingIntervalMs, async () => {
     const runtime = state.get();
 
     if (runtime.status !== 'RUNNING' || runtime.emergencyStop) {
@@ -235,7 +238,7 @@ export async function createApp(): Promise<AppRuntime> {
     await executionEngine.evaluateOpenPositions();
   });
 
-  polling.register('health-heartbeat', 5_000, async () => {
+  polling.register('health-heartbeat', runtimePollingIntervalMs, async () => {
     const runtime = state.get();
 
     await state.patch({
@@ -253,15 +256,19 @@ export async function createApp(): Promise<AppRuntime> {
       scannerRunning: runtime.status === 'RUNNING',
       telegramRunning: true,
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
+      executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
       orders: orderManager.list(),
       workers: workerPool.snapshot(),
       notes: [
         `mode=${settings.get().tradingMode}`,
+        `executionFlags=dryRun:${settings.get().dryRun},paperTrade:${settings.get().paperTrade},uiOnly:${settings.get().uiOnly}`,
         `accountsEnabled=${accountRegistry.countEnabled()}`,
         `hotlistCount=${state.get().lastHotlist.length}`,
         `tradeCount=${state.get().tradeCount}`,
         `workersEnabled=${settings.get().workers.enabled}`,
+        `marketScanIntervalMs=${marketScanIntervalMs}`,
+        `runtimePollingIntervalMs=${runtimePollingIntervalMs}`,
       ],
     });
   });
@@ -286,20 +293,32 @@ export async function createApp(): Promise<AppRuntime> {
 
     await journal.info('APP_STARTED', 'cukong-markets app started', {
       mode: settings.get().tradingMode,
+      executionMode: settings.getExecutionMode(),
+      dryRun: settings.get().dryRun,
+      paperTrade: settings.get().paperTrade,
+      uiOnly: settings.get().uiOnly,
       activeAccounts: accountRegistry.countEnabled(),
       appPort: appServer.getPort(),
       callbackEnabled: env.indodaxEnableCallbackServer,
       callbackPort: env.indodaxEnableCallbackServer ? callbackServer.getPort() : null,
+      marketScanIntervalMs,
+      runtimePollingIntervalMs,
     });
 
     logger.info(
       {
         mode: settings.get().tradingMode,
+        executionMode: settings.getExecutionMode(),
+        dryRun: settings.get().dryRun,
+        paperTrade: settings.get().paperTrade,
+        uiOnly: settings.get().uiOnly,
         activeAccounts: accountRegistry.countEnabled(),
         workers: workerPool.snapshot().length,
         appPort: appServer.getPort(),
         callbackEnabled: env.indodaxEnableCallbackServer,
         callbackPort: env.indodaxEnableCallbackServer ? callbackServer.getPort() : null,
+        marketScanIntervalMs,
+        runtimePollingIntervalMs,
       },
       'cukong-markets app started',
     );
@@ -320,6 +339,7 @@ export async function createApp(): Promise<AppRuntime> {
       scannerRunning: false,
       telegramRunning: false,
       tradingEnabled: false,
+      executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
       orders: orderManager.list(),
       workers: workerPool.snapshot(),

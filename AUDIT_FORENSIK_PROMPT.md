@@ -76,3 +76,40 @@ Probe yang saya baca:
 
 ## Verdict akhir saat ini
 
+
+## Status penutupan target utama setelah implementasi
+
+### P0
+
+- [x] **LIVE vs SIMULATED dipisahkan tegas** — `executionMode` sekarang tampil di `/healthz`, Telegram status, dan log startup.
+- [x] **Jalur resmi simulasi ↔ live tersedia** — Telegram `Settings -> Strategy Settings -> Execution Simulated / Execution Live` sekarang benar-benar mematikan/menyalakan `dryRun`, `paperTrade`, dan `uiOnly`.
+- [x] **README verifikasi callback publik diperbaiki** — verifikasi resmi sekarang memakai `POST`, bukan `GET 405`.
+- [x] **`.env.example` nyata dan sinkron** — file sekarang ada dan mengikuti kontrak `env.ts` yang benar-benar dipakai.
+- [x] **Jalur validasi resmi repo ada** — `yarn typecheck:probes`, `yarn test:probes`, dan `yarn verify` sekarang tersedia.
+- [x] **Probe callback reconciliation end-to-end ada** — `tests/callback_reconciliation_probe.ts` sekarang membuktikan jalur `order_id/orderId/id -> reconcileFromCallback()`.
+
+### P1
+
+- [x] **Bug `activeJobs` diperbaiki** — `PollingService.stats()` sekarang menghitung job aktif dari `job.active`.
+- [x] **Source of truth interval dirapikan** — `market-scan` memakai `settings.scanner.marketWatchIntervalMs`, sedangkan polling runtime memakai `settings.scanner.pollingIntervalMs`.
+- [x] **Contract `manualOrder()` BUY diperbaiki** — request BUY tanpa `price` valid sekarang ditolak tegas.
+- [x] **Naming artifact deploy disamakan** — renderer nginx sekarang sinkron ke `deploy/nginx/cukong-markets.nginx.conf`.
+
+### P2
+
+- [x] **Dokumentasi disinkronkan ke source nyata** — `README.md`, `REFACTOR_LOG.md`, dan `SESSION_CONTEXT_NEXT.md` sekarang mengikuti status source dan hasil validasi terbaru.
+- [ ] **Smoke test terpadu tunggal** — belum ada satu probe bootstrap penuh yang menyatukan semua flow utama menjadi satu paket; ini tetap backlog jujur.
+
+### Validasi nyata tambahan
+
+- `yarn lint`
+- `yarn typecheck:probes`
+- `yarn build`
+- `yarn test:probes`
+- live round-trip nyata via `ExecutionEngine`: BUY lalu SELL `xrp_idr` selesai `CONFIRMED_LIVE`
+- verifikasi publik terbaru tetap menunjukkan `https://kangtrade.top/healthz` bukan runtime repo ini, dan `POST https://kangtrade.top/indodax/callback` masih mengembalikan `fail`
+
+### Status jujur saat ini
+
+- **repo internal + integrasi exchange live:** implemented & connected
+- **deploy/inbound publik di `kangtrade.top`:** blocked / not proven dari source repo ini

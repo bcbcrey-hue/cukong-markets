@@ -35,9 +35,13 @@ async function main() {
 
     const appHealth = (await appHealthResponse.json()) as {
       ok: boolean;
+      executionMode: string;
       callback: { enabled: boolean; path: string; port: number };
+      health: { executionMode: string };
     };
     assert.equal(appHealth.ok, true, 'App health response should be ok=true');
+    assert.equal(appHealth.executionMode, 'SIMULATED', 'App health must expose execution mode at top level');
+    assert.equal(appHealth.health.executionMode, 'SIMULATED', 'Nested health snapshot must expose execution mode');
     assert.equal(appHealth.callback.enabled, true, 'App health should reflect callback enabled env');
     assert.equal(
       appHealth.callback.path,

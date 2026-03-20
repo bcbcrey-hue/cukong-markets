@@ -1,4 +1,5 @@
 import type {
+  ExecutionMode,
   HealthSnapshot,
   OrderRecord,
   PositionRecord,
@@ -12,6 +13,7 @@ export interface BuildHealthParams {
   scannerRunning: boolean;
   telegramRunning: boolean;
   tradingEnabled: boolean;
+  executionMode: ExecutionMode;
   positions: PositionRecord[];
   orders: OrderRecord[];
   workers?: WorkerHealth[];
@@ -79,6 +81,7 @@ export class HealthService {
       scannerRunning: params.scannerRunning,
       telegramRunning: params.telegramRunning,
       tradingEnabled: params.tradingEnabled,
+      executionMode: params.executionMode,
       activePairsTracked: Object.keys(runtime.pairs).length,
       workers: params.workers ?? [],
       notes,

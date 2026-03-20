@@ -1,6 +1,7 @@
 import type {
   BacktestSettings,
   BotSettings,
+  ExecutionMode,
   RiskSettings,
   ScannerSettings,
   StrategySettings,
@@ -88,6 +89,14 @@ export class SettingsService {
     return this.settings;
   }
 
+  getExecutionMode(settings: BotSettings = this.settings): ExecutionMode {
+    if (settings.uiOnly || settings.dryRun || settings.paperTrade) {
+      return 'SIMULATED';
+    }
+
+    return 'LIVE';
+  }
+
   async replace(next: BotSettings): Promise<BotSettings> {
     this.settings = this.normalize({
       ...next,
@@ -108,6 +117,22 @@ export class SettingsService {
   async setTradingMode(mode: TradingMode): Promise<BotSettings> {
     return this.patch({
       tradingMode: mode,
+    });
+  }
+
+  async setExecutionMode(mode: ExecutionMode): Promise<BotSettings> {
+    if (mode === 'LIVE') {
+      return this.patch({
+        dryRun: false,
+        paperTrade: false,
+        uiOnly: false,
+      });
+    }
+
+    return this.patch({
+      dryRun: true,
+      paperTrade: true,
+      uiOnly: false,
     });
   }
 

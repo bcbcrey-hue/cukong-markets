@@ -16,6 +16,7 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 - Telegram tetap UI utama via long polling
 - akun tetap disimpan di `data/accounts/accounts.json`
 - `.env.example` sekarang ada dan sinkron dengan source nyata
+- `executionMode` live vs simulated sekarang tampil eksplisit di `/healthz`, Telegram status, dan log startup
 
 ---
 
@@ -52,6 +53,8 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 - `.env.example` yang sempat tidak ada sudah ditambahkan
 - README tidak lagi overclaim live/public runtime
 - source of truth dipusatkan ke `REFACTOR_LOG.md`
+- jalur resmi Telegram untuk `Execution Simulated` / `Execution Live` sudah ada
+- jalur resmi `yarn typecheck:probes`, `yarn test:probes`, dan `yarn verify` sudah ada
 
 ---
 
@@ -60,26 +63,26 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 ### Dalam repo
 
 - tidak ada blocker P0 correctness dari hasil audit ini
-- belum ada probe khusus callback reconciliation berbasis payload callback real (order_id tersedia vs tidak tersedia)
+- probe callback reconciliation berbasis payload callback real (`order_id/orderId/id`) sekarang sudah ada dan lulus
+- live exchange round-trip `xrp_idr` via `ExecutionEngine` sudah terbukti `CONFIRMED_LIVE`
 
 ### Luar repo / deploy / ingress
 
 - domain publik aktif belum mengarah ke runtime repo ini
-- verifikasi publik terbaru: `/healthz` masih mengembalikan HTML page, `/indodax/callback` masih mengembalikan gate text `405`
+- verifikasi publik terbaru: `/healthz` masih mengembalikan HTML page, `POST /indodax/callback` masih mengembalikan `fail`
 
 ---
 
 ## 7. Package / validasi cepat
 
-- script package yang ada: `lint`, `build`, `dev`, `start`, `render:nginx`
-- probe dijalankan langsung via `tsx tests/*.ts`
-- validasi yang lulus: `yarn lint`, `yarn build`, seluruh probe utama di folder `tests/`
+- script package yang ada: `lint`, `typecheck:probes`, `test:probes`, `verify`, `build`, `dev`, `start`, `render:nginx`
+- probe tetap bisa dijalankan via `tsx tests/*.ts`, tetapi jalur resmi sekarang adalah `yarn test:probes`
+- validasi yang lulus: `yarn lint`, `yarn typecheck:probes`, `yarn build`, `yarn test:probes`, seluruh probe utama di folder `tests/`, dan live round-trip `xrp_idr`
 
 ---
 
 ## 8. Next focus yang relevan
 
 1. selaraskan deploy/infrastructure agar domain publik benar-benar memakai runtime repo ini
-2. tambah probe integrasi startup recovery + immediate position evaluation setelah boot
-3. tambah probe integrasi callback-driven reconciliation (payload accepted dengan `order_id/orderId/id`)
-4. bila perlu, sederhanakan compatibility layer legacy + V2 setelah jalur live publik benar-benar stabil
+2. tambah probe integrasi bootstrap penuh yang menyatukan app start → `/healthz` → callback → recovery → status report sebagai satu smoke test
+3. bila perlu, sederhanakan compatibility layer legacy + V2 setelah jalur live publik benar-benar stabil

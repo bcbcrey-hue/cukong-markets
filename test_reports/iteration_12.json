@@ -1,0 +1,63 @@
+{
+  "summary": "Backend regression validation completed. Local backend probes and official scripts pass, but public domain runtime is still not synced with audited backend contract.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "https://kangtrade.top/healthz",
+        "issue": "Returns HTML frontend document instead of backend health JSON containing executionMode/runtime status.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "https://kangtrade.top/indodax/callback",
+        "issue": "Public callback path is served by Express-style gate behavior (GET 405 custom text, POST 200 fail) and not the audited callback server contract.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Public ingress routing to backend runtime",
+        "issue": "Live domain behavior diverges from repo runtime/probe behavior, blocking trustworthy live verdict.",
+        "affected_selectors": []
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/callback_reconciliation_probe.ts",
+    "/app/tests/telegram_slippage_confirmation_probe.ts",
+    "/app/tests/telegram_menu_navigation_probe.ts",
+    "/app/tests/http_servers_probe.ts",
+    "/app/tests/app_lifecycle_servers_probe.ts",
+    "/app/tests/nginx_renderer_probe.ts",
+    "/app/tests/runtime_backend_regression.ts",
+    "/app/tests/live_execution_hardening_probe.ts",
+    "/app/tests/execution_summary_failed_probe.ts",
+    "/app/tests/indodax_history_v2_probe.ts"
+  ],
+  "action_items": [
+    "Sync public nginx/runtime deployment with deploy/nginx/cukong-markets.nginx.conf artifact so /healthz proxies to backend app server.",
+    "Ensure public /indodax/callback is routed to IndodaxCallbackServer contract (POST accepted/rejected by allow-list) instead of alternate Express gate.",
+    "After deploy sync, re-run external smoke: GET /healthz and GET+POST /indodax/callback to confirm live behavior matches audited backend.",
+    "Keep official checks in CI: yarn typecheck:probes, yarn test:probes, yarn verify."
+  ],
+  "critical_code_review_comments": [
+    "ExecutionEngine remains a very large file (>1500 LOC); split into smaller reconciliation/execution modules to reduce regression risk.",
+    "Local code path for required scope is consistent: executionMode exposure, callback reconciliation order_id/orderId/id, manual BUY price guard, polling activeJobs computation, and nginx renderer artifact path."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_12.json"
+  ],
+  "success_rate": {
+    "backend": "85%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data. Probes used isolated temporary DATA_DIR.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Executed and passed locally: yarn typecheck:probes, yarn test:probes, yarn verify. Callback reconciliation probe passed for order_id/orderId/id variants. Telegram callback controls for execution mode are wired and probe-covered. NOTE: several tests intentionally use MOCKED exchange/telegram harnesses by design; public ingress remains unsynced.",
+  "rca of the issue": "RCA: Main gap is deployment/ingress mismatch, not local repository regression. Reproduction: curl https://kangtrade.top/healthz returns HTML, curl GET https://kangtrade.top/indodax/callback returns custom 405 Express text, curl POST callback returns 200 fail. Mitigation: deploy rendered nginx artifact and align runtime callback server behind public route, then revalidate externally."
+}

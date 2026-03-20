@@ -37,6 +37,7 @@ export class AppServer {
     }
 
     if (path === '/healthz') {
+      const currentHealth = this.health.get();
       this.writeJson(response, 200, {
         ok: true,
         app: env.appName,
@@ -53,7 +54,8 @@ export class AppServer {
           url: env.indodaxCallbackUrl,
           allowedHost: env.indodaxCallbackAllowedHost || null,
         },
-        health: this.health.get(),
+        executionMode: currentHealth.executionMode,
+        health: currentHealth,
       });
       return;
     }

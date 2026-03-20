@@ -2,8 +2,8 @@ import 'dotenv/config';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const templatePath = path.resolve(process.cwd(), 'deploy/nginx/mafiamarkets.nginx.conf.template');
-const outputPath = path.resolve(process.cwd(), 'deploy/nginx/mafiamarkets.nginx.conf');
+const templatePath = path.resolve(process.cwd(), 'deploy/nginx/cukong-markets.nginx.conf.template');
+const outputPath = path.resolve(process.cwd(), 'deploy/nginx/cukong-markets.nginx.conf');
 
 function readRequired(name) {
   const value = process.env[name]?.trim();

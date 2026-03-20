@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 async function main() {
-  const outputPath = path.resolve('/app/deploy/nginx/mafiamarkets.nginx.conf');
+  const outputPath = path.resolve('/app/deploy/nginx/cukong-markets.nginx.conf');
 
   await execFileAsync('node', ['/app/scripts/render-nginx-conf.mjs'], {
     cwd: '/app',

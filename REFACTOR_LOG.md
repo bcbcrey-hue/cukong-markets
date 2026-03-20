@@ -39,7 +39,7 @@ Kesimpulan final:
 | `src/storage` | implemented & connected | `JsonStore` + `JsonLinesStore` benar-benar dipakai persistence state/history/summary |
 | `src/services` | implemented & connected | persistence, state, health, journal, report, summary, polling, worker pool terhubung ke app |
 | `src/domain/accounts` | implemented & connected | legacy upload JSON diterima, validasi nyata, storage tetap `data/accounts/accounts.json` |
-| `src/domain/settings` | implemented & connected | settings dimuat/simpan, trading mode/slippage/take profit benar-benar mengubah state runtime |
+| `src/domain/settings` | implemented & connected | settings dimuat/simpan, trading mode/slippage/take profit benar-benar mengubah state runtime; `executionMode` live/simulated kini punya jalur resmi Telegram |
 | `src/domain/market` | implemented & connected | market snapshot, ticker/orderbook features, hotlist update, pair universe nyata dipakai di app |
 | `src/domain/signals` | implemented & connected | scoring strategy dan `SignalEngine` dipakai sebelum opportunity assessment |
 | `src/domain/intelligence` | implemented & connected | feature pipeline, probability, edge validation, timing, score explainer, opportunity engine saling terhubung |
@@ -48,15 +48,15 @@ Kesimpulan final:
 | `src/domain/backtest` | implemented & connected | replay loader, simulated replay, metrics, persistence hasil backtest nyata |
 | `src/domain/trading` | implemented but partial | execution/recovery/hardening nyata, callback reconciliation by exchangeOrderId sudah terhubung, tetapi restart safety lintas storage lokal masih parsial |
 | `src/integrations/indodax` | implemented & connected | public API, private `/tapi`, V2 mapping, callback server, dan post-process callback ke execution reconciliation nyata dipakai |
-| `src/integrations/telegram` | implemented & connected | whitelist, callback router, 7 kategori menu, upload handler, handlers nyata terhubung ke service; RUN START/STOP kini mengontrol polling runtime |
+| `src/integrations/telegram` | implemented & connected | whitelist, callback router, 7 kategori menu, upload handler, handlers nyata terhubung ke service; RUN START/STOP kini mengontrol polling runtime; execution mode live/simulated kini bisa diubah resmi dari Telegram |
 | `src/server` | implemented & connected | app server `/healthz` nyata, expose callback contract runtime |
 | `src/workers` | implemented & connected | feature/pattern/backtest worker nyata dipakai lewat `WorkerPoolService` |
-| `tests` | implemented & connected | probe lint/build/runtime/execution/history/telegram/nginx/app lifecycle semua ada dan lulus |
-| `scripts` | implemented & connected | `render-nginx-conf.mjs` benar-benar membaca env dan merender config |
+| `tests` | implemented & connected | probe lint/build/runtime/execution/history/telegram/nginx/app lifecycle semua ada dan lulus; callback reconciliation end-to-end kini ikut tervalidasi |
+| `scripts` | implemented & connected | `render-nginx-conf.mjs` benar-benar membaca env dan merender config `cukong-markets.nginx.conf` |
 | `deploy/nginx` | implemented & connected | template + rendered output sinkron dengan env contract repo |
 | `.env.example` | implemented & connected | sekarang sinkron penuh dengan variabel yang benar-benar dipakai source |
-| `package.json` | implemented & connected | script build/dev/start/lint/render sesuai repo; probe masih dijalankan langsung via `tsx`, bukan via script package |
-| `tsconfig.json` | implemented & connected | build/typecheck source `src/**/*.ts` lulus |
+| `package.json` | implemented & connected | script resmi `typecheck:probes`, `test:probes`, dan `verify` kini ada di samping build/dev/start/lint/render |
+| `tsconfig.json` | implemented & connected | build/typecheck source `src/**/*.ts` lulus; probe kini ikut typecheck lewat `tsconfig.probes.json` |
 
 ---
 
@@ -157,6 +157,7 @@ Yang benar-benar ada:
 - navigation callback router nyata dan tervalidasi probe
 - legacy upload account JSON tetap diterima
 - perubahan `buy slippage` dan `take profit` dari Telegram benar-benar menyimpan settings
+- perubahan `executionMode` `SIMULATED` ↔ `LIVE` dari Telegram benar-benar menyimpan settings dan mematikan/menyalakan flag simulasi yang relevan
 - menu backtest benar-benar men-trigger `BacktestEngine`
 
 ---
@@ -199,6 +200,7 @@ Yang benar-benar ada:
 - prioritas `Host` langsung atas spoofed `X-Forwarded-Host`
 - persist callback event dan callback state
 - callback accepted memicu post-process untuk reconcile order aktif berdasarkan `exchangeOrderId` bila payload menyertakan `order_id/orderId/id`
+- `/healthz` kini menampilkan `executionMode` eksplisit, sehingga operator tidak lagi hanya melihat `tradingEnabled`
 
 ### Nginx renderer
 
@@ -217,7 +219,7 @@ Status: **blocked by deploy/runtime access outside repo**.
 Verifikasi publik terbaru:
 
 - `https://kangtrade.top/healthz` merespons HTML login page, bukan JSON health server repo ini
-- `https://kangtrade.top/indodax/callback` merespons text gate `405`, bukan `ok/fail` dari callback server repo ini
+- `POST https://kangtrade.top/indodax/callback` merespons `fail`, bukan `ok` dari callback server repo ini
 
 Makna statusnya:
 
@@ -236,6 +238,14 @@ Makna statusnya:
 - startup sekarang menjalankan `evaluateOpenPositions()` langsung setelah `recoverLiveOrdersOnStartup()`
 - Telegram RUN START/STOP sekarang mengontrol polling runtime (bukan hanya set state)
 - callback accepted sekarang bisa men-trigger reconciliation order live by `exchangeOrderId`
+- `executionMode` live vs simulated sekarang tampil di health, Telegram status, dan log startup
+- jalur resmi Telegram untuk `Execution Simulated` / `Execution Live` sekarang ada
+- `PollingService.stats()` kini menghitung `activeJobs` dari job yang benar-benar aktif
+- source of truth interval sekarang dipisah tegas: `market-scan` memakai `settings.scanner.marketWatchIntervalMs`, sedangkan job polling runtime memakai `settings.scanner.pollingIntervalMs`
+- contract `manualOrder()` BUY sekarang menolak request tanpa `price` valid
+- artifact nginx sekarang sinkron ke branding final `cukong-markets.nginx.conf`
+- jalur resmi `yarn typecheck:probes`, `yarn test:probes`, dan `yarn verify` sekarang ada
+- probe `tests/callback_reconciliation_probe.ts` sekarang menembus `order_id/orderId/id -> reconcileFromCallback()`
 
 ---
 
@@ -254,18 +264,22 @@ Makna statusnya:
 ## 11. Validasi nyata yang lulus
 
 - `yarn lint`
+- `yarn typecheck:probes`
 - `yarn build`
+- `yarn test:probes`
 - `tests/private_api_v2_mapping_probe.ts`
 - `tests/nginx_renderer_probe.ts`
 - `tests/http_servers_probe.ts`
 - `tests/telegram_menu_navigation_probe.ts`
 - `tests/telegram_slippage_confirmation_probe.ts`
+- `tests/callback_reconciliation_probe.ts`
 - `tests/worker_timeout_probe.ts`
 - `tests/runtime_backend_regression.ts`
 - `tests/live_execution_hardening_probe.ts`
 - `tests/execution_summary_failed_probe.ts`
 - `tests/indodax_history_v2_probe.ts`
 - `tests/app_lifecycle_servers_probe.ts`
+- live exchange round-trip nyata via `ExecutionEngine`: BUY lalu SELL `xrp_idr` selesai dengan trade outcome `CONFIRMED_LIVE`
 
 ---
 

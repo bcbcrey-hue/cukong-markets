@@ -9,7 +9,10 @@
     "dev": "tsx watch src/bootstrap.ts",
     "render:nginx": "node scripts/render-nginx-conf.mjs",
     "start": "node dist/bootstrap.js",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck:probes": "tsc -p tsconfig.probes.json --noEmit",
+    "test:probes": "yarn build && node scripts/run-probes.mjs",
+    "verify": "yarn lint && yarn typecheck:probes && yarn test:probes"
   },
   "engines": {
     "node": ">=20"

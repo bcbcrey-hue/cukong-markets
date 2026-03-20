@@ -112,6 +112,7 @@ export function createDefaultHealth(): HealthSnapshot {
     scannerRunning: false,
     telegramRunning: false,
     tradingEnabled: false,
+    executionMode: 'SIMULATED',
     activePairsTracked: 0,
     workers: [],
     notes: [],

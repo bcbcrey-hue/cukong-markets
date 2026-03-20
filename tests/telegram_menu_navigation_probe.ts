@@ -180,6 +180,11 @@ async function main() {
     /BUY_SLIPPAGE/,
     'Buy Slippage button must live inside Positions / Orders / Manual Trade submenu',
   );
+  assert.match(
+    strategyCallbacks,
+    /EXECUTION_MODE/,
+    'Strategy Settings submenu must expose official execution mode control',
+  );
   assert.doesNotMatch(
     strategyCallbacks,
     /BUY_SLIPPAGE/,

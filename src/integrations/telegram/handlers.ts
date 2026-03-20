@@ -1,5 +1,6 @@
 import type { Context, Telegraf } from 'telegraf';
 import type {
+  ExecutionMode,
   HotlistEntry,
   PositionRecord,
   SignalCandidate,
@@ -129,10 +130,15 @@ function renderRiskText(settings: SettingsService): string {
 }
 
 function renderStrategyText(settings: SettingsService): string {
-  const strategy = settings.get().strategy;
+  const currentSettings = settings.get();
+  const strategy = currentSettings.strategy;
   return [
     '⚙️ STRATEGY SETTINGS',
-    `tradingMode=${settings.get().tradingMode}`,
+    `tradingMode=${currentSettings.tradingMode}`,
+    `executionMode=${settings.getExecutionMode()}`,
+    `dryRun=${currentSettings.dryRun}`,
+    `paperTrade=${currentSettings.paperTrade}`,
+    `uiOnly=${currentSettings.uiOnly}`,
     `buySlippageBps=${strategy.buySlippageBps}`,
     `maxBuySlippageBps=${strategy.maxBuySlippageBps}`,
     `buyOrderTimeoutMs=${strategy.buyOrderTimeoutMs}`,
@@ -211,6 +217,7 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
       return (
         parsed.action === 'BUY_SLIPPAGE' ||
         parsed.action === 'TAKE_PROFIT' ||
+        (parsed.action === 'EXECUTION_MODE' && ['SIMULATED', 'LIVE'].includes(parsed.value ?? '')) ||
         (parsed.action === 'MODE' && isTradingModeValue(parsed.value))
       );
     case 'SIG':
@@ -261,6 +268,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
     scannerRunning: deps.state.get().status === 'RUNNING',
     telegramRunning: true,
     tradingEnabled: deps.settings.get().tradingMode !== 'OFF' && !deps.state.get().emergencyStop,
+    executionMode: deps.settings.getExecutionMode(),
     positions: deps.positions.list(),
     orders: deps.orders.list(),
   });
@@ -657,6 +665,24 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       await replyText(
         ctx,
         `${renderStrategyText(deps.settings)}\n\nTrading mode diubah ke ${mode}.`,
+        strategySettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'EXECUTION_MODE' && parsed.value) {
+      const mode = parsed.value as ExecutionMode;
+      await deps.settings.setExecutionMode(mode);
+
+      const modeHint =
+        mode === 'LIVE' && ['OFF', 'ALERT_ONLY'].includes(deps.settings.get().tradingMode)
+          ? '\n\nCatatan: eksekusi LIVE sudah di-arm, tetapi trading mode saat ini masih belum mengizinkan eksekusi order nyata.'
+          : '';
+
+      await replyText(
+        ctx,
+        `${renderStrategyText(deps.settings)}\n\nExecution mode diubah ke ${mode}.${modeHint}`,
         strategySettingsKeyboard(deps.settings.get()),
       );
       await ctx.answerCbQuery();
