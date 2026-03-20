@@ -46,6 +46,14 @@ class FakeCallbackApi {
     return { success: 1, return: { orders: {} } };
   }
 
+  async myTradesV2() {
+    return { success: 1, return: { trades: [] } };
+  }
+
+  async orderHistoriesV2() {
+    return { success: 1, return: { orders: [] } };
+  }
+
   async tradeHistory() {
     return { success: 1, return: { trades: [] } };
   }

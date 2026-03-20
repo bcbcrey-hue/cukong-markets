@@ -2,7 +2,7 @@ import path from 'node:path';
 
 export type TradingMode = 'OFF' | 'ALERT_ONLY' | 'SEMI_AUTO' | 'FULL_AUTO';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-export type IndodaxHistoryMode = 'v2_prefer' | 'v2_only' | 'legacy';
+export type IndodaxHistoryMode = 'v2_only' | 'legacy';
 
 export interface EnvConfig {
   nodeEnv: string;
@@ -241,7 +241,23 @@ function readNumberList(name: string): number[] {
 
 const tradingModes = ['OFF', 'ALERT_ONLY', 'SEMI_AUTO', 'FULL_AUTO'] as const;
 const logLevels = ['debug', 'info', 'warn', 'error'] as const;
-const historyModes = ['v2_prefer', 'v2_only', 'legacy'] as const;
+const historyModes = ['v2_only', 'legacy'] as const;
+
+function normalizeIndodaxHistoryMode(raw: string, fallback: IndodaxHistoryMode): IndodaxHistoryMode {
+  if (!raw) {
+    return fallback;
+  }
+
+  if (raw === 'v2_only' || raw === 'v2_prefer') {
+    return 'v2_only';
+  }
+
+  if (raw === 'legacy') {
+    return 'legacy';
+  }
+
+  throw new Error(`Invalid value for INDODAX_HISTORY_MODE: "${raw}". Allowed: v2_only, legacy`);
+}
 
 const rootDataDir = readString('DATA_DIR', path.resolve(process.cwd(), 'data'));
 const rootLogDir = readString('LOG_DIR', path.resolve(process.cwd(), 'logs'));
@@ -306,7 +322,7 @@ export const env: EnvConfig = {
     'https://tapi.indodax.com',
   ),
   indodaxTimeoutMs: readNumber('INDODAX_TIMEOUT_MS', 15_000),
-  indodaxHistoryMode: readStringEnum('INDODAX_HISTORY_MODE', historyModes, 'v2_prefer'),
+  indodaxHistoryMode: normalizeIndodaxHistoryMode(readString('INDODAX_HISTORY_MODE'), 'v2_only'),
   indodaxCallbackPath,
   indodaxCallbackPort: readNumber('INDODAX_CALLBACK_PORT', 3001),
   indodaxCallbackBindHost: readString('INDODAX_CALLBACK_BIND_HOST', '0.0.0.0'),
@@ -356,14 +372,5 @@ export function isProductionEnv(): boolean {
 }
 
 export function getIndodaxHistoryMode(): IndodaxHistoryMode {
-  const raw = readString('INDODAX_HISTORY_MODE');
-  if (!raw) {
-    return env.indodaxHistoryMode;
-  }
-
-  if ((historyModes as readonly string[]).includes(raw)) {
-    return raw as IndodaxHistoryMode;
-  }
-
-  throw new Error(`Invalid value for INDODAX_HISTORY_MODE: "${raw}"`);
+  return normalizeIndodaxHistoryMode(readString('INDODAX_HISTORY_MODE'), env.indodaxHistoryMode);
 }

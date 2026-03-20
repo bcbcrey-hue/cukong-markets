@@ -16,19 +16,17 @@ import { StateService } from '../src/services/stateService';
 import { SummaryService } from '../src/services/summaryService';
 
 class TrackingHistoryApi {
+  public orderHistoryCalls: Array<Record<string, unknown>> = [];
+  public myTradesCalls: Array<Record<string, unknown>> = [];
   public counters = {
-    v2Orders: 0,
-    v2Trades: 0,
     legacyOrders: 0,
     legacyTrades: 0,
   };
 
   constructor(
     private readonly config: {
-      v2OrderHistory?: Record<string, unknown> | Error;
-      v2TradeHistory?: Record<string, unknown> | Error;
-      legacyOrderHistory?: Record<string, unknown> | Error;
-      legacyTradeHistory?: Record<string, unknown> | Error;
+      onOrderHistoriesV2?: (options: Record<string, unknown>) => Record<string, unknown> | Error;
+      onMyTradesV2?: (options: Record<string, unknown>) => Record<string, unknown> | Error;
     },
   ) {}
 
@@ -43,36 +41,32 @@ class TrackingHistoryApi {
     throw new Error('getOrder unavailable for history mode probe');
   }
 
-  async orderHistoriesV2() {
-    this.counters.v2Orders += 1;
-    if (this.config.v2OrderHistory instanceof Error) {
-      throw this.config.v2OrderHistory;
+  async orderHistoriesV2(options: Record<string, unknown> = {}) {
+    this.orderHistoryCalls.push(options);
+    const response = this.config.onOrderHistoriesV2?.(options);
+    if (response instanceof Error) {
+      throw response;
     }
-    return this.config.v2OrderHistory ?? { success: 1, return: { orders: [] } };
+    return response ?? { success: 1, return: { orders: [] } };
   }
 
-  async myTradesV2() {
-    this.counters.v2Trades += 1;
-    if (this.config.v2TradeHistory instanceof Error) {
-      throw this.config.v2TradeHistory;
+  async myTradesV2(options: Record<string, unknown> = {}) {
+    this.myTradesCalls.push(options);
+    const response = this.config.onMyTradesV2?.(options);
+    if (response instanceof Error) {
+      throw response;
     }
-    return this.config.v2TradeHistory ?? { success: 1, return: { trades: [] } };
+    return response ?? { success: 1, return: { trades: [] } };
   }
 
   async orderHistory() {
     this.counters.legacyOrders += 1;
-    if (this.config.legacyOrderHistory instanceof Error) {
-      throw this.config.legacyOrderHistory;
-    }
-    return this.config.legacyOrderHistory ?? { success: 1, return: { orders: [] } };
+    return { success: 1, return: { orders: [] } };
   }
 
   async tradeHistory() {
     this.counters.legacyTrades += 1;
-    if (this.config.legacyTradeHistory instanceof Error) {
-      throw this.config.legacyTradeHistory;
-    }
-    return this.config.legacyTradeHistory ?? { success: 1, return: { trades: [] } };
+    return { success: 1, return: { trades: [] } };
   }
 }
 
@@ -221,6 +215,24 @@ async function createHarness(tempDataDir: string, api: TrackingHistoryApi) {
   };
 }
 
+function emptyV2OrderPayload() {
+  return {
+    success: 1,
+    return: {
+      orders: [],
+    },
+  };
+}
+
+function emptyV2TradePayload() {
+  return {
+    success: 1,
+    return: {
+      trades: [],
+    },
+  };
+}
+
 async function seedActiveOrder(
   orderManager: OrderManager,
   accountId: string,
@@ -228,8 +240,9 @@ async function seedActiveOrder(
   orderId: string,
   quantity: number,
   price: number,
+  createdAt: string,
 ) {
-  return orderManager.create({
+  const order = await orderManager.create({
     accountId,
     pair,
     side: 'buy',
@@ -244,6 +257,9 @@ async function seedActiveOrder(
     referencePrice: price,
     notes: 'history probe',
   });
+
+  await orderManager.update(order.id, { createdAt });
+  return orderManager.getById(order.id) ?? order;
 }
 
 async function main() {
@@ -254,89 +270,141 @@ async function main() {
   try {
     process.env.INDODAX_HISTORY_MODE = 'v2_prefer';
     {
+      const targetTime = Date.now() - 36 * 60 * 60 * 1000;
       const api = new TrackingHistoryApi({
-        v2OrderHistory: buildV2OrderPayload('xlm_idr', 'V2-ORDER-1', 200, 101),
-        v2TradeHistory: buildV2TradePayload('xlm_idr', 'V2-ORDER-1', 200, 101, 5),
+        onOrderHistoriesV2: (options) => {
+          const startTime = Number(options.startTime);
+          const endTime = Number(options.endTime);
+          if (startTime <= targetTime && targetTime <= endTime) {
+            return buildV2OrderPayload('xlm_idr', 'V2-ORDER-1', 200, 101);
+          }
+
+          return emptyV2OrderPayload();
+        },
+        onMyTradesV2: (options) =>
+          options.orderId === 'V2-ORDER-1'
+            ? buildV2TradePayload('xlm_idr', 'V2-ORDER-1', 200, 101, 5)
+            : emptyV2TradePayload(),
       });
       const harness = await createHarness(path.resolve(baseTempDir, 'v2-prefer-success'), api);
-      await seedActiveOrder(harness.orderManager, harness.account!.id, 'xlm_idr', 'V2-ORDER-1', 200, 100);
+      await seedActiveOrder(
+        harness.orderManager,
+        harness.account!.id,
+        'xlm_idr',
+        'V2-ORDER-1',
+        200,
+        100,
+        new Date(targetTime).toISOString(),
+      );
 
       await harness.execution.recoverLiveOrdersOnStartup();
 
       const order = harness.orderManager.list()[0];
       const position = harness.positionManager.listOpen()[0];
-      assert.equal(order?.status, 'FILLED', 'v2_prefer should reconcile order via v2 payload');
-      assert.equal(order?.feeAmount, 5, 'v2_prefer should keep fee accounting via myTrades v2');
-      assert.equal(position?.quantity, 200, 'v2_prefer should materialize filled quantity into position state');
-      assert.equal(api.counters.v2Orders > 0, true, 'v2 order history should be called in v2_prefer mode');
-      assert.equal(api.counters.v2Trades > 0, true, 'v2 myTrades should be called in v2_prefer mode');
-      assert.equal(api.counters.legacyOrders, 0, 'legacy orderHistory should not be used when v2 succeeds');
-      assert.equal(api.counters.legacyTrades, 0, 'legacy tradeHistory should not be used when v2 succeeds');
+      assert.equal(order?.status, 'FILLED', 'v2_prefer alias must reconcile order via canonical v2 payload');
+      assert.equal(order?.feeAmount, 5, 'myTrades v2 must preserve fee accounting for >24h recovery');
+      assert.equal(position?.quantity, 200, 'v2 recovery must materialize filled quantity into position state');
+      assert.equal(api.orderHistoryCalls.length > 0, true, 'v2 order history should be queried during recovery');
+      assert.equal(api.myTradesCalls.length > 0, true, 'myTrades v2 should be queried during recovery');
+      assert.equal(
+        api.orderHistoryCalls.every(
+          (call) => typeof call.startTime === 'number' && typeof call.endTime === 'number',
+        ),
+        true,
+        'order history v2 recovery must send explicit startTime/endTime instead of relying on 24h default',
+      );
+      assert.equal(
+        api.orderHistoryCalls.some(
+          (call) => Number(call.startTime) <= targetTime && targetTime <= Number(call.endTime),
+        ),
+        true,
+        'one explicit v2 order history window must cover the >24h target order time',
+      );
+      assert.equal(api.myTradesCalls[0]?.orderId, 'V2-ORDER-1', 'myTrades v2 must send orderId filter');
+      assert.equal(api.counters.legacyOrders, 0, 'startup recovery must not use legacy orderHistory');
+      assert.equal(api.counters.legacyTrades, 0, 'startup recovery must not use legacy tradeHistory');
     }
 
-    process.env.INDODAX_HISTORY_MODE = 'v2_prefer';
+    process.env.INDODAX_HISTORY_MODE = 'v2_only';
     {
+      const actualTargetTime = Date.now() - 28 * 24 * 60 * 60 * 1000;
+      const localCreatedAt = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString();
       const api = new TrackingHistoryApi({
-        v2OrderHistory: new Error('v2 order history unavailable'),
-        v2TradeHistory: new Error('v2 myTrades unavailable'),
-        legacyOrderHistory: buildLegacyOrderPayload('ada_idr', 'LEGACY-FALLBACK-1', 50, 10000),
-        legacyTradeHistory: buildLegacyTradePayload('ada_idr', 'LEGACY-FALLBACK-1', 50, 10000, 8),
+        onOrderHistoriesV2: (options) => {
+          const startTime = Number(options.startTime);
+          const endTime = Number(options.endTime);
+          if (startTime <= actualTargetTime && actualTargetTime <= endTime) {
+            return buildV2OrderPayload('ada_idr', 'CHUNK-LOOKUP-1', 50, 10000);
+          }
+
+          return emptyV2OrderPayload();
+        },
+        onMyTradesV2: (options) =>
+          options.orderId === 'CHUNK-LOOKUP-1'
+            ? buildV2TradePayload('ada_idr', 'CHUNK-LOOKUP-1', 50, 10000, 8)
+            : emptyV2TradePayload(),
       });
-      const harness = await createHarness(path.resolve(baseTempDir, 'v2-prefer-fallback'), api);
-      await seedActiveOrder(harness.orderManager, harness.account!.id, 'ada_idr', 'LEGACY-FALLBACK-1', 50, 10000);
+      const harness = await createHarness(path.resolve(baseTempDir, 'chunked-windowed-search'), api);
+      await seedActiveOrder(
+        harness.orderManager,
+        harness.account!.id,
+        'ada_idr',
+        'CHUNK-LOOKUP-1',
+        50,
+        10000,
+        localCreatedAt,
+      );
 
       await harness.execution.recoverLiveOrdersOnStartup();
 
       const order = harness.orderManager.list()[0];
-      assert.equal(order?.status, 'FILLED', 'v2_prefer should fallback to legacy history when v2 fails');
-      assert.equal(order?.feeAmount, 8, 'legacy fallback should preserve fee accounting');
-      assert.equal(api.counters.v2Orders > 0, true, 'v2 path should be attempted before fallback');
-      assert.equal(api.counters.v2Trades > 0, true, 'v2 myTrades should be attempted before fallback');
-      assert.equal(api.counters.legacyOrders > 0, true, 'legacy orderHistory should be used as fallback');
-      assert.equal(api.counters.legacyTrades > 0, true, 'legacy tradeHistory should be used as fallback');
-    }
-
-    process.env.INDODAX_HISTORY_MODE = 'legacy';
-    {
-      const api = new TrackingHistoryApi({
-        v2OrderHistory: buildV2OrderPayload('doge_idr', 'LEGACY-ONLY-1', 100, 1000),
-        v2TradeHistory: buildV2TradePayload('doge_idr', 'LEGACY-ONLY-1', 100, 1000, 3),
-        legacyOrderHistory: buildLegacyOrderPayload('doge_idr', 'LEGACY-ONLY-1', 100, 1000),
-        legacyTradeHistory: buildLegacyTradePayload('doge_idr', 'LEGACY-ONLY-1', 100, 1000, 3),
-      });
-      const harness = await createHarness(path.resolve(baseTempDir, 'legacy-only'), api);
-      await seedActiveOrder(harness.orderManager, harness.account!.id, 'doge_idr', 'LEGACY-ONLY-1', 100, 1000);
-
-      await harness.execution.recoverLiveOrdersOnStartup();
-
-      const order = harness.orderManager.list()[0];
-      assert.equal(order?.status, 'FILLED', 'legacy mode should still reconcile live history');
-      assert.equal(api.counters.v2Orders, 0, 'legacy mode must not call v2 order histories');
-      assert.equal(api.counters.v2Trades, 0, 'legacy mode must not call v2 myTrades');
-      assert.equal(api.counters.legacyOrders > 0, true, 'legacy mode must use legacy orderHistory');
-      assert.equal(api.counters.legacyTrades > 0, true, 'legacy mode must use legacy tradeHistory');
+      assert.equal(order?.status, 'FILLED', 'chunked windowed v2 lookup should reconcile orders older than 7 days');
+      assert.equal(order?.feeAmount, 8, 'chunked v2 recovery should preserve fee accounting');
+      assert.equal(api.orderHistoryCalls.length > 1, true, 'older order recovery should require multiple bounded v2 windows');
+      assert.equal(
+        api.orderHistoryCalls.every(
+          (call) => Number(call.endTime) - Number(call.startTime) <= 7 * 24 * 60 * 60 * 1000,
+        ),
+        true,
+        'each order history v2 request must stay within the 7 day maximum range',
+      );
+      assert.equal(
+        api.orderHistoryCalls.some(
+          (call) => Number(call.startTime) <= actualTargetTime && actualTargetTime <= Number(call.endTime),
+        ),
+        true,
+        'chunked lookup must eventually hit the historical window that contains the target order',
+      );
+      assert.equal(api.counters.legacyOrders, 0, 'chunked v2 lookup must not fallback to legacy orderHistory');
+      assert.equal(api.counters.legacyTrades, 0, 'chunked v2 lookup must not fallback to legacy tradeHistory');
     }
 
     process.env.INDODAX_HISTORY_MODE = 'v2_only';
     {
       const api = new TrackingHistoryApi({
-        v2OrderHistory: new Error('v2 unavailable'),
-        v2TradeHistory: new Error('v2 unavailable'),
-        legacyOrderHistory: buildLegacyOrderPayload('btc_idr', 'V2-ONLY-1', 1, 1000000000),
-        legacyTradeHistory: buildLegacyTradePayload('btc_idr', 'V2-ONLY-1', 1, 1000000000, 12),
+        onOrderHistoriesV2: () => new Error('v2 order history unavailable'),
+        onMyTradesV2: () => new Error('v2 myTrades unavailable'),
       });
-      const harness = await createHarness(path.resolve(baseTempDir, 'v2-only'), api);
-      await seedActiveOrder(harness.orderManager, harness.account!.id, 'btc_idr', 'V2-ONLY-1', 1, 1000000000);
+      const harness = await createHarness(path.resolve(baseTempDir, 'v2-unavailable-no-legacy-fallback'), api);
+      await seedActiveOrder(
+        harness.orderManager,
+        harness.account!.id,
+        'doge_idr',
+        'NO-FALLBACK-1',
+        100,
+        1000,
+        new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      );
 
       const messages = await harness.execution.recoverLiveOrdersOnStartup();
-      const order = harness.orderManager.list()[0];
 
-      assert.equal(messages.length, 0, 'v2_only should not silently fallback to legacy when v2 fails');
-      assert.equal(order?.status, 'OPEN', 'v2_only should leave order unresolved if v2 data is unavailable');
-      assert.equal(api.counters.legacyOrders, 0, 'v2_only must not call legacy orderHistory');
-      assert.equal(api.counters.legacyTrades, 0, 'v2_only must not call legacy tradeHistory');
-      assert.equal(api.counters.v2Orders > 0, true, 'v2_only should still attempt v2 order history');
-      assert.equal(api.counters.v2Trades > 0, true, 'v2_only should still attempt v2 myTrades');
+      const order = harness.orderManager.list()[0];
+      assert.equal(messages.length, 0, 'runtime must not silently fallback to legacy when v2 is unavailable');
+      assert.equal(order?.status, 'OPEN', 'order should stay unresolved when canonical v2 data is unavailable');
+      assert.equal(api.orderHistoryCalls.length > 0, true, 'v2 order history should still be attempted');
+      assert.equal(api.myTradesCalls.length > 0, true, 'myTrades v2 should still be attempted');
+      assert.equal(api.counters.legacyOrders, 0, 'canonical runtime must not call legacy orderHistory on v2 failure');
+      assert.equal(api.counters.legacyTrades, 0, 'canonical runtime must not call legacy tradeHistory on v2 failure');
     }
 
     console.log('PASS indodax_history_v2_probe');

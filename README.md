@@ -6,49 +6,47 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 
 ## Status jujur repo saat ini
 
-### Sudah implemented & connected di repo
+### Sudah beres dan sinkron di source
 
-- `MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
-- domain `intelligence`, `microstructure`, `history`, `backtest`, dan `workers`
-- status eksekusi live vs simulasi sekarang dipisahkan tegas lewat `executionMode` di `/healthz`, Telegram status, dan log startup
-- ada jalur resmi Telegram admin untuk mengubah `SIMULATED` ↔ `LIVE` tanpa edit file manual
-- hardening execution nyata: `openOrders`-first sync, fallback `getOrder`, fallback history, duplicate BUY/SELL guard, stale BUY timeout cancel
-- startup recovery langsung diikuti evaluasi open positions (tidak menunggu tick `position-monitor` pertama)
-- execution summary + trade outcome summary ke persistence + journal + Telegram notifier
-- callback server Indodax terpisah port, env-driven, dan persist event/state
-- callback accepted dapat memicu reconciliation order aktif berbasis `exchangeOrderId` bila payload menyertakan `order_id/orderId/id`
-- Telegram operational UI 7 kategori, whitelist ketat, legacy upload account JSON, storage akun tetap di `data/accounts/accounts.json`
-- RUN START/STOP di Telegram sekarang mengontrol polling runtime (resume/pause loop), bukan sekadar patch status state
-- history mode `v2_prefer | v2_only | legacy` benar-benar dipakai di execution/recovery
-- nginx template + renderer berbasis env
-- jalur validasi resmi repo sekarang ada: `yarn typecheck:probes`, `yarn test:probes`, `yarn verify`
-- probe callback reconciliation end-to-end sekarang tersedia: `tests/callback_reconciliation_probe.ts`
+- `MarketWatcher -> SignalEngine -> OpportunityEngine -> Hotlist -> ExecutionEngine` benar-benar terhubung.
+- `executionMode` live vs simulated tampil tegas di `/healthz`, Telegram status, dan log startup.
+- startup recovery, sync live order, callback-triggered reconcile, partial fill, fee, weighted average fill, dan update posisi tetap jalan.
+- callback server Indodax env-driven, persist event/state, dan callback accepted tetap memicu reconcile berdasarkan `order_id / orderId / id`.
+- jalur validasi resmi repo tersedia dan lulus: `yarn lint`, `yarn typecheck:probes`, `yarn build`, `yarn test:probes`.
 
-### Masih parsial
+### Status migrasi history/recovery Indodax
 
-- jalur execution/recovery masih sengaja memegang compatibility layer legacy `/tapi` + Trade API 2.0 untuk recovery dan fallback; ini **parsial**, bukan final murni V2
+Untuk scope migrasi history/recovery, status sekarang adalah **non-parsial**:
+
+- order history canonical ke `GET /api/v2/order/histories`
+- trade history canonical ke `GET /api/v2/myTrades`
+- runtime V2 utama **tidak lagi fallback** ke legacy `orderHistory` / `tradeHistory`
+- recovery order history V2 memakai **explicit `startTime/endTime`**, tidak mengandalkan default 24 jam
+- recovery order history V2 memakai **windowed search bounded <= 7 hari per request** dan **chunked lookup deterministik** sampai order target ketemu atau pencarian habis
+- `myTradesV2` memakai `symbol + orderId` sesuai docs resmi
+
+### Yang tetap memakai `/tapi` dan memang masih benar menurut docs resmi
+
+Method berikut **sengaja tetap** memakai jalur private API resmi lama karena dokumentasi resmi masih menyatakannya valid:
+
+- `trade`
+- `openOrders`
+- `getOrder`
+- `cancelOrder`
+- `getInfo`
+
+Repo ini **tidak overclaim full migration semua private API**. Yang diselesaikan di sesi ini adalah **history/recovery ke V2**.
 
 ### Tidak boleh dioverclaim
 
 - runtime publik `https://kangtrade.top` **bukan bukti** bahwa repo ini sudah live sesuai source saat ini
-- verifikasi publik terbaru menunjukkan:
-  - `https://kangtrade.top/healthz` merespons HTML login page, bukan JSON health server repo ini
-  - `POST https://kangtrade.top/indodax/callback` merespons `fail`, bukan `ok` dari callback server repo ini
-- artinya ingress/domain publik aktif saat ini belum terbukti mengarah ke runtime repo ini
+- verifikasi publik terakhir masih menunjukkan domain aktif belum terbukti mengarah ke runtime repo ini
 
-### Live vs simulated sekarang dipisahkan tegas
-
-- `executionMode=SIMULATED` bila salah satu flag `dryRun`, `paperTrade`, atau `uiOnly` masih aktif
-- `executionMode=LIVE` bila ketiga flag tersebut sudah mati
-- status ini tampil di `/healthz`, Telegram status, dan log startup
-- jalur resmi operator: `Settings -> Strategy Settings -> Execution Simulated / Execution Live`
-- agar order nyata benar-benar boleh berjalan, operator tetap harus memastikan `tradingMode` bukan `OFF` atau `ALERT_ONLY`
-
-## Kontrak arsitektur yang benar
+## Kontrak arsitektur yang berlaku
 
 - domain publik dibentuk dari `PUBLIC_BASE_URL`
 - callback publik final dibentuk dari `PUBLIC_BASE_URL + INDODAX_CALLBACK_PATH`
-- route internal inti sengaja stabil:
+- route internal inti tetap stabil:
   - app health: `/healthz`
   - callback listener: `/indodax/callback`
 - vendor outbound dipisahkan dari domain publik:
@@ -58,14 +56,14 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 - nginx hanya wiring/proxy
 - Telegram tetap UI/panel utama via long polling
 
-Contoh contract target saat ini:
+Contoh contract target:
 
 ```bash
 PUBLIC_BASE_URL=https://kangtrade.top
 INDODAX_CALLBACK_PATH=/indodax/callback
 ```
 
-Hasil final callback URL:
+Hasil callback URL:
 
 ```bash
 https://kangtrade.top/indodax/callback
@@ -73,7 +71,7 @@ https://kangtrade.top/indodax/callback
 
 ## Telegram UI operasional
 
-Menu utama operasional memang terdiri dari 7 kategori:
+Menu utama operasional tetap 7 kategori:
 
 1. `⚡ Execute Trade`
 2. `🚨 Emergency Controls`
@@ -83,20 +81,12 @@ Menu utama operasional memang terdiri dari 7 kategori:
 6. `👤 Accounts`
 7. `🧪 Backtest`
 
-Submenu saat ini sudah memecah flow utama menjadi:
-
-- monitoring / laporan / intelligence / spoof / pattern / logs
-- positions / orders / manual buy / manual sell
-- strategy settings / risk settings
-- accounts list / upload / reload
-- backtest run top / run all / last result
-
-Whitelist Telegram tetap ketat lewat `TELEGRAM_ALLOWED_USER_IDS`.
-
-Jalur resmi untuk mengubah mode eksekusi:
+Jalur resmi operator untuk mengubah mode eksekusi tetap:
 
 - `Settings -> Strategy Settings -> Execution Simulated`
 - `Settings -> Strategy Settings -> Execution Live`
+
+Whitelist Telegram tetap ketat lewat `TELEGRAM_ALLOWED_USER_IDS`.
 
 ## Storage dan persistence yang dipakai nyata
 
@@ -136,7 +126,13 @@ Salin `.env.example` menjadi `.env`, lalu isi minimal:
 - `LOG_DIR`
 - `TEMP_DIR`
 
-`.env.example` sekarang sudah sinkron dengan variabel yang benar-benar dipakai source. Path-path turunan seperti file accounts/state/history **tidak** diisi manual di env karena memang dibentuk oleh code dari `DATA_DIR`.
+Catatan penting untuk `INDODAX_HISTORY_MODE`:
+
+- default final: `v2_only`
+- `legacy` masih tersedia hanya sebagai jalur eksplisit kompatibilitas/manual
+- `v2_prefer` diperlakukan sebagai alias kompatibilitas ke `v2_only`, jadi tidak lagi menghasilkan runtime hybrid
+
+Path turunan seperti file accounts/state/history **tidak** diisi manual di env karena dibentuk otomatis dari `DATA_DIR`.
 
 ## Instalasi dan menjalankan lokal
 
@@ -152,8 +148,6 @@ Jika `INDODAX_ENABLE_CALLBACK_SERVER=true`, callback server ikut start saat app 
 
 ## Render nginx
 
-Setelah `.env` siap, jalankan:
-
 ```bash
 yarn render:nginx
 ```
@@ -163,13 +157,6 @@ Output final:
 ```bash
 deploy/nginx/cukong-markets.nginx.conf
 ```
-
-Template nginx saat ini memang meneruskan header berikut:
-
-- `Host`
-- `X-Forwarded-Host`
-- `X-Forwarded-For`
-- `X-Forwarded-Proto`
 
 ## Verifikasi lokal cepat
 
@@ -185,9 +172,9 @@ Health callback:
 curl http://127.0.0.1:${INDODAX_CALLBACK_PORT}/healthz
 ```
 
-## Test / probe yang benar-benar tersedia
+## Test / probe yang tersedia nyata
 
-`package.json` sekarang menyediakan script resmi berikut:
+Script resmi repo:
 
 - `yarn lint`
 - `yarn typecheck:probes`
@@ -198,56 +185,25 @@ curl http://127.0.0.1:${INDODAX_CALLBACK_PORT}/healthz
 - `yarn start`
 - `yarn render:nginx`
 
-Probe repo tetap bisa dijalankan langsung via `tsx`, tetapi jalur resmi audit sekarang adalah `yarn test:probes` / `yarn verify`.
+Probe penting:
 
-Contoh pola run probe:
-
-```bash
-set -a
-source .env
-set +a
-DATA_DIR=/tmp/cukong-probe ./node_modules/.bin/tsx tests/http_servers_probe.ts
-```
-
-Daftar probe penting yang tersedia nyata:
-
-- `tests/runtime_backend_regression.ts`
-- `tests/worker_timeout_probe.ts`
+- `tests/private_api_v2_mapping_probe.ts`
+- `tests/indodax_history_v2_probe.ts`
 - `tests/live_execution_hardening_probe.ts`
-- `tests/execution_summary_failed_probe.ts`
+- `tests/callback_reconciliation_probe.ts`
+- `tests/runtime_backend_regression.ts`
+- `tests/http_servers_probe.ts`
+- `tests/app_lifecycle_servers_probe.ts`
 - `tests/telegram_menu_navigation_probe.ts`
 - `tests/telegram_slippage_confirmation_probe.ts`
-- `tests/indodax_history_v2_probe.ts`
-- `tests/private_api_v2_mapping_probe.ts`
-- `tests/http_servers_probe.ts`
+- `tests/execution_summary_failed_probe.ts`
 - `tests/nginx_renderer_probe.ts`
-- `tests/app_lifecycle_servers_probe.ts`
-- `tests/callback_reconciliation_probe.ts`
-
-## Deploy / ingress checklist
-
-1. Isi `.env` production yang benar
-2. Jalankan `yarn build`
-3. Jalankan `yarn render:nginx`
-4. Terapkan `deploy/nginx/cukong-markets.nginx.conf` ke server ingress yang benar
-5. Pastikan `/healthz` menuju app server dan `/indodax/callback` menuju callback server
-6. Verifikasi publik:
-
-```bash
-curl -i https://your-domain/healthz
-curl -i -X POST https://your-domain/indodax/callback \
-  -H 'Content-Type: application/json' \
-  -d '{"order_id":"probe","status":"filled"}'
-```
-
-`GET /indodax/callback` yang mengembalikan `405 fail` **bukan** bukti bahwa ingress salah, karena callback server source memang menolak method non-POST.
-
-Jika `/healthz` masih mengembalikan HTML page atau `POST /indodax/callback` masih mengembalikan respons non-repo / `fail`, maka ingress publik belum memakai wiring repo ini.
+- `tests/worker_timeout_probe.ts`
 
 ## Catatan jujur
 
 - repo internal saat ini sudah sinkron dan tervalidasi lewat `yarn lint`, `yarn typecheck:probes`, `yarn build`, dan `yarn test:probes`
-- live exchange probe nyata via `ExecutionEngine` sudah berhasil melakukan round-trip BUY lalu SELL pada `xrp_idr` dengan status `CONFIRMED_LIVE`
-- repo ini **siap dipakai sebagai source of truth internal**, tetapi **belum boleh diklaim live publik** selama ingress/domain aktif belum benar-benar diarahkan ke runtime repo ini
-- untuk audit teknis final dan status komponen blueprint, lihat `REFACTOR_LOG.md`
-- untuk ringkasan sesi berikutnya, lihat `SESSION_CONTEXT_NEXT.md`
+- history/recovery Indodax sekarang non-hybrid untuk scope migrasi yang ditargetkan
+- repo ini siap dipakai sebagai source of truth internal
+- untuk audit teknis final dan rincian status komponen, lihat `REFACTOR_LOG.md`
+- untuk ringkasan cepat sesi berikutnya, lihat `SESSION_CONTEXT_NEXT.md`

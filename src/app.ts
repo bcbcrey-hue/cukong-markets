@@ -1,7 +1,7 @@
 import { logger } from './core/logger';
 import { LightScheduler } from './core/scheduler';
 import { registerShutdown } from './core/shutdown';
-import { env } from './config/env';
+import { env, getIndodaxHistoryMode } from './config/env';
 
 import { AccountRegistry } from './domain/accounts/accountRegistry';
 import { PairHistoryStore } from './domain/history/pairHistoryStore';
@@ -266,6 +266,8 @@ export async function createApp(): Promise<AppRuntime> {
         `accountsEnabled=${accountRegistry.countEnabled()}`,
         `hotlistCount=${state.get().lastHotlist.length}`,
         `tradeCount=${state.get().tradeCount}`,
+        `historyMode=${getIndodaxHistoryMode()}`,
+        `historyRuntime=${getIndodaxHistoryMode() === 'legacy' ? 'LEGACY_EXPLICIT' : 'V2_CANONICAL'}`,
         `workersEnabled=${settings.get().workers.enabled}`,
         `marketScanIntervalMs=${marketScanIntervalMs}`,
         `runtimePollingIntervalMs=${runtimePollingIntervalMs}`,
@@ -301,6 +303,7 @@ export async function createApp(): Promise<AppRuntime> {
       appPort: appServer.getPort(),
       callbackEnabled: env.indodaxEnableCallbackServer,
       callbackPort: env.indodaxEnableCallbackServer ? callbackServer.getPort() : null,
+      historyMode: getIndodaxHistoryMode(),
       marketScanIntervalMs,
       runtimePollingIntervalMs,
     });
@@ -317,6 +320,7 @@ export async function createApp(): Promise<AppRuntime> {
         appPort: appServer.getPort(),
         callbackEnabled: env.indodaxEnableCallbackServer,
         callbackPort: env.indodaxEnableCallbackServer ? callbackServer.getPort() : null,
+        historyMode: getIndodaxHistoryMode(),
         marketScanIntervalMs,
         runtimePollingIntervalMs,
       },

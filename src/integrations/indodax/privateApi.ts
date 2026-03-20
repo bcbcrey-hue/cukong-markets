@@ -150,6 +150,31 @@ function stringifyHeaders(headers: Headers): Record<string, string> {
   return Object.fromEntries(headers.entries());
 }
 
+function assertWindowWithinSevenDays(
+  method: 'orderHistoriesV2' | 'myTradesV2',
+  startTime?: number,
+  endTime?: number,
+): void {
+  if (
+    startTime !== undefined &&
+    endTime !== undefined &&
+    Number.isFinite(startTime) &&
+    Number.isFinite(endTime) &&
+    Math.abs(endTime - startTime) > 7 * 24 * 60 * 60 * 1000
+  ) {
+    throw new Error(`${method} only supports a maximum time range of 7 days per request`);
+  }
+}
+
+function normalizeHistoryLimit(limit: number | undefined, fallback: number): number | undefined {
+  if (limit === undefined) {
+    return undefined;
+  }
+
+  const normalized = Math.max(10, Math.min(1000, Math.trunc(limit)));
+  return Number.isFinite(normalized) ? normalized : fallback;
+}
+
 export class PrivateApi {
   private readonly baseUrl: string;
   private readonly tradeApiV2BaseUrl: string;
@@ -270,13 +295,14 @@ export class PrivateApi {
     pair?: string,
   ): Record<string, string | number> | null {
     const normalizedPair = normalizePair(
-      pair ?? String(readValue(item, ['pair', 'market', 'symbol', 'trade_pair']) ?? ''),
+      pair ?? String(readValue(item, ['symbol', 'pair', 'market', 'trade_pair']) ?? ''),
     );
     const asset = getSellAssetKey(normalizedPair ?? 'amount_idr');
-    const filled = readValue(item, ['filled_qty', 'filled_quantity', 'executed_qty', 'executedQty']);
+    const originalQuantity = readValue(item, ['oriQty', `order_${asset}`, asset, 'amount', 'quantity', 'qty', 'volume']);
+    const filled = readValue(item, ['executedQty', 'filled_qty', 'filled_quantity', 'executed_qty']);
     const remaining = readValue(item, ['remaining_qty', 'remain_qty', 'remaining', 'leaves_qty', 'remain']);
     const quantity =
-      readValue(item, [`order_${asset}`, asset, 'amount', 'quantity', 'qty', 'volume', 'oriQty']) ??
+      originalQuantity ??
       ((Number(filled ?? 0) || Number(remaining ?? 0)) > 0
         ? (Number(filled ?? 0) + Number(remaining ?? 0))
         : undefined);
@@ -287,7 +313,7 @@ export class PrivateApi {
           ? String(Math.max(0, Number(quantity) - Number(filled)))
           : Math.max(0, Number(quantity) - Number(filled))
         : 0);
-    const orderId = readValue(item, ['order_id', 'id', 'orderId']);
+    const orderId = readValue(item, ['orderId', 'order_id', 'id']);
 
     if (orderId === undefined || orderId === null) {
       return null;
@@ -295,6 +321,7 @@ export class PrivateApi {
 
     return {
       order_id: String(orderId),
+      client_order_id: String(readValue(item, ['clientOrderId', 'client_order_id', 'clientId']) ?? ''),
       pair: normalizedPair ?? pair ?? '',
       type: normalizeOrderSide(readValue(item, ['type', 'side'])),
       price: readValue(item, ['price', 'order_price', 'avg_price', 'average_price']) as string | number,
@@ -304,10 +331,10 @@ export class PrivateApi {
         readValue(item, ['status', 'order_status', 'state']) ??
           (Number(computedRemaining ?? 0) <= 0 ? 'filled' : 'open'),
       ),
-      submit_time: readValue(item, ['submit_time', 'created_at', 'createdAt', 'timestamp', 'time', 'submitTime']) as
+      submit_time: readValue(item, ['submitTime', 'submit_time', 'created_at', 'createdAt', 'timestamp', 'time']) as
         | string
         | number,
-      finish_time: readValue(item, ['finish_time', 'updated_at', 'updatedAt', 'closed_at', 'closedAt', 'finishTime']) as
+      finish_time: readValue(item, ['finishTime', 'finish_time', 'updated_at', 'updatedAt', 'closed_at', 'closedAt']) as
         | string
         | number,
     };
@@ -318,37 +345,40 @@ export class PrivateApi {
     pair?: string,
   ): Record<string, string | number> | null {
     const normalizedPair = normalizePair(
-      pair ?? String(readValue(item, ['pair', 'market', 'symbol', 'trade_pair']) ?? ''),
+      pair ?? String(readValue(item, ['symbol', 'pair', 'market', 'trade_pair']) ?? ''),
     );
     const asset = getSellAssetKey(normalizedPair ?? 'amount_idr');
-    const orderId = readValue(item, ['order_id', 'orderId']);
+    const orderId = readValue(item, ['orderId', 'order_id']);
 
     if (orderId === undefined || orderId === null) {
       return null;
     }
 
     const feeAsset = String(
-      readValue(item, ['fee_asset', 'commission_asset', 'feeAsset', 'commissionAsset']) ??
+      readValue(item, ['commissionAsset', 'commission_asset', 'fee_asset', 'feeAsset']) ??
         (normalizedPair?.split('_')[1] ?? 'idr'),
     ).toLowerCase();
     const normalizedSide = normalizeOrderSide(
       readValue(item, ['type', 'side']),
       normalizeOrderSide(readValue(item, ['isBuyer'])) || undefined,
     );
+    const quantity = readValue(item, ['qty', 'quantity', asset, 'amount', 'executed_qty']) ?? 0;
 
     return {
-      trade_id: String(readValue(item, ['trade_id', 'id', 'tradeId']) ?? ''),
+      trade_id: String(readValue(item, ['tradeId', 'trade_id', 'id']) ?? ''),
       order_id: String(orderId),
+      client_order_id: String(readValue(item, ['clientOrderId', 'client_order_id', 'clientId']) ?? ''),
       pair: normalizedPair ?? pair ?? '',
       type: normalizedSide,
       price: readValue(item, ['price', 'avg_price', 'average_price']) as string | number,
-      [asset]: (readValue(item, [asset, 'amount', 'quantity', 'qty', 'executed_qty']) ?? 0) as
+      [asset]: quantity as
         | string
         | number,
-      [`fee_${feeAsset}`]: (readValue(item, [`fee_${feeAsset}`, 'fee', 'commission']) ?? 0) as
+      quote_qty: (readValue(item, ['quoteQty', 'quote_qty']) ?? 0) as string | number,
+      [`fee_${feeAsset}`]: (readValue(item, [`fee_${feeAsset}`, 'commission', 'fee']) ?? 0) as
         | string
         | number,
-      timestamp: readValue(item, ['timestamp', 'created_at', 'createdAt', 'executed_at', 'time']) as
+      timestamp: readValue(item, ['time', 'timestamp', 'created_at', 'createdAt', 'executed_at']) as
         | string
         | number,
     };
@@ -402,11 +432,13 @@ export class PrivateApi {
       throw new Error('pair is required for orderHistoriesV2');
     }
 
+    assertWindowWithinSevenDays('orderHistoriesV2', options.startTime, options.endTime);
+
     const payload = await this.getV2<unknown>('/api/v2/order/histories', {
       symbol,
       startTime: options.startTime,
       endTime: options.endTime,
-      limit: options.limit,
+      limit: normalizeHistoryLimit(options.limit, 100),
       sort: options.sort,
     });
 
@@ -433,11 +465,13 @@ export class PrivateApi {
       throw new Error('pair is required for myTradesV2');
     }
 
+    assertWindowWithinSevenDays('myTradesV2', options.startTime, options.endTime);
+
     const payload = await this.getV2<unknown>('/api/v2/myTrades', {
       symbol,
       startTime: options.startTime,
       endTime: options.endTime,
-      limit: options.limit,
+      limit: normalizeHistoryLimit(options.limit, 500),
       orderId: options.orderId,
       sort: options.sort,
     });

@@ -58,6 +58,12 @@ interface CallbackReconcileInput {
   status?: string | null;
 }
 
+interface OrderHistorySearchWindow {
+  startTime: number;
+  endTime: number;
+  label: string;
+}
+
 export class ExecutionEngine {
   constructor(
     private readonly accounts: AccountRegistry,
@@ -297,6 +303,120 @@ export class ExecutionEngine {
     return null;
   }
 
+  private parseIsoTimestamp(value?: string | null): number | null {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private pushOrderHistoryWindow(
+    windows: OrderHistorySearchWindow[],
+    seen: Set<string>,
+    startTime: number,
+    endTime: number,
+    label: string,
+  ): void {
+    if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
+      return;
+    }
+
+    const normalizedStart = Math.max(0, Math.min(Math.trunc(startTime), Math.trunc(endTime)));
+    const normalizedEnd = Math.max(Math.trunc(startTime), Math.trunc(endTime));
+    if (normalizedEnd <= normalizedStart) {
+      return;
+    }
+
+    const key = `${normalizedStart}:${normalizedEnd}`;
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    windows.push({ startTime: normalizedStart, endTime: normalizedEnd, label });
+  }
+
+  private buildOrderHistorySearchWindows(order: OrderRecord): OrderHistorySearchWindow[] {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const maxWindowMs = 7 * dayMs;
+    const narrowOffsetMs = 12 * 60 * 60 * 1000;
+    const wideOffsetMs = Math.floor(maxWindowMs / 2);
+    const searchHorizonMs = 90 * dayMs;
+    const nowMs = Date.now();
+    const windows: OrderHistorySearchWindow[] = [];
+    const seen = new Set<string>();
+    const anchorCandidates = [
+      { label: 'createdAt', timestamp: this.parseIsoTimestamp(order.createdAt) },
+      { label: 'exchangeUpdatedAt', timestamp: this.parseIsoTimestamp(order.exchangeUpdatedAt) },
+      { label: 'lastExecutedAt', timestamp: this.parseIsoTimestamp(order.lastExecutedAt) },
+    ].filter((candidate): candidate is { label: string; timestamp: number } => candidate.timestamp !== null);
+
+    const uniqueAnchors: Array<{ label: string; timestamp: number }> = [];
+    for (const candidate of anchorCandidates) {
+      if (uniqueAnchors.some((anchor) => anchor.timestamp === candidate.timestamp)) {
+        continue;
+      }
+
+      uniqueAnchors.push(candidate);
+    }
+
+    const primaryAnchor = uniqueAnchors[0] ?? { label: 'fallbackNow', timestamp: nowMs };
+    const searchAnchors = uniqueAnchors.length > 0 ? uniqueAnchors : [primaryAnchor];
+
+    for (const anchor of searchAnchors) {
+      this.pushOrderHistoryWindow(
+        windows,
+        seen,
+        anchor.timestamp - narrowOffsetMs,
+        anchor.timestamp + narrowOffsetMs,
+        `${anchor.label}-narrow`,
+      );
+      this.pushOrderHistoryWindow(
+        windows,
+        seen,
+        anchor.timestamp - wideOffsetMs,
+        anchor.timestamp + wideOffsetMs,
+        `${anchor.label}-wide`,
+      );
+    }
+
+    const backwardLimit = Math.max(0, primaryAnchor.timestamp - searchHorizonMs);
+    let backwardCursorEnd = primaryAnchor.timestamp - wideOffsetMs - 1;
+    let backwardChunk = 1;
+    while (backwardCursorEnd > backwardLimit) {
+      const startTime = Math.max(backwardLimit, backwardCursorEnd - maxWindowMs + 1);
+      this.pushOrderHistoryWindow(
+        windows,
+        seen,
+        startTime,
+        backwardCursorEnd,
+        `backfill-${backwardChunk}`,
+      );
+      backwardCursorEnd = startTime - 1;
+      backwardChunk += 1;
+    }
+
+    const forwardLimit = Math.min(nowMs + dayMs, primaryAnchor.timestamp + searchHorizonMs);
+    let forwardCursorStart = primaryAnchor.timestamp + wideOffsetMs + 1;
+    let forwardChunk = 1;
+    while (forwardCursorStart < forwardLimit) {
+      const endTime = Math.min(forwardLimit, forwardCursorStart + maxWindowMs - 1);
+      this.pushOrderHistoryWindow(
+        windows,
+        seen,
+        forwardCursorStart,
+        endTime,
+        `forward-${forwardChunk}`,
+      );
+      forwardCursorStart = endTime + 1;
+      forwardChunk += 1;
+    }
+
+    return windows;
+  }
+
   private extractTradeStats(
     order: OrderRecord,
     payload: IndodaxTradeHistoryReturn,
@@ -390,12 +510,7 @@ export class ExecutionEngine {
       return this.loadTradeStatsLegacy(order);
     }
 
-    const v2TradeStats = await this.loadTradeStatsV2(order);
-    if (v2TradeStats || mode === 'v2_only') {
-      return v2TradeStats;
-    }
-
-    return this.loadTradeStatsLegacy(order);
+    return this.loadTradeStatsV2(order);
   }
 
   private async loadTradeStatsLegacy(
@@ -435,7 +550,8 @@ export class ExecutionEngine {
       const response = await api.myTradesV2({
         pair: order.pair,
         orderId: order.exchangeOrderId,
-        limit: 200,
+        limit: 1000,
+        sort: 'asc',
       });
       return this.extractTradeStats(order, response.return ?? {});
     } catch (error) {
@@ -465,18 +581,9 @@ export class ExecutionEngine {
       };
     }
 
-    const v2Snapshot = await this.loadOrderHistorySnapshotV2(order);
-    if (v2Snapshot || mode === 'v2_only') {
-      return {
-        snapshot: v2Snapshot,
-        source: v2Snapshot ? 'orderHistoryV2' : null,
-      };
-    }
-
-    const legacySnapshot = await this.loadOrderHistorySnapshotLegacy(order);
     return {
-      snapshot: legacySnapshot,
-      source: legacySnapshot ? 'orderHistory' : null,
+      snapshot: await this.loadOrderHistorySnapshotV2(order),
+      source: 'orderHistoryV2',
     };
   }
 
@@ -514,14 +621,58 @@ export class ExecutionEngine {
       return null;
     }
 
+    const windows = this.buildOrderHistorySearchWindows(order);
+    const lastWindow = windows[windows.length - 1] ?? null;
+
     try {
-      const response = await api.orderHistoriesV2({
-        pair: order.pair,
-        orderId: order.exchangeOrderId,
-        limit: 200,
-      });
-      const match = this.findOrderHistoryMatch(order, response.return ?? {});
-      return match ? this.buildExchangeSnapshotFromOrderFields(order, match, 'closed') : null;
+      for (let index = 0; index < windows.length; index += 1) {
+        const window = windows[index];
+        const response = await api.orderHistoriesV2({
+          pair: order.pair,
+          startTime: window.startTime,
+          endTime: window.endTime,
+          limit: 1000,
+          sort: 'asc',
+        });
+        const match = this.findOrderHistoryMatch(order, response.return ?? {});
+        if (!match) {
+          continue;
+        }
+
+        if (index > 0) {
+          await this.journal.info(
+            'ORDER_HISTORY_V2_MATCHED_WINDOW',
+            'target order ditemukan lewat windowed search order history v2',
+            {
+              orderId: order.id,
+              exchangeOrderId: order.exchangeOrderId,
+              pair: order.pair,
+              attempts: index + 1,
+              matchedWindow: window.label,
+              startTime: window.startTime,
+              endTime: window.endTime,
+            },
+          );
+        }
+
+        return this.buildExchangeSnapshotFromOrderFields(order, match, 'closed');
+      }
+
+      await this.journal.warn(
+        'ORDER_HISTORY_V2_ORDER_NOT_FOUND',
+        'target order tidak ditemukan pada bounded windowed search order history v2',
+        {
+          orderId: order.id,
+          exchangeOrderId: order.exchangeOrderId,
+          pair: order.pair,
+          attemptedWindows: windows.length,
+          firstWindowStartTime: windows[0]?.startTime ?? null,
+          firstWindowEndTime: windows[0]?.endTime ?? null,
+          lastWindowStartTime: lastWindow?.startTime ?? null,
+          lastWindowEndTime: lastWindow?.endTime ?? null,
+        },
+      );
+      return null;
     } catch (error) {
       await this.journal.warn(
         'ORDER_HISTORY_V2_SYNC_FAILED',
@@ -552,7 +703,7 @@ export class ExecutionEngine {
     const isFilled = filledQuantity >= order.quantity - 1e-8;
 
     return {
-      exchangeStatus: isFilled ? 'filled_from_trade_history' : 'partial_from_trade_history',
+      exchangeStatus: isFilled ? 'filled_from_my_trades_v2' : 'partial_from_my_trades_v2',
       filledQuantity: Math.min(order.quantity, filledQuantity),
       remainingQuantity: Math.max(0, order.quantity - filledQuantity),
       averageFillPrice: tradeStats.averageFillPrice ?? order.averageFillPrice ?? order.price,
@@ -562,7 +713,7 @@ export class ExecutionEngine {
   private async syncOrderWithSnapshot(
     order: OrderRecord,
     snapshot: ExchangeOrderSnapshot,
-    source: 'getOrder' | 'openOrders' | 'orderHistory' | 'orderHistoryV2' | 'tradeHistoryFallback',
+    source: 'getOrder' | 'openOrders' | 'orderHistory' | 'orderHistoryV2' | 'myTradesV2Fallback',
     tradeStats: ExchangeTradeStats | null = null,
   ): Promise<OrderRecord | undefined> {
     const averageFillPrice = snapshot.averageFillPrice ?? order.price;
@@ -728,7 +879,7 @@ export class ExecutionEngine {
     const api = this.indodax.forAccount(account);
     const tradeStats = await this.loadTradeStats(order);
     let snapshot: ExchangeOrderSnapshot | null = null;
-    let source: 'getOrder' | 'orderHistory' | 'orderHistoryV2' | 'tradeHistoryFallback' = 'getOrder';
+    let source: 'getOrder' | 'orderHistory' | 'orderHistoryV2' | 'myTradesV2Fallback' = 'getOrder';
 
     try {
       const response = await api.getOrder(order.pair, order.exchangeOrderId);
@@ -756,7 +907,7 @@ export class ExecutionEngine {
     if (!snapshot) {
       snapshot = this.buildTradeStatsFallbackSnapshot(order, tradeStats);
       if (snapshot) {
-        source = 'tradeHistoryFallback';
+        source = 'myTradesV2Fallback';
       }
     }
 

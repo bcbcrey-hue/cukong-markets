@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only validation for Indodax history/recovery V2 migration completed. All targeted probes and full probe suite passed; no correctness gap found for requested scope.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/private_api_v2_mapping_probe.ts",
+    "/app/tests/indodax_history_v2_probe.ts",
+    "/app/tests/live_execution_hardening_probe.ts",
+    "/app/tests/callback_reconciliation_probe.ts"
+  ],
+  "action_items": [
+    "Keep tests/private_api_v2_mapping_probe.ts as mandatory gate for V2 parameter/signing contract.",
+    "Keep tests/indodax_history_v2_probe.ts as mandatory gate for >24h explicit window and >7 day chunked bounded lookup.",
+    "Maintain INDODAX_HISTORY_MODE default as v2_only; keep legacy path explicit/manual only.",
+    "Consider splitting executionEngine.ts into smaller modules to reduce regression risk and improve maintainability."
+  ],
+  "critical_code_review_comments": [
+    "No fallback from default V2 runtime to legacy orderHistory/tradeHistory was observed in executed probes.",
+    "ExecutionEngine is very large (>1700 LOC), which increases review and regression risk even though behavior is currently correct."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_13.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (skipped by request)"
+  },
+  "seed_data_creation": "No persistent seed data. Probes used isolated temporary DATA_DIR.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Executed successfully: yarn typecheck:probes, yarn build, targeted V2 migration probes, and yarn test:probes (full suite). Requested scope validated: orderHistoriesV2 query mapping (no orderId), myTradesV2 symbol+orderId, explicit startTime/endTime for >24h recovery, deterministic <=7-day chunked lookup for >7-day orders, default V2 runtime no legacy fallback, callback-triggered reconcile intact. Note: probe coverage for exchange API behavior is MOCKED by design.",
+  "rca of the issue": "No defect reproduced in requested scope."
+}

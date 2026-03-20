@@ -1,6 +1,6 @@
 # SESSION_CONTEXT_NEXT
 
-Repository aktif: `- https://github.com/masreykangtrade-oss/cukong-markets`
+Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
 Branding/package naming final: `cukong-markets`.
 
@@ -8,53 +8,59 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 
 ---
 
-## 1. Posisi project yang harus dianggap benar
+## 1. Posisi project yang sekarang harus dianggap benar
 
 - repo internal sudah sinkron dan tervalidasi
 - callback publik final = `PUBLIC_BASE_URL + INDODAX_CALLBACK_PATH`
 - route internal tetap stabil di `/healthz` dan `/indodax/callback`
 - Telegram tetap UI utama via long polling
 - akun tetap disimpan di `data/accounts/accounts.json`
-- `.env.example` sekarang ada dan sinkron dengan source nyata
-- `executionMode` live vs simulated sekarang tampil eksplisit di `/healthz`, Telegram status, dan log startup
+- `executionMode` live vs simulated tampil eksplisit di health, Telegram, dan log startup
 
 ---
 
-## 2. Status komponen blueprint besar
+## 2. Status history/recovery Indodax
 
-- implemented & connected: `MarketWatcher`, `SignalEngine`, intelligence pipeline / `OpportunityAssessment`, microstructure, history, backtest, workers, Telegram operational UI, callback server, nginx renderer
-- implemented but partial: `ExecutionEngine` karena recovery/history masih hybrid legacy `/tapi` + V2 dan restart safety masih bergantung storage lokal
-- exists but not yet proven in public runtime: public ingress `/healthz` dan `/indodax/callback`
-
----
-
-## 3. Concern separation yang berlaku
-
-- publik: `PUBLIC_BASE_URL` + `INDODAX_CALLBACK_PATH`
-- internal route stabil: `/healthz`, `/indodax/callback`
-- vendor outbound: `INDODAX_PUBLIC_BASE_URL`, `INDODAX_PRIVATE_BASE_URL`, `INDODAX_TRADE_API_V2_BASE_URL`
-- nginx: render/proxy dari env
-- Telegram: UI/panel utama
+- **non-parsial untuk scope migrasi history/recovery**
+- order history canonical: `GET /api/v2/order/histories`
+- trade history canonical: `GET /api/v2/myTrades`
+- runtime utama tidak lagi fallback ke legacy `orderHistory` / `tradeHistory`
+- order history V2 sekarang memakai explicit `startTime/endTime`, bounded lookup `<= 7 hari`, dan chunked search deterministik
+- `myTradesV2` memakai `symbol + orderId`
 
 ---
 
-## 4. Status contract Indodax
+## 3. Method yang tetap di `/tapi` dan memang masih benar
 
-- status final: hybrid legacy + V2
-- legacy masih dipakai untuk `trade`, `cancelOrder`, `openOrders`, `orderHistory`, `tradeHistory`, `getOrder`
-- V2 nyata dipakai untuk `GET /api/v2/order/histories` dan `GET /api/v2/myTrades`
-- history mode nyata: `v2_prefer | v2_only | legacy`
+- `trade`
+- `openOrders`
+- `getOrder`
+- `cancelOrder`
+- `getInfo`
+
+Catatan: jangan overclaim full migration semua private API. Yang selesai adalah migrasi **history/recovery ke V2**.
 
 ---
 
-## 5. Hal yang sudah ditutup
+## 4. History mode env yang berlaku
 
-- docs vs source sekarang sinkron
-- `.env.example` yang sempat tidak ada sudah ditambahkan
-- README tidak lagi overclaim live/public runtime
-- source of truth dipusatkan ke `REFACTOR_LOG.md`
-- jalur resmi Telegram untuk `Execution Simulated` / `Execution Live` sudah ada
-- jalur resmi `yarn typecheck:probes`, `yarn test:probes`, dan `yarn verify` sudah ada
+- default final: `v2_only`
+- `legacy` masih tersedia hanya sebagai jalur eksplisit/manual
+- `v2_prefer` dipetakan sebagai alias kompatibilitas ke `v2_only`, jadi tidak lagi membuat runtime hybrid
+
+---
+
+## 5. Validasi yang sudah lulus
+
+- `yarn lint`
+- `yarn typecheck:probes`
+- `yarn build`
+- `yarn test:probes`
+- `tests/private_api_v2_mapping_probe.ts`
+- `tests/indodax_history_v2_probe.ts`
+- `tests/live_execution_hardening_probe.ts`
+- `tests/callback_reconciliation_probe.ts`
+- seluruh probe utama lain di folder `tests/`
 
 ---
 
@@ -62,27 +68,16 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 
 ### Dalam repo
 
-- tidak ada blocker P0 correctness dari hasil audit ini
-- probe callback reconciliation berbasis payload callback real (`order_id/orderId/id`) sekarang sudah ada dan lulus
-- live exchange round-trip `xrp_idr` via `ExecutionEngine` sudah terbukti `CONFIRMED_LIVE`
+- tidak ada blocker correctness tersisa untuk scope migrasi history/recovery
 
 ### Luar repo / deploy / ingress
 
-- domain publik aktif belum mengarah ke runtime repo ini
-- verifikasi publik terbaru: `/healthz` masih mengembalikan HTML page, `POST /indodax/callback` masih mengembalikan `fail`
+- domain publik aktif belum dibuktikan mengarah ke runtime repo ini
 
 ---
 
-## 7. Package / validasi cepat
+## 7. Next focus yang relevan
 
-- script package yang ada: `lint`, `typecheck:probes`, `test:probes`, `verify`, `build`, `dev`, `start`, `render:nginx`
-- probe tetap bisa dijalankan via `tsx tests/*.ts`, tetapi jalur resmi sekarang adalah `yarn test:probes`
-- validasi yang lulus: `yarn lint`, `yarn typecheck:probes`, `yarn build`, `yarn test:probes`, seluruh probe utama di folder `tests/`, dan live round-trip `xrp_idr`
-
----
-
-## 8. Next focus yang relevan
-
-1. selaraskan deploy/infrastructure agar domain publik benar-benar memakai runtime repo ini
-2. tambah probe integrasi bootstrap penuh yang menyatukan app start → `/healthz` → callback → recovery → status report sebagai satu smoke test
-3. bila perlu, sederhanakan compatibility layer legacy + V2 setelah jalur live publik benar-benar stabil
+1. verifikasi deploy/infrastructure agar domain publik benar-benar memakai runtime repo ini
+2. bila perlu, tambah smoke test bootstrap penuh app start → health → callback → recovery
+3. pertahankan dokumentasi tetap jujur: V2 canonical untuk history/recovery, `/tapi` tetap dipakai hanya untuk method yang masih resmi

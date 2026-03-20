@@ -20,8 +20,8 @@ class FakeLiveOrderApi {
   private readonly tradeQueue: Array<Record<string, unknown>> = [];
   private readonly orderQueue = new Map<string, Array<Record<string, unknown>>>();
   private readonly openOrdersQueue: Array<Record<string, unknown>> = [];
-  private readonly orderHistoryQueue: Array<Record<string, unknown>> = [];
-  private readonly tradeHistoryQueue: Array<Record<string, unknown>> = [];
+  private readonly orderHistoriesV2Queue: Array<Record<string, unknown>> = [];
+  private readonly myTradesV2Queue: Array<Record<string, unknown>> = [];
 
   queueTrade(response: Record<string, unknown>) {
     this.tradeQueue.push(response);
@@ -31,12 +31,12 @@ class FakeLiveOrderApi {
     this.openOrdersQueue.push(response);
   }
 
-  queueOrderHistory(response: Record<string, unknown>) {
-    this.orderHistoryQueue.push(response);
+  queueOrderHistoriesV2(response: Record<string, unknown>) {
+    this.orderHistoriesV2Queue.push(response);
   }
 
-  queueTradeHistory(response: Record<string, unknown>) {
-    this.tradeHistoryQueue.push(response);
+  queueMyTradesV2(response: Record<string, unknown>) {
+    this.myTradesV2Queue.push(response);
   }
 
   queueOrder(orderId: string, ...responses: Array<Record<string, unknown>>) {
@@ -78,8 +78,8 @@ class FakeLiveOrderApi {
     return next;
   }
 
-  async tradeHistory() {
-    const next = this.tradeHistoryQueue.shift();
+  async myTradesV2() {
+    const next = this.myTradesV2Queue.shift();
     if (!next) {
       return {
         success: 1,
@@ -92,8 +92,8 @@ class FakeLiveOrderApi {
     return next;
   }
 
-  async orderHistory() {
-    const next = this.orderHistoryQueue.shift();
+  async orderHistoriesV2() {
+    const next = this.orderHistoriesV2Queue.shift();
     if (!next) {
       return {
         success: 1,
@@ -104,6 +104,24 @@ class FakeLiveOrderApi {
     }
 
     return next;
+  }
+
+  async tradeHistory() {
+    return {
+      success: 1,
+      return: {
+        trades: [],
+      },
+    };
+  }
+
+  async orderHistory() {
+    return {
+      success: 1,
+      return: {
+        orders: [],
+      },
+    };
   }
 
   async cancelOrder(_pair: string, orderId: string) {
@@ -336,7 +354,7 @@ async function main() {
   const firstFilled = orderQuantity * 0.4;
 
   liveApi.queueTrade({ success: 1, return: { order_id: 'BUY-PARTIAL-1' } });
-  liveApi.queueTradeHistory({
+  liveApi.queueMyTradesV2({
     success: 1,
     return: {
       trades: [
@@ -434,7 +452,7 @@ async function main() {
       orders: {},
     },
   });
-  liveApi.queueTradeHistory({
+  liveApi.queueMyTradesV2({
     success: 1,
     return: {
       trades: [
@@ -660,7 +678,7 @@ async function main() {
     exchangeOrderId: 'RECOVER-HISTORY-1',
     exchangeStatus: 'submitted',
     exchangeUpdatedAt: new Date().toISOString(),
-    notes: 'persisted for orderHistory fallback test',
+    notes: 'persisted for orderHistoriesV2 recovery test',
   });
 
   liveApi.queueOpenOrders({
@@ -669,7 +687,7 @@ async function main() {
       orders: {},
     },
   });
-  liveApi.queueTradeHistory({
+  liveApi.queueMyTradesV2({
     success: 1,
     return: {
       trades: [
@@ -683,7 +701,7 @@ async function main() {
       ],
     },
   });
-  liveApi.queueOrderHistory({
+  liveApi.queueOrderHistoriesV2({
     success: 1,
     return: {
       orders: [
@@ -701,26 +719,26 @@ async function main() {
   const historyRecoveryMessages = await execution.recoverLiveOrdersOnStartup();
   assert.ok(
     historyRecoveryMessages.some((message) => message.includes('RECOVER-HISTORY-1')),
-    'Recovery should reconcile terminal order via orderHistory fallback when getOrder is unavailable',
+    'Recovery should reconcile terminal order via orderHistoriesV2 when getOrder is unavailable',
   );
 
   const historyRecoveredAfter = orderManager.getById(historyRecoveredOrder.id);
   assert.equal(
     historyRecoveredAfter?.status,
     'FILLED',
-    'orderHistory fallback should move persisted live order to FILLED when exchange history is terminal',
+    'orderHistoriesV2 should move persisted live order to FILLED when exchange history is terminal',
   );
   assert.equal(
     historyRecoveredAfter?.feeAmount,
     5,
-    'orderHistory fallback should still merge fee from tradeHistory when available',
+    'orderHistoriesV2 recovery should still merge fee from myTradesV2 when available',
   );
   const historyRecoveredPosition = positionManager
     .listOpen()
     .find((position) => position.pair === 'xlm_idr' && position.accountId === defaultAccount.id);
   assert.ok(
     historyRecoveredPosition,
-    'orderHistory fallback should materialize filled quantity into runtime position state after restart',
+    'orderHistoriesV2 recovery should materialize filled quantity into runtime position state after restart',
   );
 
   console.log('PASS live_execution_hardening_probe');
