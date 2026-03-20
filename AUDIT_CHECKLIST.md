@@ -32,23 +32,17 @@ Audit ini memverifikasi wiring runtime aktual dari `src/bootstrap.ts` → `creat
 - [~] **Execution hardening**  
   File inti: `executionEngine.ts`, `riskEngine.ts`  
   Catatan mismatch: hardening order/fill/recovery ada, tetapi belum terbukti memiliki mekanisme restart safety di luar local JSON state (tidak ada idempotency key lintas restart selain data order/position yang sudah tersimpan).
-- [~] **Telegram ops UI memicu logic nyata**  
-  File inti: `src/integrations/telegram/handlers.ts`, `bot.ts`  
-  Catatan mismatch: menu/aksi utama (manual buy/sell, emergency, settings, backtest) terhubung; tetapi `RUN START/STOP` hanya set status state, tidak mengontrol lifecycle scheduler/server secara langsung.
-- [~] **Recovery startup menyeluruh**  
-  File inti: `src/app.ts`, `executionEngine.ts`  
-  Catatan mismatch: recovery fokus ke active live orders; tidak ada prosedur eksplisit re-evaluasi massal open position segera saat startup (baru berjalan saat job `position-monitor` tick berikutnya).
+- [~] **Monitoring order aktif via callback exchange**  
+  File inti: `src/integrations/indodax/callbackServer.ts`, `src/domain/trading/executionEngine.ts`, `src/app.ts`  
+  Catatan mismatch: callback accepted sekarang memicu reconciliation berdasarkan `exchangeOrderId`, tetapi payload callback yang tidak membawa `order_id/orderId/id` belum bisa mengubah state order/position.
 
 ## SALAH
 - [ ] **Tidak ada temuan klaim yang terbukti SALAH total** berdasarkan code saat ini (yang ada dominan status parsial/belum terbukti).
 
 ## BELUM TERBUKTI
-- [?] **Monitoring order aktif via callback exchange** sebagai jalur utama eksekusi  
-  File inti: `src/integrations/indodax/callbackServer.ts`, `src/app.ts`  
-  Catatan: callback server menerima & simpan event, namun tidak ada wiring yang mengubah status order/position dari callback payload.
 - [?] **Evaluasi posisi terbuka “langsung” di startup**  
-  File inti: `src/app.ts`  
-  Catatan: tidak dipanggil eksplisit saat boot; bergantung job `position-monitor` periodik.
+  File inti: `src/app.ts`, `executionEngine.ts`  
+  Catatan: sekarang dieksekusi eksplisit sesudah `recoverLiveOrdersOnStartup`, tetapi belum ada probe khusus yang mensimulasikan seluruh skenario startup dengan posisi open + slippage ekstrem.
 - [?] **Module util/domain tertentu berperan di jalur runtime utama**  
   File inti: `src/domain/market/pairUniverse.ts` (`top`,`get`,`exportMetrics`), `src/domain/market/marketWatcher.ts` (`calcImbalance`,`computeLiquidityScore`), `src/domain/accounts/accountValidator.ts` (class `AccountValidator`), `src/domain/trading/positionManager.ts` (`forceClose`)  
   Catatan: ada implementasi, tetapi pada audit ini tidak ditemukan penggunaan runtime nyata.
@@ -156,8 +150,7 @@ Status: **RELEVAN DAN SUDAH DIAUDIT** kecuali ditandai lain.
 - `deploy/nginx/cukong-markets.nginx.conf` — generated contoh config.
 
 ## Langkah perbaikan konkret (sesi berikutnya)
-1. Hubungkan event callback Indodax ke `OrderManager`/`PositionManager` (bukan hanya logging state callback).
-2. Tambahkan startup hook eksplisit untuk evaluasi open positions segera setelah recovery order selesai.
-3. Samakan kontrol START/STOP Telegram dengan lifecycle runtime nyata (polling/server), bukan hanya patch status.
+1. Tambahkan probe integrasi callback-driven reconciliation dengan payload valid/invalid untuk memverifikasi perubahan order state.
+2. Tambahkan probe startup khusus untuk kombinasi: open live orders + open positions + trigger auto-exit saat boot.
+3. Pertimbangkan kontrol runtime Telegram untuk mem-pause worker pool bila diperlukan mode hemat resource.
 4. Bersihkan dead/unused wiring (contoh `mapper.ts`, method helper yang tidak dipakai) atau buktikan pemakaian nyata via runtime path.
-5. Tambahkan probe/integration test yang memverifikasi end-to-end: startup recovery, partial-fill aggregation, callback-driven reconciliation.

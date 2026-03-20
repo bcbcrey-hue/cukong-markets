@@ -30,6 +30,10 @@ export interface TelegramBotDeps {
   execution: ExecutionEngine;
   journal: JournalService;
   backtest: BacktestEngine;
+  runtimeControl?: {
+    start(): Promise<void>;
+    stop(): Promise<void>;
+  };
 }
 
 export class TelegramBot implements SummaryNotifier {

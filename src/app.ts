@@ -58,7 +58,6 @@ export async function createApp(): Promise<AppRuntime> {
   const report = new ReportService();
   const summary = new SummaryService(persistence, journal, report, accountRegistry);
   const appServer = new AppServer(health);
-  const callbackServer = new IndodaxCallbackServer(persistence, journal);
 
   await Promise.all([
     state.load(),
@@ -100,6 +99,23 @@ export async function createApp(): Promise<AppRuntime> {
     summary,
   );
 
+  const callbackServer = new IndodaxCallbackServer(
+    persistence,
+    journal,
+    async (payload) => {
+      const exchangeOrderId = payload?.order_id ?? payload?.orderId ?? payload?.id;
+      if (!exchangeOrderId) {
+        return;
+      }
+
+      await executionEngine.reconcileFromCallback({
+        exchangeOrderId: String(exchangeOrderId),
+        pair: typeof payload?.pair === 'string' ? payload.pair : null,
+        status: typeof payload?.status === 'string' ? payload.status : null,
+      });
+    },
+  );
+
   const telegram = new TelegramBot({
     report,
     health,
@@ -113,6 +129,25 @@ export async function createApp(): Promise<AppRuntime> {
     execution: executionEngine,
     journal,
     backtest,
+    runtimeControl: {
+      start: async () => {
+        if (settings.get().workers.enabled) {
+          await workerPool.start();
+        }
+
+        polling.start();
+        await executionEngine.syncActiveOrders();
+        await executionEngine.evaluateOpenPositions();
+        await state.setStatus('RUNNING');
+
+        await journal.info('RUNTIME_STARTED_FROM_TELEGRAM', 'runtime resumed from telegram control');
+      },
+      stop: async () => {
+        polling.stop();
+        await state.setStatus('STOPPED');
+        await journal.info('RUNTIME_STOPPED_FROM_TELEGRAM', 'runtime paused from telegram control');
+      },
+    },
   });
   summary.attachNotifier(telegram);
 
@@ -242,6 +277,7 @@ export async function createApp(): Promise<AppRuntime> {
     await appServer.start();
     await callbackServer.start();
     await executionEngine.recoverLiveOrdersOnStartup();
+    await executionEngine.evaluateOpenPositions();
 
     await telegram.start();
     polling.start();
