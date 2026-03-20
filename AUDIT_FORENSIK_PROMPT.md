@@ -1,7 +1,7 @@
 Lakukan AUDIT FORENSIK ULANG terhadap repo ini, TANPA REFACTOR, TANPA IMPLEMENTASI, TANPA PATCH, TANPA MENGUBAH FILE.
 
 Repository:
-https://github.com/bcbcrey-hue/cukong-markets
+https://github.com/masreykangtrade-oss/cukong-markets
 
 TUJUAN:
 Saya ingin audit keras yang jujur untuk memverifikasi apakah klaim arsitektur dan fitur berikut benar-benar ADA dan benar-benar TERHUBUNG di source code saat ini, bukan sekadar ada file, interface, blueprint, README, atau kontrak yang terlihat bagus.
@@ -252,42 +252,3 @@ Larangan tambahan:
 
 
 
-Gunakan repository source code aktual sebagai sumber kebenaran utama.
-
-Repository project GitHub:
-- https://github.com/bcbcrey-hue/cukong-markets
-
-Instruksi audit utama:
-- https://github.com/bcbcrey-hue/cukong-markets/blob/main/AUDIT_FORENSIK_PROMPT.md
-
-Dokumen konteks yang boleh dipakai hanya sebagai referensi tambahan, BUKAN sumber kebenaran utama:
-- https://github.com/bcbcrey-hue/cukong-markets/blob/main/REFACTOR_LOG.md
-- https://github.com/bcbcrey-hue/cukong-markets/blob/main/SESSION_CONTEXT_NEXT.md
-- https://github.com/bcbcrey-hue/cukong-markets/blob/main/README.md
-- https://github.com/bcbcrey-hue/cukong-markets/blob/main/cukong-markets-blueprint.md
-
-Aturan:
-- Jika ada konflik antara dokumen naratif dan source code aktual, source code aktual adalah sumber kebenaran tunggal.
-- Jangan menilai dari cukong-markets-blueprint, README, REFACTOR_LOG, SESSION_CONTEXT_NEXT, atau niat desain.
-- Nilai hanya dari file, function, class, method, dan wiring runtime yang benar-benar ada di source code saat ini.
-- Jangan overclaim bahwa suatu fitur "sudah berfungsi" hanya karena module atau file ada.
-- Sesuatu hanya boleh dianggap benar-benar berfungsi jika terbukti terhubung dalam flow runtime nyata.
-- Jika ada method dipanggil tetapi implementasinya tidak ada atau tidak match, tandai sebagai MISMATCH.
-- Jika ada module, class, atau function yang ada tetapi tidak terbukti dipakai di jalur runtime, tandai sebagai BELUM TERBUKTI TERHUBUNG.
-- Jangan menyalin ulang narasi arsitektur dari dokumen konteks tanpa verifikasi langsung ke source code.
-- Jangan refactor, jangan mengubah source code, dan jangan memberi patch.
-- Kerjakan audit sekarang juga tanpa meminta konfirmasi lanjutan.
-
-OUTPUT TAMBAHAN YANG WAJIB:
-- Setelah audit selesai, buat atau perbarui file `AUDIT_CHECKLIST.md` di root repository.
-- File `AUDIT_CHECKLIST.md` harus berisi checklist final yang ringkas, faktual, dan siap dipakai sebagai konteks sesi berikutnya.
-- Isi checklist harus memisahkan dengan jelas:
-  - BENAR
-  - PARSIAL
-  - SALAH
-  - BELUM TERBUKTI
-- Untuk setiap poin, sertakan file inti dan catatan mismatch singkat bila ada.
-- `AUDIT_CHECKLIST.md` juga harus memuat ringkasan cakupan file yang benar-benar sudah diaudit.
-
-
-Mulai audit dari nol sekarang tanpa pertanyaan tambahan.
