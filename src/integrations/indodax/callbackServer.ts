@@ -62,6 +62,14 @@ export class IndodaxCallbackServer {
   constructor(
     private readonly persistence: PersistenceService,
     private readonly journal: JournalService,
+    private readonly onAcceptedCallback?: (
+      payload: Record<string, unknown> | null,
+      meta: {
+        eventId: string;
+        host: string | null;
+        path: string;
+      },
+    ) => Promise<void>,
   ) {}
 
   private async loadState(): Promise<void> {
@@ -235,6 +243,27 @@ export class IndodaxCallbackServer {
     };
 
     await this.persistEvent(event);
+
+    if (accepted && this.onAcceptedCallback) {
+      try {
+        await this.onAcceptedCallback(parsedBody, {
+          eventId: event.id,
+          host: event.host,
+          path: event.path,
+        });
+      } catch (error) {
+        await this.journal.warn(
+          'INDODAX_CALLBACK_POST_PROCESS_FAILED',
+          error instanceof Error ? error.message : 'callback post process failed',
+          {
+            eventId: event.id,
+            host: event.host,
+            path: event.path,
+          },
+        );
+      }
+    }
+
     this.writePlainText(response, accepted ? 200 : 403, accepted ? 'ok' : 'fail');
   }
 

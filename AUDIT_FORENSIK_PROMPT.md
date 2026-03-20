@@ -1,3 +1,11 @@
+## Catatan sinkron terbaru (berdasarkan source code saat ini)
+
+- callback accepted di `IndodaxCallbackServer` sudah memiliki jalur post-process untuk memicu reconciliation order aktif di `ExecutionEngine` jika payload berisi `order_id/orderId/id`.
+- startup runtime di `createApp().start()` sekarang menjalankan `recoverLiveOrdersOnStartup()` lalu `evaluateOpenPositions()` secara eksplisit.
+- aksi Telegram `RUN START/STOP` tidak lagi sekadar patch state; sekarang mengontrol start/stop polling runtime melalui runtime control hook.
+
+> Tetap gunakan dokumen ini hanya sebagai prompt audit. Source of truth final tetap `AUDIT_CHECKLIST.md` + source code aktual.
+
 Lakukan AUDIT FORENSIK ULANG terhadap repo ini, TANPA REFACTOR, TANPA IMPLEMENTASI, TANPA PATCH, TANPA MENGUBAH FILE.
 
 Repository:
@@ -248,7 +256,6 @@ Larangan tambahan:
 - Jangan berhenti pada audit per-modul besar saja.
 - Jangan menulis seolah seluruh repo telah diaudit jika belum ada daftar file yang diperiksa.
 - Jangan menyederhanakan audit per-file menjadi narasi umum.
-
 
 
 

@@ -52,6 +52,12 @@ interface ExchangeTradeStats {
   lastExecutedAt: string | null;
 }
 
+interface CallbackReconcileInput {
+  exchangeOrderId?: string | null;
+  pair?: string | null;
+  status?: string | null;
+}
+
 export class ExecutionEngine {
   constructor(
     private readonly accounts: AccountRegistry,
@@ -764,6 +770,48 @@ export class ExecutionEngine {
       source,
       tradeStats,
     );
+  }
+
+  async reconcileFromCallback(input: CallbackReconcileInput): Promise<string | null> {
+    const exchangeOrderId = input.exchangeOrderId ? String(input.exchangeOrderId) : '';
+    if (!exchangeOrderId) {
+      return null;
+    }
+
+    const target = this.orders
+      .listActive()
+      .find((order) => order.exchangeOrderId && String(order.exchangeOrderId) === exchangeOrderId);
+
+    if (!target) {
+      return null;
+    }
+
+    try {
+      const beforeStatus = target.status;
+      const beforeFilled = target.filledQuantity;
+      const synced = await this.syncLiveOrder(target.id);
+
+      if (!synced) {
+        return null;
+      }
+
+      if (synced.status !== beforeStatus || Math.abs(synced.filledQuantity - beforeFilled) > 1e-8) {
+        return this.formatLiveOrderMessage(synced.side.toUpperCase() as 'BUY' | 'SELL', synced);
+      }
+
+      return `${synced.side.toUpperCase()} callback sync ${synced.pair} unchanged status=${synced.status}`;
+    } catch (error) {
+      await this.journal.warn(
+        'CALLBACK_RECONCILIATION_FAILED',
+        error instanceof Error ? error.message : 'unknown callback reconciliation failure',
+        {
+          exchangeOrderId,
+          pair: input.pair ?? null,
+          exchangeStatus: input.status ?? null,
+        },
+      );
+      return null;
+    }
   }
 
   private extractExchangeOrderId(response: IndodaxTradeReturn | undefined): string | undefined {

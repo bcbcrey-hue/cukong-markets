@@ -22,7 +22,7 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 ## 2. Status komponen blueprint besar
 
 - implemented & connected: `MarketWatcher`, `SignalEngine`, intelligence pipeline / `OpportunityAssessment`, microstructure, history, backtest, workers, Telegram operational UI, callback server, nginx renderer
-- implemented but partial: `ExecutionEngine` karena recovery/history masih hybrid legacy `/tapi` + V2
+- implemented but partial: `ExecutionEngine` karena recovery/history masih hybrid legacy `/tapi` + V2 dan restart safety masih bergantung storage lokal
 - exists but not yet proven in public runtime: public ingress `/healthz` dan `/indodax/callback`
 
 ---
@@ -60,6 +60,7 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 ### Dalam repo
 
 - tidak ada blocker P0 correctness dari hasil audit ini
+- belum ada probe khusus callback reconciliation berbasis payload callback real (order_id tersedia vs tidak tersedia)
 
 ### Luar repo / deploy / ingress
 
@@ -79,4 +80,6 @@ Gunakan file ini sebagai ringkasan cepat yang sinkron dengan `REFACTOR_LOG.md`, 
 ## 8. Next focus yang relevan
 
 1. selaraskan deploy/infrastructure agar domain publik benar-benar memakai runtime repo ini
-2. bila perlu, sederhanakan compatibility layer legacy + V2 setelah jalur live publik benar-benar stabil
+2. tambah probe integrasi startup recovery + immediate position evaluation setelah boot
+3. tambah probe integrasi callback-driven reconciliation (payload accepted dengan `order_id/orderId/id`)
+4. bila perlu, sederhanakan compatibility layer legacy + V2 setelah jalur live publik benar-benar stabil

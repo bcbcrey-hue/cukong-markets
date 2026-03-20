@@ -54,6 +54,10 @@ interface HandlerDeps {
   journal: JournalService;
   uploadHandler: UploadHandler;
   backtest: BacktestEngine;
+  runtimeControl?: {
+    start(): Promise<void>;
+    stop(): Promise<void>;
+  };
 }
 
 interface UserFlowState {
@@ -469,19 +473,31 @@ async function openMenu(
 }
 
 async function startRuntime(ctx: Context, deps: HandlerDeps): Promise<void> {
-  await deps.state.setStatus('RUNNING');
+  if (deps.runtimeControl) {
+    await deps.runtimeControl.start();
+  } else {
+    await deps.state.setStatus('RUNNING');
+  }
   await replyText(
     ctx,
-    'Runtime bot diaktifkan. Loop otomatis akan berjalan sesuai state dan konfigurasi saat ini.',
+    deps.runtimeControl
+      ? 'Runtime bot diaktifkan. Polling runtime, evaluasi posisi, dan sinkronisasi order aktif dijalankan kembali.'
+      : 'Runtime bot diaktifkan. Loop otomatis akan berjalan sesuai state dan konfigurasi saat ini.',
     executeTradeKeyboard,
   );
 }
 
 async function stopRuntime(ctx: Context, deps: HandlerDeps): Promise<void> {
-  await deps.state.setStatus('STOPPED');
+  if (deps.runtimeControl) {
+    await deps.runtimeControl.stop();
+  } else {
+    await deps.state.setStatus('STOPPED');
+  }
   await replyText(
     ctx,
-    'Runtime bot dihentikan. Wiring aplikasi tetap utuh, tetapi loop runtime tidak berjalan sampai diaktifkan lagi.',
+    deps.runtimeControl
+      ? 'Runtime bot dihentikan. Polling runtime dihentikan tanpa mematikan bot Telegram atau server HTTP.'
+      : 'Runtime bot dihentikan. Wiring aplikasi tetap utuh, tetapi loop runtime tidak berjalan sampai diaktifkan lagi.',
     executeTradeKeyboard,
   );
 }

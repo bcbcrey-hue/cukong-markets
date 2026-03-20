@@ -46,9 +46,9 @@ Kesimpulan final:
 | `src/domain/microstructure` | implemented & connected | accumulation/spoof/iceberg/cluster detector nyata dipakai oleh `FeaturePipeline` |
 | `src/domain/history` | implemented & connected | pair history, anomaly, context, regime, pattern match nyata dipakai oleh `OpportunityEngine` |
 | `src/domain/backtest` | implemented & connected | replay loader, simulated replay, metrics, persistence hasil backtest nyata |
-| `src/domain/trading` | implemented but partial | execution/recovery/hardening nyata, tetapi masih membawa compatibility path legacy + V2 |
-| `src/integrations/indodax` | implemented & connected | public API, private `/tapi`, V2 mapping, callback server semuanya nyata dan dipakai |
-| `src/integrations/telegram` | implemented & connected | whitelist, callback router, 7 kategori menu, upload handler, handlers nyata terhubung ke service |
+| `src/domain/trading` | implemented but partial | execution/recovery/hardening nyata, callback reconciliation by exchangeOrderId sudah terhubung, tetapi restart safety lintas storage lokal masih parsial |
+| `src/integrations/indodax` | implemented & connected | public API, private `/tapi`, V2 mapping, callback server, dan post-process callback ke execution reconciliation nyata dipakai |
+| `src/integrations/telegram` | implemented & connected | whitelist, callback router, 7 kategori menu, upload handler, handlers nyata terhubung ke service; RUN START/STOP kini mengontrol polling runtime |
 | `src/server` | implemented & connected | app server `/healthz` nyata, expose callback contract runtime |
 | `src/workers` | implemented & connected | feature/pattern/backtest worker nyata dipakai lewat `WorkerPoolService` |
 | `tests` | implemented & connected | probe lint/build/runtime/execution/history/telegram/nginx/app lifecycle semua ada dan lulus |
@@ -198,6 +198,7 @@ Yang benar-benar ada:
 - allowed host filter nyata
 - prioritas `Host` langsung atas spoofed `X-Forwarded-Host`
 - persist callback event dan callback state
+- callback accepted memicu post-process untuk reconcile order aktif berdasarkan `exchangeOrderId` bila payload menyertakan `order_id/orderId/id`
 
 ### Nginx renderer
 
@@ -232,6 +233,9 @@ Makna statusnya:
 - README dibersihkan agar tidak overclaim live/public runtime
 - `REFACTOR_LOG.md` dibersihkan menjadi satu log final tanpa status lama yang bentrok
 - `SESSION_CONTEXT_NEXT.md` disinkronkan ke README, REFACTOR_LOG, `.env.example`, dan `package.json`
+- startup sekarang menjalankan `evaluateOpenPositions()` langsung setelah `recoverLiveOrdersOnStartup()`
+- Telegram RUN START/STOP sekarang mengontrol polling runtime (bukan hanya set state)
+- callback accepted sekarang bisa men-trigger reconciliation order live by `exchangeOrderId`
 
 ---
 

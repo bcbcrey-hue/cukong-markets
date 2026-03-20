@@ -11,9 +11,12 @@ Package/app naming final yang dipakai sekarang: `cukong-markets`.
 - `MarketWatcher -> SignalEngine -> intelligence pipeline -> OpportunityAssessment -> Hotlist -> ExecutionEngine`
 - domain `intelligence`, `microstructure`, `history`, `backtest`, dan `workers`
 - hardening execution nyata: `openOrders`-first sync, fallback `getOrder`, fallback history, duplicate BUY/SELL guard, stale BUY timeout cancel
+- startup recovery langsung diikuti evaluasi open positions (tidak menunggu tick `position-monitor` pertama)
 - execution summary + trade outcome summary ke persistence + journal + Telegram notifier
 - callback server Indodax terpisah port, env-driven, dan persist event/state
+- callback accepted dapat memicu reconciliation order aktif berbasis `exchangeOrderId` bila payload menyertakan `order_id/orderId/id`
 - Telegram operational UI 7 kategori, whitelist ketat, legacy upload account JSON, storage akun tetap di `data/accounts/accounts.json`
+- RUN START/STOP di Telegram sekarang mengontrol polling runtime (resume/pause loop), bukan sekadar patch status state
 - history mode `v2_prefer | v2_only | legacy` benar-benar dipakai di execution/recovery
 - nginx template + renderer berbasis env
 
