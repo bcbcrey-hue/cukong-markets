@@ -3,7 +3,7 @@ Gunakan repository source code aktual sebagai sumber kebenaran utama.
 Repository:
 https://github.com/masreykangtrade-oss/cukong-markets
 
-Dokumen target audit/implementasi utama:
+Dokumen target cheklist/implementasi:
 - https://github.com/masreykangtrade-oss/cukong-markets/blob/main/AUDIT_FORENSIK_PROMPT.md
 
 Dokumentasi resmi WAJIB yang menjadi sumber kebenaran eksternal:
