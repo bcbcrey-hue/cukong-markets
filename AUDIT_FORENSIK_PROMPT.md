@@ -38,12 +38,13 @@ DEFINISI TIDAK PARSIAL YANG DIMAKSUD:
 BATASAN WAJIB:
 1. JANGAN refactor besar yang tidak perlu
 2. JANGAN ubah Telegram UX/menu kecuali jika memang diperlukan untuk wiring status/config
-3. JANGAN hapus method private API lain yang masih resmi dan masih didokumentasikan, seperti:
+3. JANGAN hapus atau migrasikan paksa method private API berikut selama dokumentasi resmi masih menyatakannya valid:
    - trade
    - openOrders
    - getOrder
    - cancelOrder
-   kecuali ada bukti resmi lebih baru bahwa method itu juga harus dipindahkan
+   Pengecualian:
+   - hanya ubah atau pindahkan method di atas jika ada bukti resmi yang lebih baru bahwa endpoint tersebut juga wajib dimigrasikan.
 4. Fokuskan migrasi pada history/recovery/reconcile agar status parsial benar-benar hilang secara jujur
 5. Jangan berhenti di audit; wajib implementasi nyata
 6. Jangan buat placeholder, TODO, atau patch setengah jadi
