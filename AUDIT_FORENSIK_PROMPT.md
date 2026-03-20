@@ -1,261 +1,78 @@
-## Catatan sinkron terbaru (berdasarkan source code saat ini)
+Berikut daftar tegas yang saya perintahkan **wajib diperbaiki** dari hasil audit source.
 
-- callback accepted di `IndodaxCallbackServer` sudah memiliki jalur post-process untuk memicu reconciliation order aktif di `ExecutionEngine` jika payload berisi `order_id/orderId/id`.
-- startup runtime di `createApp().start()` sekarang menjalankan `recoverLiveOrdersOnStartup()` lalu `evaluateOpenPositions()` secara eksplisit.
-- aksi Telegram `RUN START/STOP` tidak lagi sekadar patch state; sekarang mengontrol start/stop polling runtime melalui runtime control hook.
+Catatan jujur dulu: daftar ini sudah berbasis file inti runtime/trading/Telegram/HTTP/persistence/tests yang berhasil saya audit langsung, tetapi **belum bisa saya klaim 100% seluruh tree repo tanpa sisa** karena listing rekursif repo dari connector tidak lengkap. Jadi ini adalah **daftar aktual dan keras dari area yang sudah terbukti paling load-bearing**. harap kamu audit lagi sebelum melakukan implementasi di bawah ini:
 
-> Tetap gunakan dokumen ini hanya sebagai prompt audit. Source of truth final tetap `AUDIT_CHECKLIST.md` + source code aktual.
+## File yang sudah saya audit langsung
 
-Lakukan AUDIT FORENSIK ULANG terhadap repo ini, TANPA REFACTOR, TANPA IMPLEMENTASI, TANPA PATCH, TANPA MENGUBAH FILE.
+Root/docs/config:
+`README.md`, `REFACTOR_LOG.md`, `SESSION_CONTEXT_NEXT.md`, `cukong-markets-blueprint.md`, `package.json`, `tsconfig.json`, `scripts/render-nginx-conf.mjs`
 
-Repository:
-https://github.com/masreykangtrade-oss/cukong-markets
+Runtime/core/services:
+`src/bootstrap.ts`, `src/app.ts`, `src/config/env.ts`, `src/core/scheduler.ts`, `src/core/shutdown.ts`, `src/core/types.ts`, `src/storage/jsonStore.ts`, `src/services/persistenceService.ts`, `src/services/stateService.ts`, `src/services/healthService.ts`, `src/services/journalService.ts`, `src/services/reportService.ts`, `src/services/summaryService.ts`, `src/services/pollingService.ts`
 
-TUJUAN:
-Saya ingin audit keras yang jujur untuk memverifikasi apakah klaim arsitektur dan fitur berikut benar-benar ADA dan benar-benar TERHUBUNG di source code saat ini, bukan sekadar ada file, interface, blueprint, README, atau kontrak yang terlihat bagus.
+Accounts/settings/trading:
+`src/domain/accounts/accountStore.ts`, `accountRegistry.ts`, `accountValidator.ts`, `src/domain/settings/settingsService.ts`, `src/domain/trading/orderManager.ts`, `positionManager.ts`, `riskEngine.ts`, `executionEngine.ts`
 
-ATURAN WAJIB:
-1. JANGAN refactor apa pun.
-2. JANGAN mengubah file.
-3. JANGAN memberi saran implementasi dulu.
-4. Fokus hanya audit source code saat ini.
-5. Audit harus PER-FILE dan PER-WIRING.
-6. Jangan menganggap sesuatu “berfungsi” hanya karena ada file/module/class/function.
-7. Sesuatu hanya boleh dianggap “terhubung” jika benar-benar:
-   - diinstansiasi / diimport / dipanggil / dipakai dalam flow runtime nyata
-   - punya jalur input-output yang jelas
-   - tidak hanya berhenti di placeholder / contract / dead code
-8. Jika ada method dipanggil tetapi implementasinya tidak ada, nyatakan sebagai MISMATCH.
-9. Jika ada class/function ada tetapi tidak terbukti dipakai di flow runtime, nyatakan sebagai TIDAK TERBUKTI TERHUBUNG.
-10. Jika ada klaim besar tetapi hanya sebagian yang nyata, tandai PARSIAL.
-11. Jangan percaya README, blueprint, atau narasi. Semua klaim harus dibuktikan dari source code aktual.
-12. Jika build/runtime path tampak mismatch, katakan jujur.
-13. Jangan overclaim.
-14. Jangan tulis asumsi seolah fakta.
-15. Jika ada konflik antara README, blueprint, REFACTOR_LOG, SESSION_CONTEXT_NEXT, atau narasi lain dengan source code aktual, maka source code aktual adalah sumber kebenaran tunggal.
-16. Jangan menyalin ulang narasi arsitektur dari dokumen konteks tanpa verifikasi langsung ke source code.
-17. Kerjakan audit dari nol tanpa meminta konfirmasi lanjutan.
-    
-CLAIM YANG HARUS DIAUDIT SATU PER SATU:
-- market scanning
-- scoring baseline
-- microstructure heuristik
-- probability & edge validation
-- entry timing
-- hotlist ranking
-- execution hardening
-- duplicate order guard
-- fill reconciliation
-- recovery startup
-- Telegram ops UI
-- backtest replay
-- worker offloading
-- persistence yang rapi
+Telegram/HTTP/Indodax:
+`src/integrations/telegram/bot.ts`, `handlers.ts`, `uploadHandler.ts`, `auth.ts`, `callbackRouter.ts`, `src/integrations/indodax/callbackServer.ts`, `src/server/appServer.ts`
 
-YANG HARUS DICEK SECARA KHUSUS:
-A. Audit file utama runtime:
-- src/bootstrap.ts
-- src/app.ts
+Probe yang saya baca:
+`tests/http_servers_probe.ts`, `tests/telegram_menu_navigation_probe.ts`, `tests/live_execution_hardening_probe.ts`
 
-B. Audit wiring market/intelligence:
-- src/domain/market/*
-- src/domain/signals/*
-- src/domain/intelligence/*
-- src/domain/history/*
-- src/domain/microstructure/*
+## Daftar semua yang harus diperbaiki agar benar-benar siap live
 
-C. Audit wiring trading/runtime:
-- src/domain/trading/*
-- src/services/*
-- src/storage/*
-- src/integrations/indodax/*
+### P0 — wajib beres sebelum repo boleh dibilang siap live
 
-D. Audit wiring Telegram:
-- src/integrations/telegram/*
+1. **Pisahkan dengan tegas status “LIVE” vs “SIMULATED”, lalu tampilkan di health dan Telegram.**
+   Ini blocker paling serius. Default settings saat ini masih `dryRun: true` dan `paperTrade: true`, sementara engine akan tetap simulasi bila `uiOnly`, `dryRun`, atau `paperTrade` aktif. Tetapi status runtime/health yang ditampilkan ke operator hanya melihat `tradingMode !== OFF` dan emergency stop, bukan mode eksekusi riil. Akibatnya operator bisa melihat “trading on” padahal bot masih simulasi. Itu sangat berbahaya untuk live-readiness. Perbaikan minimal: tambahkan field eksplisit seperti `executionMode: SIMULATED | LIVE`, tampilkan di `/healthz`, Telegram status, dan log startup.    
 
-E. Audit backtest/workers:
-- src/domain/backtest/*
-- src/workers/*
-- src/services/workerPoolService.ts
+2. **Buat jalur resmi untuk mengubah bot dari simulasi ke live.**
+   Saat ini yang terlihat di Telegram handler hanya pengaturan `trading mode`, `buy slippage`, dan `take profit`. Dari wiring yang saya audit, tidak ada jalur operator yang jelas untuk mematikan `dryRun`, `paperTrade`, dan `uiOnly`. Kalau memang live mode harus bisa dioperasikan nyata, harus ada satu jalur resmi: lewat env, file settings, atau menu Telegram admin—dan harus tervalidasi jelas. Tanpa itu, klaim “siap live” masih belum bersih.    
 
-F. Audit server/runtime ingress:
-- src/server/*
-- deploy/*
-- scripts/*
+3. **Perbaiki README dan logika verifikasi publik untuk callback.**
+   README sekarang memakai respons `405` pada `/indodax/callback` sebagai indikasi bahwa domain publik belum mengarah ke runtime repo ini. Itu salah kaprah, karena callback server di source memang sengaja mengembalikan `405 fail` untuk method selain `POST`. Jadi verifikasi publik callback harus diubah: jangan pakai `GET`, tetapi pakai `POST` dengan host/header yang sesuai. Kalau dokumentasi ini dibiarkan, operator bisa salah diagnosa deploy.   
 
-METODE AUDIT YANG WAJIB:
-Untuk setiap claim, lakukan:
-1. Sebutkan file inti yang relevan.
-2. Sebutkan function/class/method yang menjadi pusat claim itu.
-3. Cek apakah function itu benar-benar dipanggil dari runtime utama.
-4. Cek apakah data flow-nya nyambung end-to-end.
-5. Cek apakah ada placeholder, dead path, mismatch nama method, contract yang tidak match, atau jalur yang putus.
-6. Cek apakah claim itu:
-   - BENAR
-   - PARSIAL
-   - SALAH
-   - BELUM TERBUKTI
-7. Beri alasan teknis singkat dan spesifik.
-8. Wajib sertakan bukti file + method/function.
+4. **Pastikan `.env.example` benar-benar ada, sinkron, dan bisa dipakai onboarding/deploy.**
+   README menjadikan `.env.example` sebagai langkah utama onboarding (`cp .env.example .env`), tetapi dalam audit ini file itu tidak berhasil saya verifikasi dari branch `main`. Jadi ini harus dianggap blocker dokumentasi-operasional sampai terbukti ada dan sinkron dengan `env.ts`. Jangan biarkan README menyuruh memakai file yang tidak benar-benar tersedia atau sudah tidak sinkron. `env.ts` sendiri punya kontrak env yang cukup banyak dan spesifik, jadi contoh env harus nyata, lengkap, dan sesuai.  
 
-FORMAT OUTPUT WAJIB:
+5. **Tambahkan jalur validasi resmi repo untuk probes/tests, bukan daftar manual.**
+   Saat ini `package.json` hanya punya `build`, `dev`, `render:nginx`, `start`, dan `lint`, sedangkan `tsconfig.json` hanya meng-include `src/**/*.ts`. Jadi probe di `tests/**/*.ts` tidak otomatis ikut typecheck/lint normal repo, walaupun README mengklaim banyak probe penting tersedia. Untuk repo yang ingin disebut siap live, harus ada minimal satu jalur resmi seperti `yarn test:probes` atau `yarn verify`, dan idealnya file test/probe ikut typechecked lewat tsconfig terpisah atau include yang jelas.   
 
-1. RINGKASAN EKSEKUTIF
-- 1 paragraf singkat
-- jelaskan repo ini secara jujur
-- jangan promosi
-- jangan pakai bahasa blueprint
+6. **Tambahkan probe callback-driven reconciliation yang benar-benar menembus `order_id/orderId/id -> reconcileFromCallback()`.**
+   Wiring callback ke execution memang ada: callback accepted akan mengambil `order_id/orderId/id` lalu memanggil reconciliation order aktif. Tetapi dari probe yang saya audit langsung, yang benar-benar dites baru health/callback acceptance dan execution hardening umum; saya belum melihat probe end-to-end yang memastikan payload callback real benar-benar mengubah state order yang aktif. Untuk live trading, ini wajib.    
 
-2. CHECKLIST CLAIM
-Gunakan format ini untuk SETIAP claim:
+### P1 — sangat penting untuk kestabilan operasional
 
-[CLAIM]
-Status: BENAR / PARSIAL / SALAH / BELUM TERBUKTI
+7. **Perbaiki bug metrik `activeJobs` di `PollingService`.**
+   `LightScheduler.list()` sudah menyimpan status `active` per job, tetapi `PollingService.stats()` mengembalikan `activeJobs: jobs.length`, jadi angka job aktif bisa salah walaupun polling sedang stop. Ini kelihatannya kecil, tapi bisa merusak health/observability dan membuat operator salah membaca runtime. Perbaikan minimal: hitung `activeJobs` dari `jobs.filter(job => job.active).length`.  
 
-File inti:
-- ...
-- ...
+8. **Tentukan satu source of truth untuk interval scanner/polling, lalu wire secara konsisten.**
+   `env.ts` dan `ScannerSettings` punya `pollingIntervalMs` dan `marketWatchIntervalMs`, tetapi di wiring `app.ts` job `market-scan` didaftarkan langsung memakai `env.pollingIntervalMs`. Dari jalur yang saya audit, belum terlihat pemakaian operasional yang tegas untuk `settings.scanner.marketWatchIntervalMs`. Ini membingungkan dan berpotensi bikin operator merasa setting berubah padahal scheduler tetap jalan dengan nilai lain. Pilih satu sumber kebenaran dan rapikan.    
 
-Bukti nyata:
-- ...
-- ...
+9. **Perbaiki contract `manualOrder()` untuk BUY.**
+   Di jalur generic `manualOrder()`, notional buy dihitung dari `(request.price ?? 0) * request.quantity`. Itu artinya kalau `price` kosong, notional bisa jadi nol dan flow menjadi tidak sehat. Memang Telegram manual buy saat ini tidak memakai method itu secara langsung, tetapi method publik seperti ini tetap harus dibersihkan supaya contract-nya tidak menyesatkan. 
 
-Wiring:
-- Terhubung / Tidak terhubung / Parsial
+10. **Samakan naming artifact deploy dengan branding final repo.**
+    Branding final yang tertulis adalah `cukong-markets`, tetapi renderer nginx masih memakai path/template/output bernama `mafiamarkets.nginx.conf`. Ini bukan blocker correctness, tetapi jelas berpotensi bikin deploy/operator bingung, apalagi kalau ada lebih dari satu repo atau artefak lama di server. Rapikan naming agar satu bahasa dari package name sampai deploy artifact.  
 
-Masalah / mismatch:
-- ...
-- ...
+### P2 — penting untuk kejujuran status dan maintainability live
 
-Verdict claim:
-- 1-3 kalimat singkat, tegas, jujur
+11. **Rapikan klaim dokumentasi agar selalu mengikuti source, bukan sebaliknya.**
+    Secara source, repo ini memang nyata dan banyak wiring penting sudah hidup. Tetapi README dan log dokumennya masih cenderung terlalu percaya diri di beberapa kalimat. Untuk repo yang mau dijadikan source of truth internal, dokumentasi harus “lebih hati-hati daripada source”, bukan lebih berani. Fokusnya: tulis apa yang benar-benar terbukti, apa yang masih parsial, dan apa yang belum bisa dibuktikan dari deploy publik.   
 
-3. TEMUAN MISMATCH KONKRET
-Buat section khusus berjudul:
-TEMUAN MISMATCH / DEAD WIRING / KLAIM YANG TIDAK TERBUKTI
+12. **Tambahkan satu probe “live-readiness smoke test” yang menyatukan jalur utama.**
+    Repo ini sudah punya probe yang terpisah-pisah untuk HTTP server, Telegram navigation, dan execution hardening. Langkah berikutnya yang layak adalah satu smoke test yang memastikan bootstrap → app start → `/healthz` → callback acceptance → startup recovery → status report berjalan konsisten sebagai satu paket. Ini penting agar “siap live” tidak hanya hasil menjumlahkan probe terpisah.     
 
-Isi dengan format:
-- File:
-- Method/function yang dipanggil:
-- Masalah:
-- Dampak ke claim:
+## Ringkasan paling tegas
 
-4. AUDIT KHUSUS EXECUTION LAYER
-Audit secara keras:
-- apakah duplicate order guard benar-benar nyata
-- apakah fill reconciliation benar-benar nyata
-- apakah recovery startup benar-benar nyata
-- apakah monitoring order aktif benar-benar nyata
-- apakah evaluasi posisi terbuka benar-benar nyata
-- apakah jalur buy/sell live benar-benar tersambung
-- apakah partial fill aggregation benar-benar ada
-- apakah restart safety benar-benar terbukti dari wiring
+1. **Jangan biarkan status bot bilang trading aktif kalau engine masih simulasi.**
+2. **Sediakan jalur resmi untuk mengubah mode simulasi ke live.**
+3. **Betulkan README dan SOP verifikasi callback publik.**
+4. **Pastikan `.env.example` nyata dan sinkron.**
+5. **Resmikan jalur `verify/test/probe` repo.**
+6. **Tambahkan probe callback reconciliation end-to-end.**
+7. **Perbaiki observability kecil yang menyesatkan seperti `activeJobs`.**
+8. **Rapikan source-of-truth interval scheduler dan contract manual order.**
 
-5. AUDIT KHUSUS TELEGRAM OPS UI
-Audit:
-- apakah menu hanya UI atau benar-benar memicu logic nyata
-- apakah manual buy/sell benar-benar nyambung
-- apakah emergency controls benar-benar nyambung
-- apakah settings benar-benar mengubah runtime/settings yang dipakai
-
-6. AUDIT KHUSUS BACKTEST / WORKERS / PERSISTENCE
-Audit:
-- apakah backtest benar-benar memakai data replay nyata
-- apakah worker benar-benar dipakai runtime, bukan sekadar tersedia
-- apakah persistence benar-benar jadi sumber state aktif, bukan dekorasi
-
-7. FINAL VERDICT WAJIB
-Berikan tabel/daftar final:
-
-BENAR:
-- ...
-
-PARSIAL:
-- ...
-
-SALAH:
-- ...
-
-BELUM TERBUKTI:
-- ...
-
-8. KESIMPULAN TEGAS
-Harus ada kalimat tegas seperti:
-- “Claim developer tidak sepenuhnya benar”
-atau
-- “Claim developer sebagian benar, tetapi beberapa area penting belum terbukti terhubung”
-atau
-- “Claim developer mayoritas valid secara wiring”
-Pilih sesuai hasil audit, jangan diplomatis.
-
-LARANGAN KERAS:
-- jangan refactor
-- jangan kasih patch
-- jangan kasih pseudo-fix
-- jangan menyimpulkan “sudah kuat” kalau ada mismatch method / dead wiring / path tidak terbukti
-- jangan pakai kalimat marketing
-- jangan menyamakan ‘module exists’ dengan ‘runtime works’
-- jangan menilai dari niat desain; nilai dari code yang benar-benar tersambung
-
-TITIK KRITIS YANG HARUS DIVERIFIKASI SECARA KHUSUS:
-Saya curiga ada klaim execution/recovery yang dioverclaim.
-Verifikasi dengan keras apakah ada pemanggilan method di runtime utama yang implementasinya tidak ada atau tidak match, terutama di hubungan:
-- src/app.ts
-- src/domain/trading/executionEngine.ts
-- apakah src/app.ts memanggil method execution yang tidak ditemukan implementasinya
-- apakah recovery startup benar-benar nyata atau hanya diklaim
-- apakah position-monitor benar-benar berjalan end-to-end
-- apakah evaluate open positions benar-benar terhubung
-
-Kalau ada mismatch seperti method dipanggil tapi tidak ditemukan, itu wajib ditulis eksplisit dan dijadikan bukti bahwa claim terkait belum valid.
-
-Saya tidak mau refactor.
-Saya hanya mau AUDIT JUJUR PER-FILE, PER-WIRING, dan CHECKLIST FINAL mana yang benar-benar berfungsi dan mana yang belum.
-
-## KEWAJIBAN CAKUPAN AUDIT PER-FILE SELURUH REPO
-
-Audit tidak boleh berhenti pada level modul besar atau narasi arsitektur.
-Audit wajib mencakup penelusuran struktur repository dan pemeriksaan file per file yang relevan.
-
-Aturan tambahan wajib:
-1. Lakukan penelusuran struktur repository terlebih dahulu.
-2. Identifikasi seluruh folder dan file yang relevan terhadap claim yang diaudit.
-3. Audit file yang relevan SATU PER SATU, bukan hanya per folder besar.
-4. Jangan melewati file hanya karena nama file terlihat sekunder atau kecil.
-5. Jika sebuah folder berisi banyak file, verifikasi file-file di dalamnya satu per satu, terutama pada area:
-   - src/bootstrap.ts
-   - src/app.ts
-   - src/domain/**
-   - src/services/**
-   - src/integrations/**
-   - src/storage/**
-   - src/server/**
-   - src/workers/**
-   - scripts/**
-   - deploy/**
-6. Untuk setiap file yang diperiksa, tentukan salah satu status berikut:
-   - RELEVAN DAN SUDAH DIAUDIT
-   - RELEVAN TAPI BELUM TERBUKTI BERPERAN
-   - TIDAK RELEVAN TERHADAP CLAIM YANG DIAUDIT
-7. Jangan menyimpulkan “seluruh repo sudah diaudit” jika belum membuat daftar file yang diperiksa.
-8. Jika ada file yang tampak penting tetapi tidak dibahas, jelaskan alasannya.
-9. Jika ada file yang hanya berisi helper/contract/utilities, tetap verifikasi apakah benar dipakai atau hanya dekorasi.
-10. Jika ada export yang tampak penting tetapi tidak ditemukan pemakaian nyata, tandai secara eksplisit.
-
-Output tambahan wajib:
-1. Tambahkan section khusus bernama `CAKUPAN AUDIT PER-FILE`.
-2. Dalam section itu, daftar file-file yang diperiksa, dikelompokkan per folder.
-3. Untuk setiap file, tulis catatan singkat:
-   - fungsi file
-   - relevansi terhadap claim
-   - apakah terhubung, parsial, atau tidak terbukti terhubung
-4. Jika jumlah file terlalu banyak, tetap tampilkan seluruh file relevan yang diperiksa, jangan hanya contoh.
-5. Pastikan `AUDIT_CHECKLIST.md` juga memuat ringkasan cakupan file yang benar-benar sudah diaudit.
-
-Larangan tambahan:
-- Jangan berhenti pada audit per-modul besar saja.
-- Jangan menulis seolah seluruh repo telah diaudit jika belum ada daftar file yang diperiksa.
-- Jangan menyederhanakan audit per-file menjadi narasi umum.
-
-
+## Verdict akhir saat ini
 
