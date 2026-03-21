@@ -414,6 +414,27 @@ export interface IndodaxCallbackState {
   }>;
 }
 
+export interface ShadowRunCheckResult {
+  check: 'private_auth' | 'public_market' | 'reconciliation_read_model';
+  endpoint: string;
+  pass: boolean;
+  account: string;
+  summary: Record<string, unknown>;
+  error?: {
+    message: string;
+    cause?: string;
+  };
+}
+
+export interface ShadowRunEvidence {
+  runId: string;
+  timestamp: string;
+  exchange: 'indodax';
+  account: string;
+  checks: ShadowRunCheckResult[];
+  allPassed: boolean;
+}
+
 export interface PairRuntimeState {
   pair: string;
   lastSeenAt: number;

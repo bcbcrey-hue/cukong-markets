@@ -41,6 +41,7 @@ export interface EnvConfig {
   tradeOutcomeFile: string;
   callbackEventsFile: string;
   callbackStateFile: string;
+  shadowRunEvidenceFile: string;
 
   backtestDir: string;
 
@@ -339,6 +340,7 @@ export const env: EnvConfig = {
   tradeOutcomeFile: path.resolve(historyDir, 'trade-outcomes.jsonl'),
   callbackEventsFile: path.resolve(historyDir, 'indodax-callback-events.jsonl'),
   callbackStateFile: path.resolve(stateDir, 'indodax-callback-state.json'),
+  shadowRunEvidenceFile: path.resolve(historyDir, 'shadow-run-evidence.jsonl'),
 
   backtestDir,
 

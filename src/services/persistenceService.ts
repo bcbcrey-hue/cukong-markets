@@ -14,6 +14,7 @@ import type {
   OrderRecord,
   PositionRecord,
   RuntimeState,
+  ShadowRunEvidence,
   TradeOutcomeSummary,
   TradeRecord,
 } from '../core/types';
@@ -190,6 +191,9 @@ export class PersistenceService {
   private readonly callbackEventsStore = new JsonLinesStore<IndodaxCallbackEvent>(
     env.callbackEventsFile,
   );
+  private readonly shadowRunEvidenceStore = new JsonLinesStore<ShadowRunEvidence>(
+    env.shadowRunEvidenceFile,
+  );
 
   async bootstrap(): Promise<void> {
     await Promise.all([
@@ -207,6 +211,7 @@ export class PersistenceService {
       this.executionSummaryStore.ensureDir(),
       this.tradeOutcomeStore.ensureDir(),
       this.callbackEventsStore.ensureDir(),
+      this.shadowRunEvidenceStore.ensureDir(),
     ]);
   }
 
@@ -346,6 +351,14 @@ export class PersistenceService {
 
   readIndodaxCallbackEvents(): Promise<IndodaxCallbackEvent[]> {
     return this.callbackEventsStore.readAll();
+  }
+
+  appendShadowRunEvidence(entry: ShadowRunEvidence): Promise<void> {
+    return this.shadowRunEvidenceStore.append(entry);
+  }
+
+  readShadowRunEvidence(): Promise<ShadowRunEvidence[]> {
+    return this.shadowRunEvidenceStore.readAll();
   }
 
   async saveHotlistSnapshot(hotlist: HotlistEntry[]): Promise<void> {
