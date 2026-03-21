@@ -52,12 +52,12 @@ Dokumen ini hanya mencatat perubahan yang benar-benar masuk ke source aktual.
 
 ## Validasi yang benar-benar dijalankan
 
-- `yarn install`
-- `yarn lint`
-- `yarn build`
-- `yarn typecheck:probes`
-- `yarn test:probes`
-- pada kondisi final, `yarn test:probes` sudah mencakup probe safety tambahan untuk `buy_entry_price_guard`, `live_submission_uncertain`, dan `cancel_submission_uncertain`
+- `npm ci`
+- `npm run lint`
+- `npm run build`
+- `npm run typecheck:probes`
+- `npm run test:probes`
+- pada kondisi final, `npm run test:probes` sudah mencakup probe safety tambahan untuk `buy_entry_price_guard`, `live_submission_uncertain`, dan `cancel_submission_uncertain`
 
 ## Status jujur saat ini
 

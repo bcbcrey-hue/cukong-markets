@@ -23,10 +23,10 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
 ## Status verifikasi terbaru
 
-- `yarn lint` lulus
-- `yarn build` lulus
-- `yarn typecheck:probes` lulus
-- `yarn test:probes` lulus
+- `npm run lint` lulus
+- `npm run build` lulus
+- `npm run typecheck:probes` lulus
+- `npm run test:probes` lulus
 - suite resmi sudah mencakup probe safety untuk startup, worker timeout, buy-entry guard, dan submission-uncertain cancel safety
 
 ## Verdict yang harus dipakai pada sesi berikutnya

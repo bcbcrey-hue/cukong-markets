@@ -5,12 +5,13 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const repoRoot = process.cwd();
 
 async function main() {
-  const outputPath = path.resolve('/app/deploy/nginx/cukong-markets.nginx.conf');
+  const outputPath = path.resolve(repoRoot, 'deploy/nginx/cukong-markets.nginx.conf');
 
-  await execFileAsync('node', ['/app/scripts/render-nginx-conf.mjs'], {
-    cwd: '/app',
+  await execFileAsync('node', ['scripts/render-nginx-conf.mjs'], {
+    cwd: repoRoot,
     env: {
       ...process.env,
       PUBLIC_BASE_URL: 'https://kangtrade.top',
