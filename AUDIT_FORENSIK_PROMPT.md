@@ -1,53 +1,165 @@
-# AUDIT_FORENSIK_PROMPT
+A) VERDICT GLOBAL
+BELUM SIAP LIVE
 
-Dokumen ini sekarang merekam status audit keras terbaru terhadap source aktual.
+B) RINGKASAN EKSEKUTIF
+Yang kuat: wiring arsitektur inti memang nyata: bootstrap → createApp → start runtime, persistence/state load, polling jobs, execution engine, server HTTP healthz, callback server, dan Telegram handler terhubung langsung dalam lifecycle runtime. Bukan sekadar file ada.
 
-## Ringkasan hasil audit
+Yang lemah/kritis: bukti “live trading benar-benar aman di exchange nyata” belum ada di repo; mayoritas pembuktian masih probe/simulasi/mock. Jalur order live memang ada di kode, tapi belum ada bukti runtime real-exchange non-destruktif dari repo ini.
 
-### Source bug yang benar-benar ditemukan dan diperbaiki
+Masalah readiness verifikasi: pipeline test:probes resmi saat ini rapuh/putus di environment aktual karena ketergantungan yarn + lockfile, dan runner probe hardcode cwd: '/app' dengan binary relatif ./node_modules/.bin/tsx. Ini membuat “klaim lulus probe” tidak bisa direproduksi langsung dari checkout ini.
 
-- bootstrap failure observability lemah karena error runtime bisa kehilangan stack/cause yang berguna
-- logger belum men-serialize field `error` secara eksplisit
-- worker path production masih rawan bergantung pada `process.cwd()`
-- official probe suite sebelumnya belum menjalankan seluruh probe kritis yang sekarang sudah masuk jalur resmi (`bootstrap_observability_probe`, `worker_timeout_probe`, `buy_entry_price_guard_probe`, `live_submission_uncertain_probe`, `cancel_submission_uncertain_probe`)
-- `.env.example` tidak ada walau dokumentasi mengklaim ada
-- timeout env untuk request Indodax sudah didefinisikan tetapi belum dipakai runtime
-- BUY path masih bisa bergerak dengan reference/entry price invalid
-- failure live submit yang ambigu sebelumnya masih bisa berakhir terlalu parsial dan berbahaya untuk operator
-- GET request ke API belum punya retry aman, sementara POST trading memang tidak boleh diretry sembarangan
-- log worker exit saat shutdown normal memberi false signal seolah runtime rusak
+C) TEMUAN PER AREA
+1) Bootstrap & app lifecycle
+ADA LOGIC + ADA WIRING: bootstrap memuat runtime modules, memastikan direktori runtime, lalu createApp() dan app.start().
 
-### Deploy / config issue yang dibedakan dari source bug
+ADA observability fase startup: phase wrapper dengan error cause-chain sudah ada.
 
-- environment yang belum memasang dependency (`yarn install`) adalah issue setup/runtime, bukan bug source
-- secret/env tetap harus disuplai oleh runtime; repo tidak dan tidak boleh mengandung secret
+Kesimpulan: lifecycle inti terhubung.
 
-### Observability issue yang ditemukan
+2) Config & env
+ADA contract env ketat: TELEGRAM_BOT_TOKEN wajib; callback path dipaksa stabil (/indodax/callback), validasi prod-route ada.
 
-- phase startup sebelumnya tidak cukup jelas untuk membedakan gagal di env import, persistence, port bind, callback server, recovery, Telegram, atau worker
-- scheduler error sebelumnya hanya disimpan lokal tanpa log operasional eksplisit
+Mismatch dokumentasi: README klaim .env.example ada, tapi pada source checkout ini tidak ditemukan file tersebut (lihat cek command di bawah). Klaim docs jadi tidak tervalidasi oleh source saat ini.
 
-### Docs mismatch yang ditemukan
+3) Telegram flow
+ADA WIRING nyata: bot dibuat dengan token env, handler diregister, ada flow menu/callback/action/start-stop runtime/manual buy-sell/upload account.
 
-- README sebelumnya overclaim status validasi/live-readiness
-- README menyebut `.env.example` seolah sudah ada padahal belum ada file-nya
-- dokumen konteks sebelumnya belum mencerminkan penguatan observability startup terbaru
+ADA access control: user yang tidak allowlisted ditolak.
 
-## Validasi nyata yang sudah dijalankan
+Kesimpulan: flow Telegram nyata terhubung.
 
-- `yarn install`
-- `yarn lint`
-- `yarn build`
-- `yarn typecheck:probes`
-- `yarn test:probes`
-- official probe suite final sekarang mencakup guard startup, worker timeout, buy entry, submission uncertain, cancel safety, callback, dan history recovery
+4) Exchange / Indodax integration
+Public API: ada fetch ticker/depth + retry retriable status/network.
 
-## Verdict final yang berlaku sekarang
+Private API: ada sign HMAC, post trade/cancel/getOrder/openOrders, plus V2 histories/myTrades mapping normalizer.
 
-- **SIAP DEPLOY** untuk scope source repo yang diaudit
-- **BELUM SIAP LIVE** untuk trading nyata
+Client wiring: IndodaxClient.forAccount mengikat credential account ke PrivateApi.
 
-## Blocker live yang masih tersisa
+Kesimpulan: integrasi ada dan terhubung secara kode.
 
-- jalur `submission_uncertain` sudah dimitigasi di source tetapi belum terbukti end-to-end terhadap exchange nyata untuk semua edge case
-- belum ada bukti operasional nyata dari repo ini untuk live shadow-run atau auth check exchange non-destruktif
+5) Trading execution (create/cancel/status)
+Create buy/sell live & simulated ada: mode simulated dan live dipisah jelas; live submit ke api.trade.
+
+Status sync ada: via openOrders/getOrder/orderHistoryV2/myTradesV2 fallback.
+
+Cancel all ada: cancel ke exchange jika ada exchangeOrderId; order submission_uncertain tanpa id ditandai unresolved.
+
+Kesimpulan: flow eksekusi nyata, tapi runtime real-exchange masih BELUM TERBUKTI.
+
+6) Position tracking
+ADA position ledger: open/applyBuyFill/closePartial/mark update + persistence.
+
+Kesimpulan: terhubung.
+
+7) Risk engine / safety control
+ADA guard entry: max posisi, size, spread, cooldown, confidence, spoof threshold.
+
+ADA exit guard: TP/SL/trailing stop.
+
+Kesimpulan: risk logic nyata, bukan placeholder.
+
+8) Callback / webhook server
+ADA server callback nyata: host allowlist, path check, method check, event persistence, journaling, dan hook rekonsiliasi execution.
+
+Kesimpulan: callback flow terhubung.
+
+9) Healthcheck
+ADA /healthz app server dan callback server health endpoint.
+
+Kesimpulan: healthcheck ada.
+
+10) Persistence / state / recovery
+ADA storage runtime: state, settings, health, orders, positions, journal, histories, callback events/state.
+
+ADA startup recovery: recoverLiveOrdersOnStartup() dipanggil saat start app.
+
+Kesimpulan: persistence/recovery ada.
+
+11) Scheduler / worker / background jobs
+ADA scheduler polling jobs: market-scan, position-monitor, health-heartbeat.
+
+ADA worker pool: thread pool + timeout + respawn + inline fallback.
+
+Kesimpulan: background process terhubung.
+
+12) Logging / observability
+ADA structured logging + redact secret fields.
+
+ADA startup phase logs dan error wrapping.
+
+13) Build / lint / typecheck / probe
+Build/lint/typecheck ada script-nya dan bisa dijalankan via npm (sebagian).
+
+Probe runner bermasalah runtime path/cwd: cwd: '/app' + relative binary path.
+
+Kesimpulan: verifikasi otomatis BELUM SIAP sebagai bukti final karena eksekusi resmi tidak stabil di checkout ini.
+
+14) Deploy/runtime readiness
+Untuk deploy source: secara struktur runtime cukup matang.
+
+Untuk live trading: tetap BELUM SIAP LIVE (bukti real exchange belum ada + pipeline bukti resmi masih rapuh).
+
+D) TEMUAN PER-FILE KRITIS
+src/app.ts
+Fungsi: komposisi dependency + lifecycle start/stop + polling orchestration + server start + callback + telegram. Dipakai runtime langsung via bootstrap. Wiring nyata. Risiko utama: jika salah satu fase gagal, status jadi ERROR (bagus), tapi klaim readiness tetap tergantung bukti eksternal yang tidak ada di repo.
+
+src/domain/trading/executionEngine.ts
+Fungsi: core execution buy/sell/sync/recovery/submission_uncertain. Dipakai langsung oleh app runtime + callback reconciliation. Logic sangat besar dan nyata. Risiko: kompleksitas tinggi; live behavior akhir tetap butuh bukti runtime exchange.
+
+src/integrations/indodax/privateApi.ts
+Fungsi: signing + private endpoint + V2 mapping histories/trades. Dipakai oleh execution engine via client/account. Risiko: mapping response fleksibel tapi bergantung format exchange yang bisa berubah; tanpa live contract test berkala, rawan drift.
+
+src/integrations/indodax/callbackServer.ts
+Fungsi: webhook receiver + allowlist + persist event + invoke reconcile hook. Dipakai runtime saat callback enabled. Wiring nyata. Risiko: autentikasi callback hanya host allowlist, belum ada signature verification payload di kode ini.
+
+scripts/run-probes.mjs
+Fungsi: runner probe resmi. Dipakai test:probes. Bug kritis: path execution hardcoded (cwd: '/app') + binary relatif. Ini bisa memutus pembuktian otomatis di environment non-/app.
+
+package.json
+Fungsi: kontrak build/lint/test. Issue readiness: script probe bergantung yarn walau environment nyata bisa jalan via npm; menyebabkan kegagalan operasional validasi.
+
+E) DAFTAR MISMATCH DOCS VS SOURCE
+README klaim .env.example “benar-benar ada”, namun pada checkout ini file tersebut tidak ada (cek command rg --files -g '.env*' menghasilkan kosong). Klaim docs tidak match kondisi source saat ini.
+
+README klaim yarn test:probes lulus, tetapi script resmi saat ini gagal dijalankan pada environment ini (yarn lockfile/tooling issue + path issue runner probe). Jadi klaim “sudah diverifikasi” belum reproducible dari source checkout ini.
+
+F) DAFTAR BLOCKER PALING KRITIS (urut bahaya)
+Tidak ada bukti runtime real-exchange non-destruktif untuk flow live buy/sell/cancel/sync → risiko finansial langsung bila dianggap siap live.
+
+Pipeline pembuktian resmi (test:probes) tidak robust/reproducible di checkout ini → quality gate readiness jadi lemah.
+
+Callback security bergantung host allowlist saja (tidak terlihat signature verification payload) → spoofing risk pada layer callback jika infrastruktur perimeter lemah.
+
+G) BUKTI YANG MASIH BELUM TERPENUHI
+BELUM TERBUKTI RUNTIME: end-to-end live order accepted/rejected/partial fill di exchange real dengan artefak bukti test non-destruktif.
+
+BELUM TERBUKTI RUNTIME: robust recovery di kondisi network partition nyata (khususnya submission_uncertain edge-case multi-order mirip).
+
+BELUM TERBUKTI RUNTIME: reproducible official probe pass dari checkout bersih pada environment standar (tanpa asumsi /app + lockfile khusus).
+
+H) REKOMENDASI TINDAKAN
+Wajib sebelum live
+Buat dan jalankan live shadow-run testplan (real exchange, nominal kecil, non-destruktif) untuk create/cancel/sync/recovery.
+
+Perbaiki test:probes agar tidak hardcode cwd: '/app' dan tidak tergantung setup lockfile yang tidak ada.
+
+Tambahkan autentikasi callback berbasis signature/token (bukan host allowlist saja).
+
+Bagus diperbaiki (non-blocking immediate)
+Tambah integration contract tests berkala untuk payload mapping V2.
+
+Tambah failover metrics (latency/error-rate per endpoint exchange).
+
+Kosmetik/dokumentasi
+Sinkronkan README dengan kondisi source aktual (termasuk status .env.example dan cara run probe yang benar-benar reproducible).
+
+Pemeriksaan yang dijalankan
+✅ npm run lint
+
+✅ npm run build
+
+✅ npm run typecheck:probes
+
+❌ npm run test:probes (gagal: yarn workspace/lockfile error pada environment ini)
+
+❌ node scripts/run-probes.mjs (gagal: spawn ./node_modules/.bin/tsx ENOENT, terkait path runner)
