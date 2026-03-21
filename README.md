@@ -2,14 +2,6 @@
 
 Backend TypeScript untuk bot operasional market Indodax dengan UI utama di Telegram.
 
-## Hierarki kebenaran
-
-- source code runtime saat ini = sumber kebenaran utama
-- `REFACTOR_LOG.md` = ringkasan implementasi/perubahan yang benar-benar masuk
-- `SESSION_CONTEXT_NEXT.md` = handoff singkat untuk sesi berikutnya
-
-Jika dokumen berbeda dengan wiring runtime, menangkan source code.
-
 ## Status source yang sudah diverifikasi
 
 Yang benar-benar sudah terbukti lewat build/lint/probe:
