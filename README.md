@@ -27,10 +27,10 @@ Untuk scope source repo, status sekarang: **SIAP DEPLOY**.
 
 Dasarnya:
 
-- `yarn lint` lulus
-- `yarn build` lulus
-- `yarn typecheck:probes` lulus
-- `yarn test:probes` lulus
+- `npm run lint` lulus
+- `npm run build` lulus
+- `npm run typecheck:probes` lulus
+- `npm run test:probes` lulus
 - probe startup, callback, recovery, worker timeout, buy-entry guard, submission-uncertain safety, dan history V2 lulus
 
 ### Live trading
@@ -83,16 +83,16 @@ Catatan penting:
 
 - Package manager final: **npm** (dipin lewat `packageManager: "npm@11.4.2"` di `package.json`).
 - Instalasi deterministic: jalankan `npm ci` (atau `npm run install:immutable`).
-- `yarn verify` harus dijalankan dari root repository dan tidak mengandalkan path absolut environment tertentu.
+- `npm run verify` harus dijalankan dari root repository dan tidak mengandalkan path absolut environment tertentu.
 
 ## Menjalankan lokal
 
 ```bash
 npm ci
 cp .env.example .env
-yarn lint
-yarn build
-yarn dev
+npm run lint
+npm run build
+npm run dev
 ```
 
 Jika `INDODAX_ENABLE_CALLBACK_SERVER=true`, callback server ikut start saat app dijalankan.
@@ -100,7 +100,7 @@ Jika `INDODAX_ENABLE_CALLBACK_SERVER=true`, callback server ikut start saat app 
 ## Validasi resmi repo
 
 ```bash
-yarn verify
+npm run verify
 ```
 
 Probe yang sekarang masuk jalur resmi:
