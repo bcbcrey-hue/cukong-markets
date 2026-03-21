@@ -5,7 +5,6 @@ Backend TypeScript untuk bot operasional market Indodax dengan UI utama di Teleg
 ## Hierarki kebenaran
 
 - source code runtime saat ini = sumber kebenaran utama
-- `AUDIT_FORENSIK_PROMPT.md` = status audit keras terbaru
 - `REFACTOR_LOG.md` = ringkasan implementasi/perubahan yang benar-benar masuk
 - `SESSION_CONTEXT_NEXT.md` = handoff singkat untuk sesi berikutnya
 
