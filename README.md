@@ -120,7 +120,22 @@ Probe yang sekarang masuk jalur resmi:
 - `tests/app_lifecycle_servers_probe.ts`
 - `tests/bootstrap_observability_probe.ts`
 - `tests/callback_reconciliation_probe.ts`
+- `tests/callback_security_probe.ts`
 - `tests/worker_timeout_probe.ts`
+
+## Validasi shadow-run exchange nyata (non-destruktif)
+
+Validasi ini **terpisah** dari `npm run verify` karena butuh secret/runtime nyata.
+
+```bash
+npm run verify:shadow-live
+```
+
+Catatan:
+
+- command di atas mengeksekusi `tests/real_exchange_shadow_run_probe.ts` dengan `RUN_REAL_EXCHANGE_SHADOW=1`
+- probe hanya memakai endpoint read-only/non-destruktif (`getInfo`, `openOrders`, `orderHistoriesV2`/`orderHistory`, dan market data public)
+- evidence wajib tersimpan ke `history/shadow-run-evidence.jsonl` (atau `DATA_DIR/history/shadow-run-evidence.jsonl`) dan diverifikasi bisa dibaca ulang via `journal.listShadowRunEvidence()`
 
 ## File referensi status
 
