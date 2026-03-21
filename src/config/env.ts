@@ -47,6 +47,8 @@ export interface EnvConfig {
   indodaxPrivateBaseUrl: string;
   indodaxTradeApiV2BaseUrl: string;
   indodaxTimeoutMs: number;
+  indodaxPublicMinIntervalMs: number;
+  indodaxPrivateMinIntervalMs: number;
   indodaxHistoryMode: IndodaxHistoryMode;
   indodaxCallbackPath: string;
   indodaxCallbackPort: number;
@@ -322,6 +324,8 @@ export const env: EnvConfig = {
     'https://tapi.indodax.com',
   ),
   indodaxTimeoutMs: readNumber('INDODAX_TIMEOUT_MS', 15_000),
+  indodaxPublicMinIntervalMs: readNumber('INDODAX_PUBLIC_MIN_INTERVAL_MS', 250),
+  indodaxPrivateMinIntervalMs: readNumber('INDODAX_PRIVATE_MIN_INTERVAL_MS', 300),
   indodaxHistoryMode: normalizeIndodaxHistoryMode(readString('INDODAX_HISTORY_MODE'), 'v2_only'),
   indodaxCallbackPath,
   indodaxCallbackPort: readNumber('INDODAX_CALLBACK_PORT', 3001),

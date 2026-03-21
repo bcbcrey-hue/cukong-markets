@@ -8,6 +8,7 @@ export class IndodaxClient {
     private readonly publicApi = new PublicApi(
       env.indodaxPublicBaseUrl,
       env.indodaxTimeoutMs,
+      env.indodaxPublicMinIntervalMs,
     ),
   ) {}
 
@@ -24,6 +25,7 @@ export class IndodaxClient {
       baseUrl: env.indodaxPrivateBaseUrl,
       tradeApiV2BaseUrl: env.indodaxTradeApiV2BaseUrl,
       timeoutMs: env.indodaxTimeoutMs,
+      minIntervalMs: env.indodaxPrivateMinIntervalMs,
       apiKey: account.apiKey,
       apiSecret: account.apiSecret,
     });

@@ -6,6 +6,7 @@ export interface IndodaxPrivateApiOptions {
   baseUrl: string;
   tradeApiV2BaseUrl?: string;
   timeoutMs?: number;
+  minIntervalMs?: number;
   apiKey: string;
   apiSecret: string;
 }
@@ -206,6 +207,9 @@ export class PrivateApi {
   private readonly timeoutMs: number;
   private readonly apiKey: string;
   private readonly apiSecret: string;
+  private readonly minIntervalMs: number;
+  private rateLimitQueue: Promise<void> = Promise.resolve();
+  private nextAllowedAtMs = 0;
 
   constructor(options: IndodaxPrivateApiOptions) {
     this.baseUrl = options.baseUrl;
@@ -213,6 +217,7 @@ export class PrivateApi {
     this.timeoutMs = options.timeoutMs ?? 15_000;
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
+    this.minIntervalMs = options.minIntervalMs ?? 300;
   }
 
   private sign(payload: string): string {
@@ -234,6 +239,27 @@ export class PrivateApi {
     }
   }
 
+
+
+  private async waitForRateLimitSlot(): Promise<void> {
+    if (this.minIntervalMs <= 0) {
+      return;
+    }
+
+    const schedule = async (): Promise<void> => {
+      const now = Date.now();
+      const waitMs = Math.max(0, this.nextAllowedAtMs - now);
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      this.nextAllowedAtMs = Date.now() + this.minIntervalMs;
+    };
+
+    const next = this.rateLimitQueue.then(schedule, schedule);
+    this.rateLimitQueue = next.catch(() => undefined);
+    await next;
+  }
+
   private async post<T>(
     method: string,
     params: Record<string, string | number> = {},
@@ -246,6 +272,8 @@ export class PrivateApi {
     });
 
     let response: Response;
+
+    await this.waitForRateLimitSlot();
 
     try {
       response = await fetch(this.baseUrl, {
@@ -299,6 +327,8 @@ export class PrivateApi {
     requestUrl.search = query.toString();
 
     let response: Response;
+
+    await this.waitForRateLimitSlot();
 
     try {
       response = await fetch(requestUrl, {

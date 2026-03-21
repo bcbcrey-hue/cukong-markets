@@ -1,6 +1,8 @@
 # Environment files
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
 
 # Local runtime artifacts
@@ -9,27 +11,3 @@ node_modules/
 data/
 logs/
 tmp/
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*

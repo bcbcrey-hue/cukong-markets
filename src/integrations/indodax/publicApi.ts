@@ -57,13 +57,38 @@ function mapTickerEntry(name: string, raw: Record<string, unknown>): IndodaxTick
 }
 
 export class PublicApi {
+  private rateLimitQueue: Promise<void> = Promise.resolve();
+  private nextAllowedAtMs = 0;
+
   constructor(
     private readonly baseUrl: string,
     private readonly timeoutMs = 15_000,
+    private readonly minIntervalMs = 250,
   ) {}
+
+  private async waitForRateLimitSlot(): Promise<void> {
+    if (this.minIntervalMs <= 0) {
+      return;
+    }
+
+    const schedule = async (): Promise<void> => {
+      const now = Date.now();
+      const waitMs = Math.max(0, this.nextAllowedAtMs - now);
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      this.nextAllowedAtMs = Date.now() + this.minIntervalMs;
+    };
+
+    const next = this.rateLimitQueue.then(schedule, schedule);
+    this.rateLimitQueue = next.catch(() => undefined);
+    await next;
+  }
 
   private async requestJson<T>(url: string, label: string, attempt = 1): Promise<T> {
     let response: Response;
+
+    await this.waitForRateLimitSlot();
 
     try {
       response = await fetch(url, {
