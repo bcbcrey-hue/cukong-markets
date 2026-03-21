@@ -1,24 +1,43 @@
 import assert from 'node:assert/strict';
 
-import { AccountRegistry } from '../src/domain/accounts/accountRegistry';
-import { AccountStore } from '../src/domain/accounts/accountStore';
-import { SettingsService } from '../src/domain/settings/settingsService';
-import { ExecutionEngine } from '../src/domain/trading/executionEngine';
-import { OrderManager } from '../src/domain/trading/orderManager';
-import { PositionManager } from '../src/domain/trading/positionManager';
-import { RiskEngine } from '../src/domain/trading/riskEngine';
-import { IndodaxClient } from '../src/integrations/indodax/client';
-import { JournalService } from '../src/services/journalService';
-import { PersistenceService } from '../src/services/persistenceService';
-import { ReportService } from '../src/services/reportService';
-import { StateService } from '../src/services/stateService';
-import { SummaryService } from '../src/services/summaryService';
-
 async function main() {
   if (process.env.RUN_REAL_EXCHANGE_SHADOW !== '1') {
     console.log('SKIP real_exchange_shadow_run_probe (set RUN_REAL_EXCHANGE_SHADOW=1 to execute)');
     return;
   }
+
+  process.env.TELEGRAM_BOT_TOKEN ||= 'shadow-live-probe-token';
+  process.env.TELEGRAM_ALLOWED_USER_IDS ||= '1';
+
+  const [
+    { AccountRegistry },
+    { AccountStore },
+    { SettingsService },
+    { ExecutionEngine },
+    { OrderManager },
+    { PositionManager },
+    { RiskEngine },
+    { IndodaxClient },
+    { JournalService },
+    { PersistenceService },
+    { ReportService },
+    { StateService },
+    { SummaryService },
+  ] = await Promise.all([
+    import('../src/domain/accounts/accountRegistry'),
+    import('../src/domain/accounts/accountStore'),
+    import('../src/domain/settings/settingsService'),
+    import('../src/domain/trading/executionEngine'),
+    import('../src/domain/trading/orderManager'),
+    import('../src/domain/trading/positionManager'),
+    import('../src/domain/trading/riskEngine'),
+    import('../src/integrations/indodax/client'),
+    import('../src/services/journalService'),
+    import('../src/services/persistenceService'),
+    import('../src/services/reportService'),
+    import('../src/services/stateService'),
+    import('../src/services/summaryService'),
+  ]);
 
   const persistence = new PersistenceService();
   await persistence.bootstrap();
