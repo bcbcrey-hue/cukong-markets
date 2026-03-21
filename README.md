@@ -78,10 +78,17 @@ Catatan penting:
 - `v2_prefer` tetap dipetakan sebagai alias kompatibilitas ke `v2_only`
 - `INDODAX_CALLBACK_PATH` harus tetap `/indodax/callback`
 
+
+## Kontrak reproducibility dependency
+
+- Package manager final: **npm** (dipin lewat `packageManager: "npm@11.4.2"` di `package.json`).
+- Instalasi deterministic: jalankan `npm ci` (atau `npm run install:immutable`).
+- `yarn verify` harus dijalankan dari root repository dan tidak mengandalkan path absolut environment tertentu.
+
 ## Menjalankan lokal
 
 ```bash
-yarn install
+npm ci
 cp .env.example .env
 yarn lint
 yarn build
@@ -93,10 +100,7 @@ Jika `INDODAX_ENABLE_CALLBACK_SERVER=true`, callback server ikut start saat app 
 ## Validasi resmi repo
 
 ```bash
-yarn lint
-yarn typecheck:probes
-yarn build
-yarn test:probes
+yarn verify
 ```
 
 Probe yang sekarang masuk jalur resmi:

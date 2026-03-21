@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const repoRoot = process.cwd();
 
 async function main() {
   const tempDataDir = await mkdtemp(path.join(os.tmpdir(), 'cukong-bootstrap-observe-'));
@@ -23,7 +24,7 @@ async function main() {
 
   try {
     await execFileAsync('node', ['dist/bootstrap.js'], {
-      cwd: '/app',
+      cwd: repoRoot,
       env: {
         ...process.env,
         NODE_ENV: 'test',

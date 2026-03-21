@@ -2,9 +2,11 @@ import { execFile } from 'node:child_process';
 import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const probes = [
   'tests/private_api_v2_mapping_probe.ts',
@@ -31,6 +33,11 @@ async function runProbe(probe, index) {
   const appPort = String(3800 + index * 2);
   const callbackPort = String(3900 + index * 2);
 
+
+  const callbackAuthMode = probe.includes('callback_security_probe')
+    ? 'required'
+    : process.env.INDODAX_CALLBACK_AUTH_MODE || 'disabled';
+
   const env = {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || 'test',
@@ -45,7 +52,7 @@ async function runProbe(probe, index) {
     INDODAX_CALLBACK_BIND_HOST: process.env.INDODAX_CALLBACK_BIND_HOST || '127.0.0.1',
     INDODAX_CALLBACK_ALLOWED_HOST: process.env.INDODAX_CALLBACK_ALLOWED_HOST || 'kangtrade.top',
     INDODAX_ENABLE_CALLBACK_SERVER: process.env.INDODAX_ENABLE_CALLBACK_SERVER || 'true',
-    INDODAX_CALLBACK_AUTH_MODE: process.env.INDODAX_CALLBACK_AUTH_MODE || 'required',
+    INDODAX_CALLBACK_AUTH_MODE: callbackAuthMode,
     INDODAX_CALLBACK_SIGNATURE_SECRET:
       process.env.INDODAX_CALLBACK_SIGNATURE_SECRET || 'probe-indodax-callback-secret',
     INDODAX_CALLBACK_SIGNATURE_HEADER:
@@ -64,11 +71,10 @@ async function runProbe(probe, index) {
   };
 
   process.stdout.write(`\n[probe] ${probe}\n`);
-  const { stdout, stderr } = await execFileAsync(
-    './node_modules/.bin/tsx',
-    [probe],
-    { cwd: '/app', env },
-  );
+  const { stdout, stderr } = await execFileAsync('npm', ['exec', '--', 'tsx', probe], {
+    cwd: repoRoot,
+    env,
+  });
 
   if (stdout.trim()) {
     process.stdout.write(stdout);

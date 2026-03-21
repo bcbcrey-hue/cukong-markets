@@ -11,9 +11,10 @@
     "start": "node dist/bootstrap.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck:probes": "tsc -p tsconfig.probes.json --noEmit",
-    "test:probes": "yarn build && node scripts/run-probes.mjs",
+    "test:probes": "npm run build && node scripts/run-probes.mjs",
     "probe:shadow-live": "tsx tests/real_exchange_shadow_run_probe.ts",
-    "verify": "yarn lint && yarn typecheck:probes && yarn test:probes"
+    "verify": "npm run lint && npm run typecheck:probes && npm run test:probes",
+    "install:immutable": "npm ci"
   },
   "engines": {
     "node": ">=20"
@@ -29,5 +30,6 @@
     "@types/node": "^22.13.10",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
-  }
+  },
+  "packageManager": "npm@11.4.2"
 }
