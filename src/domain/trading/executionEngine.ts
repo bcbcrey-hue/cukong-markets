@@ -9,6 +9,7 @@ import type {
   SignalCandidate,
   ShadowRunCheckResult,
   ShadowRunEvidence,
+  ShadowRunTelegramSummary,
   SummaryAccuracy,
   TradingMode,
 } from '../../core/types';
@@ -73,7 +74,38 @@ interface RunShadowOptions {
   pair?: string;
 }
 
+interface ShadowRunLifecycleState {
+  status: ShadowRunTelegramSummary['shadowStatus'];
+  runId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  blockReason: string | null;
+  failureReason: string | null;
+  evidenceArchive: ShadowRunTelegramSummary['evidenceArchive'];
+  checks: {
+    publicMarket: ShadowRunTelegramSummary['publicMarket'];
+    privateAuth: ShadowRunTelegramSummary['privateAuth'];
+    reconciliation: ShadowRunTelegramSummary['reconciliation'];
+  };
+}
+
 export class ExecutionEngine {
+  private shadowRunTask: Promise<void> | null = null;
+  private shadowRunState: ShadowRunLifecycleState = {
+    status: 'IDLE',
+    runId: null,
+    startedAt: null,
+    finishedAt: null,
+    blockReason: null,
+    failureReason: null,
+    evidenceArchive: 'TIDAK DIUJI',
+    checks: {
+      publicMarket: 'TIDAK DIUJI',
+      privateAuth: 'TIDAK DIUJI',
+      reconciliation: 'TIDAK DIUJI',
+    },
+  };
+
   constructor(
     private readonly accounts: AccountRegistry,
     private readonly settings: SettingsService,
@@ -1880,6 +1912,184 @@ export class ExecutionEngine {
       }
       throw error;
     }
+  }
+
+  private aggregateShadowCheckStatus(
+    evidences: ShadowRunEvidence[],
+    check: ShadowRunCheckResult['check'],
+  ): ShadowRunTelegramSummary['publicMarket'] {
+    const checks = evidences.flatMap((item) => item.checks).filter((item) => item.check === check);
+    if (checks.length === 0) {
+      return 'TIDAK DIUJI';
+    }
+
+    return checks.every((item) => item.pass) ? 'LULUS' : 'GAGAL';
+  }
+
+  private computeNextSteps(
+    summary: Pick<
+      ShadowRunTelegramSummary,
+      | 'runtimeStatus'
+      | 'shadowStatus'
+      | 'publicMarket'
+      | 'privateAuth'
+      | 'reconciliation'
+      | 'evidenceArchive'
+      | 'hotlistSignalOpportunity'
+      | 'intelligenceSpoofPattern'
+    >,
+  ): string[] {
+    const steps: string[] = [];
+
+    if (summary.runtimeStatus === 'RUNNING') {
+      steps.push('Stop runtime utama dulu sebelum jalankan shadow-run.');
+    }
+    if (summary.privateAuth === 'GAGAL') {
+      steps.push('Periksa kredensial akun/API key dan izin private endpoint.');
+    }
+    if (summary.publicMarket === 'GAGAL') {
+      steps.push('Periksa konektivitas endpoint market publik Indodax.');
+    }
+    if (summary.reconciliation === 'GAGAL') {
+      steps.push('Periksa endpoint read-model (openOrders/orderHistory) dan pair uji.');
+    }
+    if (summary.evidenceArchive === 'GAGAL TERSIMPAN') {
+      steps.push('Periksa permission/storage data/history untuk arsip evidence.');
+    }
+    if (summary.hotlistSignalOpportunity === 'TIDAK TERSEDIA') {
+      steps.push('Jalankan observasi market watcher agar hotlist/signal/opportunity terisi.');
+    }
+    if (summary.intelligenceSpoofPattern === 'TIDAK TERSEDIA') {
+      steps.push('Tunggu snapshot intelligence berikutnya untuk spoof/pattern.');
+    }
+
+    return steps.slice(0, 4);
+  }
+
+  getShadowRunTelegramSummary(): ShadowRunTelegramSummary {
+    const runtimeRaw = this.state.get().status;
+    const runtimeStatus: ShadowRunTelegramSummary['runtimeStatus'] =
+      runtimeRaw === 'RUNNING' || runtimeRaw === 'STARTING' ? 'RUNNING' : 'STOPPED';
+    const opportunities = this.state.get().lastOpportunities;
+    const hotlistSignalOpportunity: ShadowRunTelegramSummary['hotlistSignalOpportunity'] =
+      this.state.get().lastHotlist.length > 0 &&
+        this.state.get().lastSignals.length > 0 &&
+        opportunities.length > 0
+        ? 'TERSEDIA'
+        : 'TIDAK TERSEDIA';
+    const intelligenceSpoofPattern: ShadowRunTelegramSummary['intelligenceSpoofPattern'] = opportunities.some(
+      (item) => Number.isFinite(item.spoofRisk) && typeof item.historicalMatchSummary === 'string',
+    )
+      ? 'TERSEDIA'
+      : 'TIDAK TERSEDIA';
+
+    const shadowStatus = this.shadowRunState.status;
+    const checks = this.shadowRunState.checks;
+    let verdict: ShadowRunTelegramSummary['verdict'] = 'BELUM SIAP';
+    if (shadowStatus === 'DIBLOK') {
+      verdict = 'DIBLOK';
+    } else if (
+      shadowStatus === 'SELESAI' &&
+      checks.publicMarket === 'LULUS' &&
+      checks.privateAuth === 'LULUS' &&
+      checks.reconciliation === 'LULUS' &&
+      this.shadowRunState.evidenceArchive === 'TERSIMPAN'
+    ) {
+      verdict = 'SIAP SHADOW-RUN AMAN';
+    } else if (runtimeStatus === 'STOPPED') {
+      verdict = 'SIAP CEK OBSERVASI';
+    }
+
+    const summary: ShadowRunTelegramSummary = {
+      runtimeStatus,
+      runtimeDetail: runtimeRaw,
+      shadowStatus,
+      runId: this.shadowRunState.runId,
+      startedAt: this.shadowRunState.startedAt,
+      finishedAt: this.shadowRunState.finishedAt,
+      blockReason: this.shadowRunState.blockReason,
+      failureReason: this.shadowRunState.failureReason,
+      publicMarket: checks.publicMarket,
+      privateAuth: checks.privateAuth,
+      reconciliation: checks.reconciliation,
+      hotlistSignalOpportunity,
+      intelligenceSpoofPattern,
+      evidenceArchive: this.shadowRunState.evidenceArchive,
+      verdict,
+      nextSteps: [],
+    };
+    summary.nextSteps = this.computeNextSteps(summary);
+    return summary;
+  }
+
+  triggerShadowRunFromTelegram(options: RunShadowOptions = {}): ShadowRunTelegramSummary {
+    const runtimeRaw = this.state.get().status;
+    if (runtimeRaw === 'RUNNING' || runtimeRaw === 'STARTING') {
+      this.shadowRunState = {
+        ...this.shadowRunState,
+        status: 'DIBLOK',
+        blockReason: 'Runtime utama masih RUNNING/STARTING. Stop runtime dulu untuk shadow-run aman.',
+        failureReason: null,
+        finishedAt: new Date().toISOString(),
+        checks: {
+          publicMarket: 'DIBLOK',
+          privateAuth: 'DIBLOK',
+          reconciliation: 'DIBLOK',
+        },
+      };
+      return this.getShadowRunTelegramSummary();
+    }
+
+    if (this.shadowRunTask) {
+      return this.getShadowRunTelegramSummary();
+    }
+
+    const startedAt = new Date().toISOString();
+    this.shadowRunState = {
+      status: 'BERJALAN',
+      runId: null,
+      startedAt,
+      finishedAt: null,
+      blockReason: null,
+      failureReason: null,
+      evidenceArchive: 'TIDAK DIUJI',
+      checks: {
+        publicMarket: 'TIDAK DIUJI',
+        privateAuth: 'TIDAK DIUJI',
+        reconciliation: 'TIDAK DIUJI',
+      },
+    };
+
+    this.shadowRunTask = (async () => {
+      try {
+        const evidences = await this.runLiveShadowRun(options);
+        const runId = evidences[0]?.runId ?? null;
+        this.shadowRunState = {
+          ...this.shadowRunState,
+          status: 'SELESAI',
+          runId,
+          finishedAt: new Date().toISOString(),
+          evidenceArchive: 'TERSIMPAN',
+          checks: {
+            publicMarket: this.aggregateShadowCheckStatus(evidences, 'public_market'),
+            privateAuth: this.aggregateShadowCheckStatus(evidences, 'private_auth'),
+            reconciliation: this.aggregateShadowCheckStatus(evidences, 'reconciliation_read_model'),
+          },
+        };
+      } catch (error) {
+        this.shadowRunState = {
+          ...this.shadowRunState,
+          status: 'GAGAL',
+          finishedAt: new Date().toISOString(),
+          evidenceArchive: 'GAGAL TERSIMPAN',
+          failureReason: this.sanitizeError(error).message,
+        };
+      } finally {
+        this.shadowRunTask = null;
+      }
+    })();
+
+    return this.getShadowRunTelegramSummary();
   }
 
   async runLiveShadowRun(options: RunShadowOptions = {}): Promise<ShadowRunEvidence[]> {

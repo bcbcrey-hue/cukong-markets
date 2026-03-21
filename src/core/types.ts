@@ -435,6 +435,29 @@ export interface ShadowRunEvidence {
   allPassed: boolean;
 }
 
+export type ShadowRunStatus = 'IDLE' | 'BERJALAN' | 'DIBLOK' | 'SELESAI' | 'GAGAL';
+export type ShadowCheckStatus = 'LULUS' | 'GAGAL' | 'TIDAK DIUJI' | 'TIDAK TERSEDIA' | 'DIBLOK';
+export type ShadowVerdict = 'SIAP CEK OBSERVASI' | 'SIAP SHADOW-RUN AMAN' | 'BELUM SIAP' | 'DIBLOK';
+
+export interface ShadowRunTelegramSummary {
+  runtimeStatus: 'RUNNING' | 'STOPPED';
+  runtimeDetail: RuntimeStatus;
+  shadowStatus: ShadowRunStatus;
+  runId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  blockReason: string | null;
+  failureReason: string | null;
+  publicMarket: ShadowCheckStatus;
+  privateAuth: ShadowCheckStatus;
+  reconciliation: ShadowCheckStatus;
+  hotlistSignalOpportunity: 'TERSEDIA' | 'TIDAK TERSEDIA';
+  intelligenceSpoofPattern: 'TERSEDIA' | 'TIDAK TERSEDIA';
+  evidenceArchive: 'TERSIMPAN' | 'GAGAL TERSIMPAN' | 'TIDAK DIUJI';
+  verdict: ShadowVerdict;
+  nextSteps: string[];
+}
+
 export interface PairRuntimeState {
   pair: string;
   lastSeenAt: number;

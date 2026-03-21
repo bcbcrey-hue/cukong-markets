@@ -7,6 +7,7 @@ import type {
   OrderRecord,
   PositionRecord,
   SignalCandidate,
+  ShadowRunTelegramSummary,
   StoredAccount,
   TradeOutcomeSummary,
   TradeRecord,
@@ -46,6 +47,46 @@ function truncate(text: string, max = 180): string {
 }
 
 export class ReportService {
+  shadowRunStatusText(summary: ShadowRunTelegramSummary): string {
+    const lines = [
+      '🌘 SHADOW RUN (NON-DESTRUKTIF)',
+      `- Runtime: ${summary.runtimeStatus} (${summary.runtimeDetail})`,
+      `- Shadow: ${summary.shadowStatus}`,
+      `- Public market: ${summary.publicMarket}`,
+      `- Private auth akun: ${summary.privateAuth}`,
+      `- Reconciliation/read-model: ${summary.reconciliation}`,
+      `- Hotlist/signal/opportunity: ${summary.hotlistSignalOpportunity}`,
+      `- Intelligence/spoof/pattern: ${summary.intelligenceSpoofPattern}`,
+      `- Evidence archive: ${summary.evidenceArchive}`,
+      `- Verdict: ${summary.verdict}`,
+    ];
+
+    if (summary.runId) {
+      lines.push(`- Run ID: ${summary.runId}`);
+    }
+    if (summary.startedAt) {
+      lines.push(`- Mulai: ${summary.startedAt}`);
+    }
+    if (summary.finishedAt) {
+      lines.push(`- Selesai: ${summary.finishedAt}`);
+    }
+    if (summary.blockReason) {
+      lines.push(`- Alasan blok: ${summary.blockReason}`);
+    }
+    if (summary.failureReason) {
+      lines.push(`- Alasan gagal: ${summary.failureReason}`);
+    }
+
+    if (summary.nextSteps.length > 0) {
+      lines.push('- Langkah perbaikan:');
+      for (const step of summary.nextSteps) {
+        lines.push(`  • ${step}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
   hotlistText(hotlist: Array<HotlistEntry | SignalCandidate>): string {
     if (!hotlist.length) {
       return '🔥 Hotlist kosong.';
