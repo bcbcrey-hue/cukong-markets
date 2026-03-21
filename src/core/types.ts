@@ -384,6 +384,15 @@ export interface IndodaxCallbackEvent {
   headers: Record<string, string>;
   bodyText: string;
   parsedBody: Record<string, unknown> | null;
+  verification: {
+    mode: 'required' | 'disabled';
+    verified: boolean;
+    signatureHeaderPresent: boolean;
+    timestampHeaderPresent: boolean;
+    nonceHeaderPresent: boolean;
+    timestampAgeMs: number | null;
+    nonceReused: boolean;
+  };
   receivedAt: string;
 }
 
@@ -398,6 +407,11 @@ export interface IndodaxCallbackState {
   rejectedCount: number;
   lastEventId: string | null;
   lastSourceHost: string | null;
+  lastVerificationAt: string | null;
+  nonceHistory: Array<{
+    nonce: string;
+    seenAt: string;
+  }>;
 }
 
 export interface PairRuntimeState {

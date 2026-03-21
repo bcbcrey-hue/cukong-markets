@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -188,6 +189,19 @@ async function main() {
     ];
 
     for (const payload of payloads) {
+      const body = JSON.stringify(payload);
+      const timestamp = String(Date.now());
+      const nonce = randomUUID();
+      const signature = createHmac(
+        'sha256',
+        process.env.INDODAX_CALLBACK_SIGNATURE_SECRET ?? 'probe-indodax-callback-secret',
+      )
+        .update(timestamp)
+        .update('.')
+        .update(nonce)
+        .update('.')
+        .update(body)
+        .digest('hex');
       const response = await fetch(
         `http://127.0.0.1:${callbackServer.getPort()}${process.env.INDODAX_CALLBACK_PATH}`,
         {
@@ -195,8 +209,11 @@ async function main() {
           headers: {
             'content-type': 'application/json',
             'x-forwarded-host': process.env.INDODAX_CALLBACK_ALLOWED_HOST ?? 'kangtrade.top',
+            [process.env.INDODAX_CALLBACK_SIGNATURE_HEADER ?? 'x-indodax-signature']: signature,
+            [process.env.INDODAX_CALLBACK_TIMESTAMP_HEADER ?? 'x-indodax-timestamp']: timestamp,
+            [process.env.INDODAX_CALLBACK_NONCE_HEADER ?? 'x-indodax-nonce']: nonce,
           },
-          body: JSON.stringify(payload),
+          body,
         },
       );
 

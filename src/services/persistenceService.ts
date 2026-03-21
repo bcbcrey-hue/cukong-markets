@@ -131,6 +131,8 @@ export function createDefaultIndodaxCallbackState(): IndodaxCallbackState {
     rejectedCount: 0,
     lastEventId: null,
     lastSourceHost: null,
+    lastVerificationAt: null,
+    nonceHistory: [],
   };
 }
 
