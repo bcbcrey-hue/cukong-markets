@@ -111,6 +111,7 @@ Probe yang sekarang masuk jalur resmi:
 - `tests/runtime_backend_regression.ts`
 - `tests/live_execution_hardening_probe.ts`
 - `tests/execution_summary_failed_probe.ts`
+- `tests/buy_entry_price_guard_probe.ts`
 - `tests/indodax_history_v2_probe.ts`
 - `tests/app_lifecycle_servers_probe.ts`
 - `tests/bootstrap_observability_probe.ts`
