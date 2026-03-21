@@ -1,4 +1,5 @@
 import { logger } from '../../core/logger';
+import { RequestPacer } from './requestPacer';
 
 export interface IndodaxTickerEntry {
   high: number;
@@ -57,43 +58,40 @@ function mapTickerEntry(name: string, raw: Record<string, unknown>): IndodaxTick
 }
 
 export class PublicApi {
-  private rateLimitQueue: Promise<void> = Promise.resolve();
-  private nextAllowedAtMs = 0;
+  private readonly pacer: RequestPacer;
 
   constructor(
     private readonly baseUrl: string,
     private readonly timeoutMs = 15_000,
     private readonly minIntervalMs = 250,
-  ) {}
-
-  private async waitForRateLimitSlot(): Promise<void> {
-    if (this.minIntervalMs <= 0) {
-      return;
-    }
-
-    const schedule = async (): Promise<void> => {
-      const now = Date.now();
-      const waitMs = Math.max(0, this.nextAllowedAtMs - now);
-      if (waitMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-      }
-      this.nextAllowedAtMs = Date.now() + this.minIntervalMs;
-    };
-
-    const next = this.rateLimitQueue.then(schedule, schedule);
-    this.rateLimitQueue = next.catch(() => undefined);
-    await next;
+  ) {
+    this.pacer = new RequestPacer(
+      {
+        market_data_scan: {
+          priority: 40,
+          minIntervalMs: this.minIntervalMs,
+        },
+      },
+      'indodax-public',
+    );
   }
 
   private async requestJson<T>(url: string, label: string, attempt = 1): Promise<T> {
     let response: Response;
 
-    await this.waitForRateLimitSlot();
-
     try {
-      response = await fetch(url, {
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await this.pacer.schedule(
+        {
+          lane: 'market_data_scan',
+          label,
+          requestPriority: 1,
+          coalesceKey: label,
+        },
+        () =>
+          fetch(url, {
+            signal: AbortSignal.timeout(this.timeoutMs),
+          }),
+      );
     } catch (error) {
       if (attempt < 2 && shouldRetryTransportError(error)) {
         logger.warn({ label, attempt, error }, 'retrying public api request after transport failure');

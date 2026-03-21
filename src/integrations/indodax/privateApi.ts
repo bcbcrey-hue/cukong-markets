@@ -1,14 +1,31 @@
 import crypto from 'node:crypto';
 import { toError } from '../../core/error-utils';
 import { createChildLogger } from '../../core/logger';
+import { RequestPacer } from './requestPacer';
 
 export interface IndodaxPrivateApiOptions {
   baseUrl: string;
   tradeApiV2BaseUrl?: string;
   timeoutMs?: number;
   minIntervalMs?: number;
+  laneMinIntervalsMs?: {
+    liveTrading?: number;
+    reconciliation?: number;
+    background?: number;
+  };
   apiKey: string;
   apiSecret: string;
+}
+
+export type IndodaxPrivateRequestLane =
+  | 'private_live_trading'
+  | 'private_reconciliation'
+  | 'background_recovery';
+
+export interface IndodaxPrivateRequestOptions {
+  lane?: IndodaxPrivateRequestLane;
+  requestPriority?: number;
+  coalesceKey?: string;
 }
 
 export interface IndodaxPrivateEnvelope<T> {
@@ -208,8 +225,7 @@ export class PrivateApi {
   private readonly apiKey: string;
   private readonly apiSecret: string;
   private readonly minIntervalMs: number;
-  private rateLimitQueue: Promise<void> = Promise.resolve();
-  private nextAllowedAtMs = 0;
+  private readonly pacer: RequestPacer;
 
   constructor(options: IndodaxPrivateApiOptions) {
     this.baseUrl = options.baseUrl;
@@ -218,6 +234,25 @@ export class PrivateApi {
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
     this.minIntervalMs = options.minIntervalMs ?? 300;
+    const laneIntervals = options.laneMinIntervalsMs ?? {};
+    this.pacer = new RequestPacer(
+      {
+        private_live_trading: {
+          priority: 100,
+          minIntervalMs: laneIntervals.liveTrading ?? this.minIntervalMs,
+        },
+        private_reconciliation: {
+          priority: 70,
+          minIntervalMs: laneIntervals.reconciliation ?? this.minIntervalMs,
+        },
+        background_recovery: {
+          priority: 30,
+          minIntervalMs: laneIntervals.background ?? this.minIntervalMs + 150,
+          maxQueueDepth: 150,
+        },
+      },
+      `indodax-private:${this.apiKey.slice(0, 6)}`,
+    );
   }
 
   private sign(payload: string): string {
@@ -238,31 +273,27 @@ export class PrivateApi {
       throw new Error(String(record.error));
     }
   }
-
-
-
-  private async waitForRateLimitSlot(): Promise<void> {
-    if (this.minIntervalMs <= 0) {
-      return;
-    }
-
-    const schedule = async (): Promise<void> => {
-      const now = Date.now();
-      const waitMs = Math.max(0, this.nextAllowedAtMs - now);
-      if (waitMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-      }
-      this.nextAllowedAtMs = Date.now() + this.minIntervalMs;
-    };
-
-    const next = this.rateLimitQueue.then(schedule, schedule);
-    this.rateLimitQueue = next.catch(() => undefined);
-    await next;
+  private async executeWithPacing<T>(
+    lane: IndodaxPrivateRequestLane,
+    label: string,
+    run: () => Promise<T>,
+    options?: IndodaxPrivateRequestOptions,
+  ): Promise<T> {
+    return this.pacer.schedule(
+      {
+        lane: options?.lane ?? lane,
+        label,
+        requestPriority: options?.requestPriority,
+        coalesceKey: options?.coalesceKey,
+      },
+      run,
+    );
   }
 
   private async post<T>(
     method: string,
     params: Record<string, string | number> = {},
+    options?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<T>> {
     const nonce = Date.now();
     const body = new URLSearchParams({
@@ -273,19 +304,23 @@ export class PrivateApi {
 
     let response: Response;
 
-    await this.waitForRateLimitSlot();
-
     try {
-      response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          Key: this.apiKey,
-          Sign: this.sign(body.toString()),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: body.toString(),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await this.executeWithPacing(
+        options?.lane ?? 'private_reconciliation',
+        `post:${method}`,
+        () =>
+          fetch(this.baseUrl, {
+            method: 'POST',
+            headers: {
+              Key: this.apiKey,
+              Sign: this.sign(body.toString()),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: body.toString(),
+            signal: AbortSignal.timeout(this.timeoutMs),
+          }),
+        options,
+      );
     } catch (error) {
       throw new Error(`Private API ${method} request failed`, {
         cause: toError(error),
@@ -309,6 +344,7 @@ export class PrivateApi {
     path: string,
     params: Record<string, string | number | undefined> = {},
     attempt = 1,
+    options?: IndodaxPrivateRequestOptions,
   ): Promise<T> {
     const query = new URLSearchParams(
       Object.entries(params)
@@ -328,23 +364,27 @@ export class PrivateApi {
 
     let response: Response;
 
-    await this.waitForRateLimitSlot();
-
     try {
-      response = await fetch(requestUrl, {
-        method: 'GET',
-        headers: {
-          'X-APIKEY': this.apiKey,
-          Sign: this.sign(query.toString()),
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await this.executeWithPacing(
+        options?.lane ?? 'private_reconciliation',
+        `get:${requestUrl.pathname}`,
+        () =>
+          fetch(requestUrl, {
+            method: 'GET',
+            headers: {
+              'X-APIKEY': this.apiKey,
+              Sign: this.sign(query.toString()),
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(this.timeoutMs),
+          }),
+        options,
+      );
     } catch (error) {
       if (attempt < 2 && shouldRetryTransportError(error)) {
         log.warn({ path: requestUrl.pathname, attempt, error }, 'retrying private api v2 get after transport failure');
-        return this.getV2<T>(path, params, attempt + 1);
+        return this.getV2<T>(path, params, attempt + 1, options);
       }
 
       throw new Error(`Private API GET ${requestUrl.pathname} request failed`, {
@@ -355,7 +395,7 @@ export class PrivateApi {
     if (!response.ok) {
       if (attempt < 2 && isRetriableStatus(response.status)) {
         log.warn({ path: requestUrl.pathname, attempt, status: response.status }, 'retrying private api v2 get after retriable status');
-        return this.getV2<T>(path, params, attempt + 1);
+        return this.getV2<T>(path, params, attempt + 1, options);
       }
 
       const errorPayload = await response
@@ -470,8 +510,8 @@ export class PrivateApi {
     };
   }
 
-  getInfo<T>(): Promise<IndodaxPrivateEnvelope<T>> {
-    return this.post<T>('getInfo');
+  getInfo<T>(options?: IndodaxPrivateRequestOptions): Promise<IndodaxPrivateEnvelope<T>> {
+    return this.post<T>('getInfo', {}, options);
   }
 
   trade(
@@ -479,39 +519,61 @@ export class PrivateApi {
     type: 'buy' | 'sell',
     price: number,
     amount: number,
+    options?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxTradeReturn>> {
     const amountField = type === 'buy' ? 'idr' : getSellAssetKey(pair);
 
-    return this.post<IndodaxTradeReturn>('trade', {
-      pair,
-      type,
-      price,
-      [amountField]: amount,
-    });
+    return this.post<IndodaxTradeReturn>(
+      'trade',
+      {
+        pair,
+        type,
+        price,
+        [amountField]: amount,
+      },
+      { lane: 'private_live_trading', requestPriority: 5, ...options },
+    );
   }
 
   cancelOrder(
     pair: string,
     orderId: string | number,
     type: 'buy' | 'sell',
+    options?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxCancelOrderReturn>> {
-    return this.post<IndodaxCancelOrderReturn>('cancelOrder', {
-      pair,
-      order_id: orderId,
-      type,
+    return this.post<IndodaxCancelOrderReturn>(
+      'cancelOrder',
+      {
+        pair,
+        order_id: orderId,
+        type,
+      },
+      { lane: 'private_live_trading', requestPriority: 6, ...options },
+    );
+  }
+
+  openOrders(
+    pair?: string,
+    options?: IndodaxPrivateRequestOptions,
+  ): Promise<IndodaxPrivateEnvelope<IndodaxOpenOrdersReturn>> {
+    return this.post<IndodaxOpenOrdersReturn>('openOrders', pair ? { pair } : {}, {
+      lane: 'private_reconciliation',
+      requestPriority: 2,
+      coalesceKey: options?.coalesceKey ?? `openOrders:${pair ?? 'all'}`,
+      ...options,
     });
   }
 
-  openOrders(pair?: string): Promise<IndodaxPrivateEnvelope<IndodaxOpenOrdersReturn>> {
-    return this.post<IndodaxOpenOrdersReturn>('openOrders', pair ? { pair } : {});
-  }
-
-  orderHistory(pair?: string): Promise<IndodaxPrivateEnvelope<IndodaxOrderHistoryReturn>> {
-    return this.post<IndodaxOrderHistoryReturn>('orderHistory', pair ? { pair } : {});
+  orderHistory(
+    pair?: string,
+    options?: IndodaxPrivateRequestOptions,
+  ): Promise<IndodaxPrivateEnvelope<IndodaxOrderHistoryReturn>> {
+    return this.post<IndodaxOrderHistoryReturn>('orderHistory', pair ? { pair } : {}, options);
   }
 
   async orderHistoriesV2(
     options: IndodaxHistoryQueryOptions = {},
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxOrderHistoryReturn>> {
     const symbol = toTradeApiV2Symbol(options.pair);
     if (!symbol) {
@@ -520,13 +582,18 @@ export class PrivateApi {
 
     assertWindowWithinSevenDays('orderHistoriesV2', options.startTime, options.endTime);
 
-    const payload = await this.getV2<unknown>('/api/v2/order/histories', {
-      symbol,
-      startTime: options.startTime,
-      endTime: options.endTime,
-      limit: normalizeHistoryLimit(options.limit, 100),
-      sort: options.sort,
-    });
+    const payload = await this.getV2<unknown>(
+      '/api/v2/order/histories',
+      {
+        symbol,
+        startTime: options.startTime,
+        endTime: options.endTime,
+        limit: normalizeHistoryLimit(options.limit, 100),
+        sort: options.sort,
+      },
+      1,
+      requestOptions,
+    );
 
     const items = collectItems(payload, ['data', 'results', 'items', 'orders', 'histories']);
     return {
@@ -539,12 +606,16 @@ export class PrivateApi {
     };
   }
 
-  tradeHistory(pair?: string): Promise<IndodaxPrivateEnvelope<IndodaxTradeHistoryReturn>> {
-    return this.post<IndodaxTradeHistoryReturn>('tradeHistory', pair ? { pair } : {});
+  tradeHistory(
+    pair?: string,
+    options?: IndodaxPrivateRequestOptions,
+  ): Promise<IndodaxPrivateEnvelope<IndodaxTradeHistoryReturn>> {
+    return this.post<IndodaxTradeHistoryReturn>('tradeHistory', pair ? { pair } : {}, options);
   }
 
   async myTradesV2(
     options: IndodaxHistoryQueryOptions = {},
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxTradeHistoryReturn>> {
     const symbol = toTradeApiV2Symbol(options.pair);
     if (!symbol) {
@@ -553,14 +624,19 @@ export class PrivateApi {
 
     assertWindowWithinSevenDays('myTradesV2', options.startTime, options.endTime);
 
-    const payload = await this.getV2<unknown>('/api/v2/myTrades', {
-      symbol,
-      startTime: options.startTime,
-      endTime: options.endTime,
-      limit: normalizeHistoryLimit(options.limit, 500),
-      orderId: options.orderId,
-      sort: options.sort,
-    });
+    const payload = await this.getV2<unknown>(
+      '/api/v2/myTrades',
+      {
+        symbol,
+        startTime: options.startTime,
+        endTime: options.endTime,
+        limit: normalizeHistoryLimit(options.limit, 500),
+        orderId: options.orderId,
+        sort: options.sort,
+      },
+      1,
+      requestOptions,
+    );
 
     const items = collectItems(payload, ['data', 'results', 'items', 'trades']);
     return {
@@ -576,10 +652,15 @@ export class PrivateApi {
   getOrder(
     pair: string,
     orderId: string | number,
+    options?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxGetOrderReturn>> {
-    return this.post<IndodaxGetOrderReturn>('getOrder', {
-      pair,
-      order_id: orderId,
-    });
+    return this.post<IndodaxGetOrderReturn>(
+      'getOrder',
+      {
+        pair,
+        order_id: orderId,
+      },
+      { lane: 'private_live_trading', requestPriority: 4, ...options },
+    );
   }
 }
