@@ -41,12 +41,14 @@ Dokumen ini hanya mencatat perubahan yang benar-benar masuk ke source aktual.
 - SELL manual sekarang menolak exit price yang invalid
 - `src/domain/trading/riskEngine.ts` sekarang memblok entry jika ukuran posisi atau reference price signal invalid
 - `src/integrations/indodax/publicApi.ts` dan `src/integrations/indodax/privateApi.ts` sekarang memakai timeout request nyata via `INDODAX_TIMEOUT_MS`
+- GET public/private API sekarang punya retry aman untuk failure retriable; POST trading/cancel tetap tidak di-retry agar tidak memicu duplicate live order
+- live submit yang ambigu karena timeout/network tidak lagi langsung direject; runtime menandai `submission_uncertain`, mencoba reconcile via `openOrders`/history, dan `cancelAllOrders()` tidak lagi melakukan local cancel berbahaya untuk order tanpa `exchangeOrderId`
 
 ### 5. Env contract / docs truthfulness
 
 - `.env.example` sekarang benar-benar ada dan sinkron dengan env yang dibaca runtime
 - `README.md` disesuaikan agar tidak lagi overclaim status live trading
-- `test:probes` resmi sekarang memasukkan `bootstrap_observability_probe`, `worker_timeout_probe`, dan `buy_entry_price_guard_probe`
+- `test:probes` resmi sekarang memasukkan `bootstrap_observability_probe`, `worker_timeout_probe`, `buy_entry_price_guard_probe`, dan `live_submission_uncertain_probe`
 
 ## Validasi yang benar-benar dijalankan
 
@@ -71,5 +73,5 @@ Belum.
 
 Blocker utama yang masih tersisa:
 
-- submit live order timeout/network masih belum punya pembuktian aman end-to-end jika exchange menerima order tetapi response tidak kembali lengkap
+- jalur `submission_uncertain` sudah dimitigasi di source, tetapi belum ada pembuktian exchange nyata untuk semua edge case identifikasi order pasca-timeout
 - belum ada pembuktian operasional nyata dari repo ini untuk live shadow-run/non-destruktif auth check exchange

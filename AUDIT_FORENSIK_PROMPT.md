@@ -13,6 +13,8 @@ Dokumen ini sekarang merekam status audit keras terbaru terhadap source aktual.
 - `.env.example` tidak ada walau dokumentasi mengklaim ada
 - timeout env untuk request Indodax sudah didefinisikan tetapi belum dipakai runtime
 - BUY path masih bisa bergerak dengan reference/entry price invalid
+- failure live submit yang ambigu sebelumnya masih bisa berakhir terlalu parsial dan berbahaya untuk operator
+- GET request ke API belum punya retry aman, sementara POST trading memang tidak boleh diretry sembarangan
 - log worker exit saat shutdown normal memberi false signal seolah runtime rusak
 
 ### Deploy / config issue yang dibedakan dari source bug
@@ -46,5 +48,5 @@ Dokumen ini sekarang merekam status audit keras terbaru terhadap source aktual.
 
 ## Blocker live yang masih tersisa
 
-- ambiguous exchange order submission setelah timeout/network error belum terbukti aman end-to-end
+- jalur `submission_uncertain` sudah dimitigasi di source tetapi belum terbukti end-to-end terhadap exchange nyata untuk semua edge case
 - belum ada bukti operasional nyata dari repo ini untuk live shadow-run atau auth check exchange non-destruktif

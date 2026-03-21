@@ -16,7 +16,9 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 - error bootstrap yang tadinya bisa menutup root cause sekarang sudah memuat phase, stack, dan cause
 - logger tidak lagi menyembunyikan object error penting sebagai `{}`
 - request public/private API sekarang benar-benar memakai timeout runtime
+- GET public/private API sekarang punya retry aman untuk failure retriable; POST trading tetap tidak di-retry agar tidak memicu duplicate order
 - BUY tidak lagi boleh lahir dari reference/entry price yang invalid
+- live submit yang ambigu sekarang masuk `submission_uncertain` lalu dicoba direkonsiliasi otomatis via `openOrders`/history sebelum dianggap final
 - false alarm worker exit saat shutdown normal sudah dibersihkan dari log
 
 ## Status verifikasi terbaru
@@ -33,5 +35,5 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
 ## Blocker jujur yang masih tersisa
 
-- ambiguous live order submission setelah timeout/network error belum terbukti aman end-to-end
+- jalur `submission_uncertain` sudah lebih aman di source tetapi belum terbukti end-to-end terhadap exchange nyata untuk seluruh edge case
 - belum ada pembuktian exchange live shadow-run/non-destruktif dari repo ini

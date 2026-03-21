@@ -10,6 +10,7 @@ import type {
   TradingMode,
 } from '../../core/types';
 import { getIndodaxHistoryMode } from '../../config/env';
+import { errorMessage, toError } from '../../core/error-utils';
 import { logger } from '../../core/logger';
 import { nowIso } from '../../utils/time';
 import { IndodaxClient } from '../../integrations/indodax/client';
@@ -99,6 +100,48 @@ export class ExecutionEngine {
   private getPrivateApi(accountId: string) {
     const account = this.accounts.getById(accountId);
     return account ? this.indodax.forAccount(account) : null;
+  }
+
+  private isAmbiguousSubmissionError(error: unknown): boolean {
+    const normalized = toError(error);
+    const message = normalized.message.toLowerCase();
+    const name = normalized.name.toLowerCase();
+    const code = String((normalized as Error & { code?: unknown }).code ?? '').toLowerCase();
+    const markers = [
+      'abort',
+      'timeout',
+      'timed out',
+      'network',
+      'fetch failed',
+      'socket hang up',
+      'econnreset',
+      'etimedout',
+      'eai_again',
+      'enotfound',
+      'ehostunreach',
+      'enetunreach',
+    ];
+
+    return markers.some((marker) =>
+      message.includes(marker) || name.includes(marker) || code.includes(marker),
+    );
+  }
+
+  private normalizeExchangeSide(value: unknown): 'buy' | 'sell' | '' {
+    if (typeof value !== 'string') {
+      return '';
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'buy' || normalized === 'sell' ? normalized : '';
+  }
+
+  private isCloseNumber(expected: number, actual: number, tolerancePct = 0.03): boolean {
+    if (!Number.isFinite(expected) || !Number.isFinite(actual) || expected <= 0 || actual <= 0) {
+      return false;
+    }
+
+    return Math.abs(actual - expected) / expected <= tolerancePct;
   }
 
   private deriveExecutionAccuracy(
@@ -228,6 +271,54 @@ export class ExecutionEngine {
       remainingQuantity,
       averageFillPrice: this.toFiniteNumber(exchangeOrder.price) ?? order.averageFillPrice ?? order.price,
     };
+  }
+
+  private isProbableExchangeOrderMatch(
+    order: OrderRecord,
+    exchangeOrder: Record<string, string | number>,
+  ): boolean {
+    const side = this.normalizeExchangeSide(exchangeOrder.type ?? exchangeOrder.side);
+    if (side && side !== order.side) {
+      return false;
+    }
+
+    const asset = this.baseAsset(order.pair);
+    const quantity =
+      this.toFiniteNumber(exchangeOrder[`order_${asset}`]) ??
+      this.toFiniteNumber(exchangeOrder[asset]) ??
+      this.toFiniteNumber(exchangeOrder.amount) ??
+      this.toFiniteNumber(exchangeOrder.quantity);
+    const price = this.toFiniteNumber(exchangeOrder.price);
+
+    if (price !== null && !this.isCloseNumber(order.price, price)) {
+      return false;
+    }
+
+    if (quantity !== null && !this.isCloseNumber(order.quantity, quantity)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private findProbableOpenOrderMatch(
+    order: OrderRecord,
+    openOrders: Map<string, ExchangeOpenOrderMatch>,
+  ): ExchangeOpenOrderMatch | null {
+    const matches = Array.from(openOrders.values()).filter(
+      (candidate) =>
+        candidate.pair === order.pair && this.isProbableExchangeOrderMatch(order, candidate.order),
+    );
+
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  private findProbableOrderHistoryMatches(
+    order: OrderRecord,
+    payload: IndodaxOrderHistoryReturn,
+  ): Array<Record<string, string | number>> {
+    const orders = Array.isArray(payload.orders) ? payload.orders : [];
+    return orders.filter((candidate) => this.isProbableExchangeOrderMatch(order, candidate));
   }
 
   private buildExchangeSnapshot(
@@ -708,6 +799,183 @@ export class ExecutionEngine {
       remainingQuantity: Math.max(0, order.quantity - filledQuantity),
       averageFillPrice: tradeStats.averageFillPrice ?? order.averageFillPrice ?? order.price,
     };
+  }
+
+  private async markSubmissionUncertain(
+    order: OrderRecord,
+    side: 'buy' | 'sell',
+    error: unknown,
+  ): Promise<OrderRecord | undefined> {
+    const uncertainOrder = await this.orders.update(order.id, {
+      status: 'OPEN',
+      exchangeStatus: 'submission_uncertain',
+      exchangeUpdatedAt: nowIso(),
+      notes: this.appendNotes(order.notes, `${side} submission uncertain: ${errorMessage(error)}`),
+    });
+
+    if (!uncertainOrder) {
+      return uncertainOrder;
+    }
+
+    await this.publishExecutionSummary(
+      uncertainOrder,
+      'OPTIMISTIC_LIVE',
+      `${side} submission uncertain after transport error`,
+    );
+    await this.journal.warn(
+      'LIVE_ORDER_SUBMISSION_UNCERTAIN',
+      `${side} submission uncertain; reconciliation required`,
+      {
+        orderId: uncertainOrder.id,
+        pair: uncertainOrder.pair,
+        accountId: uncertainOrder.accountId,
+        error: errorMessage(error),
+      },
+    );
+
+    return uncertainOrder;
+  }
+
+  private async resolveSubmissionUncertainFromHistory(
+    order: OrderRecord,
+  ): Promise<OrderRecord | undefined> {
+    const api = this.getPrivateApi(order.accountId);
+    if (!api) {
+      return order;
+    }
+
+    const probableMatches: Array<Record<string, string | number>> = [];
+    const mode = getIndodaxHistoryMode();
+
+    if (mode === 'legacy') {
+      if (typeof (api as { orderHistory?: unknown }).orderHistory !== 'function') {
+        return order;
+      }
+
+      const response = await api.orderHistory(order.pair);
+      probableMatches.push(...this.findProbableOrderHistoryMatches(order, response.return ?? {}));
+    } else {
+      if (typeof (api as { orderHistoriesV2?: unknown }).orderHistoriesV2 !== 'function') {
+        return order;
+      }
+
+      const windows = this.buildOrderHistorySearchWindows(order).slice(0, 2);
+      for (const window of windows) {
+        const response = await api.orderHistoriesV2({
+          pair: order.pair,
+          startTime: window.startTime,
+          endTime: window.endTime,
+          limit: 1000,
+          sort: 'asc',
+        });
+        probableMatches.push(...this.findProbableOrderHistoryMatches(order, response.return ?? {}));
+      }
+    }
+
+    const uniqueMatches = probableMatches.filter(
+      (candidate, index, items) =>
+        items.findIndex(
+          (item) => String(item.order_id ?? '') === String(candidate.order_id ?? ''),
+        ) === index,
+    );
+
+    if (uniqueMatches.length !== 1) {
+      return order;
+    }
+
+    const historyMatch = uniqueMatches[0];
+    const exchangeOrderId = String(historyMatch.order_id ?? '');
+    if (!exchangeOrderId) {
+      return order;
+    }
+
+    const attached = await this.orders.update(order.id, {
+      exchangeOrderId,
+      exchangeStatus: 'matched_from_order_history_after_submission_uncertain',
+      exchangeUpdatedAt: nowIso(),
+      notes: this.appendNotes(order.notes, `exchangeOrderId=${exchangeOrderId}`),
+    });
+
+    if (!attached) {
+      return attached;
+    }
+
+    const tradeStats = await this.loadTradeStats(attached);
+    return this.syncOrderWithSnapshot(
+      attached,
+      this.mergeTradeStatsIntoSnapshot(
+        this.buildExchangeSnapshotFromOrderFields(attached, historyMatch, 'closed'),
+        tradeStats,
+      ),
+      mode === 'legacy' ? 'orderHistory' : 'orderHistoryV2',
+      tradeStats,
+    );
+  }
+
+  private async resolveSubmissionUncertainOrder(
+    order: OrderRecord,
+    openOrders?: Map<string, ExchangeOpenOrderMatch>,
+  ): Promise<OrderRecord | undefined> {
+    if (order.exchangeOrderId || order.exchangeStatus !== 'submission_uncertain') {
+      return order;
+    }
+
+    const accountOpenOrders = openOrders ?? (await this.fetchOpenOrdersForAccount(order.accountId));
+    const probableOpenOrder = this.findProbableOpenOrderMatch(order, accountOpenOrders);
+
+    if (probableOpenOrder) {
+      const exchangeOrderId = String(probableOpenOrder.order.order_id ?? '');
+      const attached = await this.orders.update(order.id, {
+        exchangeOrderId,
+        exchangeStatus: 'matched_from_open_orders_after_submission_uncertain',
+        exchangeUpdatedAt: nowIso(),
+        notes: this.appendNotes(order.notes, `exchangeOrderId=${exchangeOrderId}`),
+      });
+
+      if (!attached) {
+        return attached;
+      }
+
+      const tradeStats = await this.loadTradeStats(attached);
+      return this.syncOrderWithSnapshot(
+        attached,
+        this.mergeTradeStatsIntoSnapshot(
+          this.buildExchangeSnapshotFromOrderFields(attached, probableOpenOrder.order, 'open'),
+          tradeStats,
+        ),
+        'openOrders',
+        tradeStats,
+      );
+    }
+
+    try {
+      const resolvedFromHistory = await this.resolveSubmissionUncertainFromHistory(order);
+      if (resolvedFromHistory?.exchangeOrderId) {
+        return resolvedFromHistory;
+      }
+    } catch (error) {
+      await this.journal.warn(
+        'LIVE_ORDER_SUBMISSION_UNCERTAIN_HISTORY_LOOKUP_FAILED',
+        errorMessage(error),
+        {
+          orderId: order.id,
+          pair: order.pair,
+          accountId: order.accountId,
+        },
+      );
+    }
+
+    await this.journal.warn(
+      'LIVE_ORDER_SUBMISSION_UNCERTAIN_UNRESOLVED',
+      'submission uncertain belum dapat direkonsiliasi otomatis',
+      {
+        orderId: order.id,
+        pair: order.pair,
+        accountId: order.accountId,
+      },
+    );
+
+    return order;
   }
 
   private async syncOrderWithSnapshot(
@@ -1343,6 +1611,19 @@ export class ExecutionEngine {
 
       return this.formatLiveOrderMessage('BUY', synced ?? order);
     } catch (error) {
+      if (this.isAmbiguousSubmissionError(error)) {
+        const uncertainOrder = await this.markSubmissionUncertain(order, 'buy', error);
+        const reconciledOrder = uncertainOrder
+          ? await this.resolveSubmissionUncertainOrder(uncertainOrder)
+          : uncertainOrder;
+
+        if (reconciledOrder?.exchangeOrderId) {
+          return this.formatLiveOrderMessage('BUY', reconciledOrder);
+        }
+
+        return `BUY live ${signal.pair} submission uncertain; reconciliation pending`;
+      }
+
       const rejectedOrder = await this.orders.reject(
         order.id,
         error instanceof Error ? error.message : 'live buy failed',
@@ -1515,6 +1796,19 @@ export class ExecutionEngine {
 
       return this.formatLiveOrderMessage('SELL', synced ?? order);
     } catch (error) {
+      if (this.isAmbiguousSubmissionError(error)) {
+        const uncertainOrder = await this.markSubmissionUncertain(order, 'sell', error);
+        const reconciledOrder = uncertainOrder
+          ? await this.resolveSubmissionUncertainOrder(uncertainOrder)
+          : uncertainOrder;
+
+        if (reconciledOrder?.exchangeOrderId) {
+          return this.formatLiveOrderMessage('SELL', reconciledOrder);
+        }
+
+        return `SELL live ${position.pair} submission uncertain; reconciliation pending`;
+      }
+
       const rejectedOrder = await this.orders.reject(
         order.id,
         error instanceof Error ? error.message : 'live sell failed',
@@ -1538,7 +1832,7 @@ export class ExecutionEngine {
 
     const activeOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId));
+      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
     const messages: string[] = [];
     const processedOrderIds = new Set<string>();
     const ordersByAccount = new Map<string, OrderRecord[]>();
@@ -1555,6 +1849,20 @@ export class ExecutionEngine {
 
         for (const order of accountOrders) {
           if (!order.exchangeOrderId) {
+            if (order.exchangeStatus !== 'submission_uncertain') {
+              continue;
+            }
+
+            processedOrderIds.add(order.id);
+            const beforeExchangeOrderId = order.exchangeOrderId;
+            const resolved = await this.resolveSubmissionUncertainOrder(order, openOrders);
+            if (resolved && (resolved.exchangeOrderId !== beforeExchangeOrderId || resolved.status !== order.status)) {
+              messages.push(
+                resolved.exchangeOrderId
+                  ? this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved)
+                  : `${resolved.side.toUpperCase()} live ${resolved.pair} submission uncertain; reconciliation pending`,
+              );
+            }
             continue;
           }
 
@@ -1606,6 +1914,16 @@ export class ExecutionEngine {
       }
 
       try {
+        if (!activeOrder.exchangeOrderId && activeOrder.exchangeStatus === 'submission_uncertain') {
+          const resolved = await this.resolveSubmissionUncertainOrder(activeOrder);
+          if (resolved && resolved.exchangeOrderId) {
+            messages.push(
+              this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved),
+            );
+          }
+          continue;
+        }
+
         const beforeStatus = activeOrder.status;
         const beforeFilled = activeOrder.filledQuantity;
         let synced = await this.syncLiveOrder(activeOrder.id);
@@ -1644,7 +1962,7 @@ export class ExecutionEngine {
 
     const activeLiveOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId));
+      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
 
     if (activeLiveOrders.length === 0) {
       return [];
@@ -1695,9 +2013,24 @@ export class ExecutionEngine {
     }
 
     let count = 0;
+    let unresolved = 0;
 
     for (const order of this.orders.listActive()) {
       const account = this.accounts.getById(order.accountId);
+
+      if (!order.exchangeOrderId && order.exchangeStatus === 'submission_uncertain') {
+        unresolved += 1;
+        await this.journal.warn(
+          'CANCEL_SKIPPED_SUBMISSION_UNCERTAIN',
+          'cancel dilewati karena order submission uncertain belum punya exchangeOrderId',
+          {
+            orderId: order.id,
+            pair: order.pair,
+            accountId: order.accountId,
+          },
+        );
+        continue;
+      }
 
       if (order.exchangeOrderId && account) {
         const api = this.indodax.forAccount(account);
@@ -1729,7 +2062,9 @@ export class ExecutionEngine {
       count += 1;
     }
 
-    return `Canceled ${count} active orders`;
+    return unresolved > 0
+      ? `Canceled ${count} active orders; unresolved ${unresolved} submission-uncertain orders`
+      : `Canceled ${count} active orders`;
   }
 
   async sellAllPositions(): Promise<string> {

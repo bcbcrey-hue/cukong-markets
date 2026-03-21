@@ -23,7 +23,9 @@ Yang benar-benar sudah terbukti lewat build/lint/probe:
 - `test:probes` resmi sekarang juga menjalankan `bootstrap_observability_probe`, `worker_timeout_probe`, dan `buy_entry_price_guard_probe`
 - `.env.example` sekarang benar-benar ada dan sinkron dengan kontrak env runtime yang dipakai source
 - `INDODAX_TIMEOUT_MS` sekarang benar-benar dipakai untuk request public/private API
+- GET public/private API sekarang punya retry aman untuk status/transport failure yang retriable, sementara POST trading **tidak** di-retry agar tidak berbahaya di kondisi gagal parsial
 - validasi harga entry BUY tidak lagi membiarkan order lahir dari reference/entry price yang invalid
+- submit live order yang gagal ambigu karena timeout/network sekarang masuk state `submission_uncertain` dan dicoba direkonsiliasi otomatis via `openOrders`/history sebelum dianggap final
 - jalur history/recovery Indodax tetap canonical ke V2 untuk scope migrasi yang memang di-claim repo
 
 ## Status yang masih harus jujur
@@ -47,7 +49,7 @@ Untuk live trading nyata, status sekarang: **BELUM SIAP LIVE**.
 Blocker jujur yang masih tersisa:
 
 - submit live order ke exchange belum punya pembuktian end-to-end non-destruktif di repo ini
-- jalur ambiguous failure setelah request trade timeout/network error masih belum punya bukti reconciliation aman terhadap order yang mungkin sudah diterima exchange tetapi belum mengembalikan `order_id`
+- jalur `submission_uncertain` sekarang sudah lebih aman, tetapi masih belum terbukti terhadap exchange nyata untuk semua edge case ketika order diterima namun belum bisa diidentifikasi unik dari side exchange
 - tidak ada bukti operasional nyata dari repo ini bahwa auth check exchange dan live shadow-run sudah tervalidasi aman
 
 ## Env contract runtime
@@ -112,6 +114,7 @@ Probe yang sekarang masuk jalur resmi:
 - `tests/live_execution_hardening_probe.ts`
 - `tests/execution_summary_failed_probe.ts`
 - `tests/buy_entry_price_guard_probe.ts`
+- `tests/live_submission_uncertain_probe.ts`
 - `tests/indodax_history_v2_probe.ts`
 - `tests/app_lifecycle_servers_probe.ts`
 - `tests/bootstrap_observability_probe.ts`

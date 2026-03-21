@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { toError } from '../../core/error-utils';
+import { createChildLogger } from '../../core/logger';
 
 export interface IndodaxPrivateApiOptions {
   baseUrl: string;
@@ -60,6 +61,8 @@ export interface IndodaxCancelOrderReturn {
   client_order_id?: string;
   status?: string;
 }
+
+const log = createChildLogger({ module: 'indodax-private-api' });
 
 function getSellAssetKey(pair: string): string {
   const [baseAsset] = pair.toLowerCase().split('_');
@@ -177,6 +180,26 @@ function normalizeHistoryLimit(limit: number | undefined, fallback: number): num
   return Number.isFinite(normalized) ? normalized : fallback;
 }
 
+function isRetriableStatus(status: number): boolean {
+  return [408, 429, 500, 502, 503, 504].includes(status);
+}
+
+function shouldRetryTransportError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return [
+    'abort',
+    'timeout',
+    'timed out',
+    'network',
+    'fetch failed',
+    'socket hang up',
+    'econnreset',
+    'etimedout',
+    'eai_again',
+    'enotfound',
+  ].some((marker) => message.includes(marker));
+}
+
 export class PrivateApi {
   private readonly baseUrl: string;
   private readonly tradeApiV2BaseUrl: string;
@@ -257,6 +280,7 @@ export class PrivateApi {
   private async getV2<T>(
     path: string,
     params: Record<string, string | number | undefined> = {},
+    attempt = 1,
   ): Promise<T> {
     const query = new URLSearchParams(
       Object.entries(params)
@@ -288,12 +312,22 @@ export class PrivateApi {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
+      if (attempt < 2 && shouldRetryTransportError(error)) {
+        log.warn({ path: requestUrl.pathname, attempt, error }, 'retrying private api v2 get after transport failure');
+        return this.getV2<T>(path, params, attempt + 1);
+      }
+
       throw new Error(`Private API GET ${requestUrl.pathname} request failed`, {
         cause: toError(error),
       });
     }
 
     if (!response.ok) {
+      if (attempt < 2 && isRetriableStatus(response.status)) {
+        log.warn({ path: requestUrl.pathname, attempt, status: response.status }, 'retrying private api v2 get after retriable status');
+        return this.getV2<T>(path, params, attempt + 1);
+      }
+
       const errorPayload = await response
         .json()
         .catch(async () => ({ error: await response.text().catch(() => '') }));

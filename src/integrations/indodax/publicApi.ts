@@ -22,6 +22,26 @@ function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isRetriableStatus(status: number): boolean {
+  return [408, 429, 500, 502, 503, 504].includes(status);
+}
+
+function shouldRetryTransportError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return [
+    'abort',
+    'timeout',
+    'timed out',
+    'network',
+    'fetch failed',
+    'socket hang up',
+    'econnreset',
+    'etimedout',
+    'eai_again',
+    'enotfound',
+  ].some((marker) => message.includes(marker));
+}
+
 function mapTickerEntry(name: string, raw: Record<string, unknown>): IndodaxTickerEntry {
   return {
     name,
@@ -42,7 +62,7 @@ export class PublicApi {
     private readonly timeoutMs = 15_000,
   ) {}
 
-  private async requestJson<T>(url: string, label: string): Promise<T> {
+  private async requestJson<T>(url: string, label: string, attempt = 1): Promise<T> {
     let response: Response;
 
     try {
@@ -50,12 +70,22 @@ export class PublicApi {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
+      if (attempt < 2 && shouldRetryTransportError(error)) {
+        logger.warn({ label, attempt, error }, 'retrying public api request after transport failure');
+        return this.requestJson<T>(url, label, attempt + 1);
+      }
+
       throw new Error(`Public API ${label} request failed`, {
         cause: error instanceof Error ? error : new Error(String(error)),
       });
     }
 
     if (!response.ok) {
+      if (attempt < 2 && isRetriableStatus(response.status)) {
+        logger.warn({ label, attempt, status: response.status }, 'retrying public api request after retriable status');
+        return this.requestJson<T>(url, label, attempt + 1);
+      }
+
       throw new Error(`Public API ${label} failed: ${response.status}`);
     }
 
