@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { JournalEntry } from '../core/types';
+import type { JournalEntry, ShadowRunEvidence } from '../core/types';
 import { PersistenceService } from './persistenceService';
 
 export class JournalService {
@@ -57,5 +57,13 @@ export class JournalService {
       payload,
       createdAt: new Date().toISOString(),
     });
+  }
+
+  async recordShadowRunEvidence(evidence: ShadowRunEvidence): Promise<void> {
+    await this.persistence.appendShadowRunEvidence(evidence);
+  }
+
+  async listShadowRunEvidence(): Promise<ShadowRunEvidence[]> {
+    return this.persistence.readShadowRunEvidence();
   }
 }

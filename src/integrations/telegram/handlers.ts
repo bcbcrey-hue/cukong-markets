@@ -36,6 +36,7 @@ import {
   positionsKeyboard,
   positionsMenuKeyboard,
   riskSettingsKeyboard,
+  shadowRunKeyboard,
   settingsKeyboard,
   strategySettingsKeyboard,
   type TelegramMenuId,
@@ -210,7 +211,7 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
         isTelegramMenuId(parsed.value)
       );
     case 'RUN':
-      return ['START', 'STOP', 'STATUS'].includes(parsed.action);
+      return ['START', 'STOP', 'STATUS', 'SHADOW_START', 'SHADOW_STATUS'].includes(parsed.action);
     case 'ACC':
       return ['LIST', 'UPLOAD', 'RELOAD'].includes(parsed.action);
     case 'SET':
@@ -296,7 +297,7 @@ async function openMenu(
         ctx,
         [
           'Main Menu aktif.',
-          'Pilih 1 dari 7 kategori utama untuk masuk ke submenu yang rapi.',
+          'Pilih 1 dari kategori utama untuk masuk ke submenu yang rapi.',
           'Semua aksi tetap terhubung tanpa dashboard flat lama.',
         ].join('\n'),
       );
@@ -400,6 +401,17 @@ async function openMenu(
       );
       return;
     }
+    case 'SHADOW':
+      await replyText(
+        ctx,
+        [
+          '🌘 SHADOW RUN',
+          'Mode cek non-destruktif ke exchange nyata tanpa submit buy/sell/cancel.',
+          'Default aman: shadow-run diblok saat runtime utama masih RUNNING.',
+        ].join('\n'),
+        shadowRunKeyboard,
+      );
+      return;
     case 'STATUS':
       await replyStatus(ctx, deps);
       return;
@@ -557,6 +569,11 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     await openMenu(ctx, deps, 'BKT');
   });
 
+  bot.hears(TELEGRAM_MAIN_MENU.SHADOW, async (ctx) => {
+    if (await denyTelegramAccess(ctx)) return;
+    await openMenu(ctx, deps, 'SHADOW');
+  });
+
   bot.hears(TELEGRAM_ACTION.START, async (ctx) => {
     if (await denyTelegramAccess(ctx)) return;
     await startRuntime(ctx, deps);
@@ -623,6 +640,20 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     if (parsed.namespace === 'RUN' && parsed.action === 'STATUS') {
       await replyStatus(ctx, deps);
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'RUN' && parsed.action === 'SHADOW_START') {
+      const summary = deps.execution.triggerShadowRunFromTelegram();
+      await replyText(ctx, deps.report.shadowRunStatusText(summary), shadowRunKeyboard);
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'RUN' && parsed.action === 'SHADOW_STATUS') {
+      const summary = deps.execution.getShadowRunTelegramSummary();
+      await replyText(ctx, deps.report.shadowRunStatusText(summary), shadowRunKeyboard);
       await ctx.answerCbQuery();
       return;
     }

@@ -31,7 +31,8 @@ export type TelegramMenuId =
   | 'POS_LIST'
   | 'ORD_LIST'
   | 'BUY_MENU'
-  | 'SELL_MENU';
+  | 'SELL_MENU'
+  | 'SHADOW';
 
 const telegramMenuIds: TelegramMenuId[] = [
   'ROOT',
@@ -57,6 +58,7 @@ const telegramMenuIds: TelegramMenuId[] = [
   'ORD_LIST',
   'BUY_MENU',
   'SELL_MENU',
+  'SHADOW',
 ];
 
 export function isTelegramMenuId(value?: string): value is TelegramMenuId {
@@ -71,6 +73,7 @@ export const TELEGRAM_MAIN_MENU = {
   SETTINGS: '⚙️ Settings',
   ACCOUNTS: '👤 Accounts',
   BACKTEST: '🧪 Backtest',
+  SHADOW: '🌘 Shadow Run',
 } as const;
 
 export const TELEGRAM_ACTION = {
@@ -105,6 +108,9 @@ export const TELEGRAM_ACTION = {
   PAUSE_ALL: '🛑 Pause All → OFF',
   CANCEL_ALL: '🧹 Cancel All Orders',
   SELL_ALL: '💥 Sell All Positions',
+  SHADOW_CATEGORY: '🌘 Shadow Run',
+  SHADOW_RUN: '▶️ Jalankan Shadow',
+  SHADOW_STATUS: '📌 Status Shadow',
 } as const;
 
 function openMenuCallback(menuId: TelegramMenuId): string {
@@ -127,7 +133,7 @@ export const mainMenuKeyboard = Markup.keyboard([
   [TELEGRAM_MAIN_MENU.EXECUTE, TELEGRAM_MAIN_MENU.EMERGENCY],
   [TELEGRAM_MAIN_MENU.MONITORING, TELEGRAM_MAIN_MENU.TRADE],
   [TELEGRAM_MAIN_MENU.SETTINGS, TELEGRAM_MAIN_MENU.ACCOUNTS],
-  [TELEGRAM_MAIN_MENU.BACKTEST],
+  [TELEGRAM_MAIN_MENU.BACKTEST, TELEGRAM_MAIN_MENU.SHADOW],
 ]).resize();
 
 export const executeTradeKeyboard = Markup.inlineKeyboard([
@@ -301,3 +307,9 @@ export function backtestKeyboard(currentPair?: string) {
     [backButton('BKT')],
   ]);
 }
+
+export const shadowRunKeyboard = Markup.inlineKeyboard([
+  [Markup.button.callback(TELEGRAM_ACTION.SHADOW_RUN, buildCallback({ namespace: 'RUN', action: 'SHADOW_START' }))],
+  [Markup.button.callback(TELEGRAM_ACTION.SHADOW_STATUS, buildCallback({ namespace: 'RUN', action: 'SHADOW_STATUS' }))],
+  [backButton('ROOT')],
+]);

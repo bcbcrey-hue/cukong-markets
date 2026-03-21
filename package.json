@@ -12,6 +12,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck:probes": "tsc -p tsconfig.probes.json --noEmit",
     "test:probes": "yarn build && node scripts/run-probes.mjs",
+    "probe:shadow-live": "tsx tests/real_exchange_shadow_run_probe.ts",
     "verify": "yarn lint && yarn typecheck:probes && yarn test:probes"
   },
   "engines": {

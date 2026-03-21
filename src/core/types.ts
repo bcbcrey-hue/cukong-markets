@@ -414,6 +414,50 @@ export interface IndodaxCallbackState {
   }>;
 }
 
+export interface ShadowRunCheckResult {
+  check: 'private_auth' | 'public_market' | 'reconciliation_read_model';
+  endpoint: string;
+  pass: boolean;
+  account: string;
+  summary: Record<string, unknown>;
+  error?: {
+    message: string;
+    cause?: string;
+  };
+}
+
+export interface ShadowRunEvidence {
+  runId: string;
+  timestamp: string;
+  exchange: 'indodax';
+  account: string;
+  checks: ShadowRunCheckResult[];
+  allPassed: boolean;
+}
+
+export type ShadowRunStatus = 'IDLE' | 'BERJALAN' | 'DIBLOK' | 'SELESAI' | 'GAGAL';
+export type ShadowCheckStatus = 'LULUS' | 'GAGAL' | 'TIDAK DIUJI' | 'TIDAK TERSEDIA' | 'DIBLOK';
+export type ShadowVerdict = 'SIAP CEK OBSERVASI' | 'SIAP SHADOW-RUN AMAN' | 'BELUM SIAP' | 'DIBLOK';
+
+export interface ShadowRunTelegramSummary {
+  runtimeStatus: 'RUNNING' | 'STOPPED';
+  runtimeDetail: RuntimeStatus;
+  shadowStatus: ShadowRunStatus;
+  runId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  blockReason: string | null;
+  failureReason: string | null;
+  publicMarket: ShadowCheckStatus;
+  privateAuth: ShadowCheckStatus;
+  reconciliation: ShadowCheckStatus;
+  hotlistSignalOpportunity: 'TERSEDIA' | 'TIDAK TERSEDIA';
+  intelligenceSpoofPattern: 'TERSEDIA' | 'TIDAK TERSEDIA';
+  evidenceArchive: 'TERSIMPAN' | 'GAGAL TERSIMPAN' | 'TIDAK DIUJI';
+  verdict: ShadowVerdict;
+  nextSteps: string[];
+}
+
 export interface PairRuntimeState {
   pair: string;
   lastSeenAt: number;

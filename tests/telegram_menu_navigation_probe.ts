@@ -18,6 +18,7 @@ import {
   positionsKeyboard,
   positionsMenuKeyboard,
   riskSettingsKeyboard,
+  shadowRunKeyboard,
   settingsKeyboard,
   strategySettingsKeyboard,
 } from '../src/integrations/telegram/keyboards';
@@ -88,8 +89,9 @@ async function main() {
       TELEGRAM_MAIN_MENU.SETTINGS,
       TELEGRAM_MAIN_MENU.ACCOUNTS,
       TELEGRAM_MAIN_MENU.BACKTEST,
+      TELEGRAM_MAIN_MENU.SHADOW,
     ],
-    'Main menu must only contain the 7 top-level categories',
+    'Main menu must include shadow-run as top-level category',
   );
 
   const sampleHotlist = [
@@ -157,6 +159,7 @@ async function main() {
     accountsKeyboard,
     backtestCategoryKeyboard,
     backtestKeyboard('btc_idr'),
+    shadowRunKeyboard,
     hotlistKeyboard(sampleHotlist, 'MON'),
     positionsKeyboard(samplePositions, 'TRADE'),
   ];

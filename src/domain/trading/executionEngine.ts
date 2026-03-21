@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type {
   AutoExecutionDecision,
   BotSettings,
@@ -6,6 +7,9 @@ import type {
   OrderRecord,
   PositionRecord,
   SignalCandidate,
+  ShadowRunCheckResult,
+  ShadowRunEvidence,
+  ShadowRunTelegramSummary,
   SummaryAccuracy,
   TradingMode,
 } from '../../core/types';
@@ -66,7 +70,42 @@ interface OrderHistorySearchWindow {
   label: string;
 }
 
+interface RunShadowOptions {
+  pair?: string;
+}
+
+interface ShadowRunLifecycleState {
+  status: ShadowRunTelegramSummary['shadowStatus'];
+  runId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  blockReason: string | null;
+  failureReason: string | null;
+  evidenceArchive: ShadowRunTelegramSummary['evidenceArchive'];
+  checks: {
+    publicMarket: ShadowRunTelegramSummary['publicMarket'];
+    privateAuth: ShadowRunTelegramSummary['privateAuth'];
+    reconciliation: ShadowRunTelegramSummary['reconciliation'];
+  };
+}
+
 export class ExecutionEngine {
+  private shadowRunTask: Promise<void> | null = null;
+  private shadowRunState: ShadowRunLifecycleState = {
+    status: 'IDLE',
+    runId: null,
+    startedAt: null,
+    finishedAt: null,
+    blockReason: null,
+    failureReason: null,
+    evidenceArchive: 'TIDAK DIUJI',
+    checks: {
+      publicMarket: 'TIDAK DIUJI',
+      privateAuth: 'TIDAK DIUJI',
+      reconciliation: 'TIDAK DIUJI',
+    },
+  };
+
   constructor(
     private readonly accounts: AccountRegistry,
     private readonly settings: SettingsService,
@@ -320,6 +359,38 @@ export class ExecutionEngine {
   ): Array<Record<string, string | number>> {
     const orders = Array.isArray(payload.orders) ? payload.orders : [];
     return orders.filter((candidate) => this.isProbableExchangeOrderMatch(order, candidate));
+  }
+
+  private safeAccountLabel(accountId: string): string {
+    const account = this.accounts.getById(accountId);
+    const raw = account?.name?.trim() || accountId;
+    const normalized = raw.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const suffix = accountId.slice(-4);
+    return `${normalized.slice(0, 12)}#${suffix}`;
+  }
+
+  private sanitizeError(error: unknown): { message: string; cause?: string } {
+    const normalized = toError(error);
+    const cause = normalized.cause instanceof Error ? normalized.cause.message : undefined;
+    return {
+      message: normalized.message,
+      ...(cause ? { cause } : {}),
+    };
+  }
+
+  private buildShadowCheck(
+    input: Omit<ShadowRunCheckResult, 'pass'> & {
+      pass?: boolean;
+      error?: {
+        message: string;
+        cause?: string;
+      };
+    },
+  ): ShadowRunCheckResult {
+    return {
+      ...input,
+      pass: input.pass ?? !input.error,
+    };
   }
 
   private buildExchangeSnapshot(
@@ -1841,6 +1912,355 @@ export class ExecutionEngine {
       }
       throw error;
     }
+  }
+
+  private aggregateShadowCheckStatus(
+    evidences: ShadowRunEvidence[],
+    check: ShadowRunCheckResult['check'],
+  ): ShadowRunTelegramSummary['publicMarket'] {
+    const checks = evidences.flatMap((item) => item.checks).filter((item) => item.check === check);
+    if (checks.length === 0) {
+      return 'TIDAK DIUJI';
+    }
+
+    return checks.every((item) => item.pass) ? 'LULUS' : 'GAGAL';
+  }
+
+  private computeNextSteps(
+    summary: Pick<
+      ShadowRunTelegramSummary,
+      | 'runtimeStatus'
+      | 'shadowStatus'
+      | 'publicMarket'
+      | 'privateAuth'
+      | 'reconciliation'
+      | 'evidenceArchive'
+      | 'hotlistSignalOpportunity'
+      | 'intelligenceSpoofPattern'
+    >,
+  ): string[] {
+    const steps: string[] = [];
+
+    if (summary.runtimeStatus === 'RUNNING') {
+      steps.push('Stop runtime utama dulu sebelum jalankan shadow-run.');
+    }
+    if (summary.privateAuth === 'GAGAL') {
+      steps.push('Periksa kredensial akun/API key dan izin private endpoint.');
+    }
+    if (summary.publicMarket === 'GAGAL') {
+      steps.push('Periksa konektivitas endpoint market publik Indodax.');
+    }
+    if (summary.reconciliation === 'GAGAL') {
+      steps.push('Periksa endpoint read-model (openOrders/orderHistory) dan pair uji.');
+    }
+    if (summary.evidenceArchive === 'GAGAL TERSIMPAN') {
+      steps.push('Periksa permission/storage data/history untuk arsip evidence.');
+    }
+    if (summary.hotlistSignalOpportunity === 'TIDAK TERSEDIA') {
+      steps.push('Jalankan observasi market watcher agar hotlist/signal/opportunity terisi.');
+    }
+    if (summary.intelligenceSpoofPattern === 'TIDAK TERSEDIA') {
+      steps.push('Tunggu snapshot intelligence berikutnya untuk spoof/pattern.');
+    }
+
+    return steps.slice(0, 4);
+  }
+
+  getShadowRunTelegramSummary(): ShadowRunTelegramSummary {
+    const runtimeRaw = this.state.get().status;
+    const runtimeStatus: ShadowRunTelegramSummary['runtimeStatus'] =
+      runtimeRaw === 'RUNNING' || runtimeRaw === 'STARTING' ? 'RUNNING' : 'STOPPED';
+    const opportunities = this.state.get().lastOpportunities;
+    const hotlistSignalOpportunity: ShadowRunTelegramSummary['hotlistSignalOpportunity'] =
+      this.state.get().lastHotlist.length > 0 &&
+        this.state.get().lastSignals.length > 0 &&
+        opportunities.length > 0
+        ? 'TERSEDIA'
+        : 'TIDAK TERSEDIA';
+    const intelligenceSpoofPattern: ShadowRunTelegramSummary['intelligenceSpoofPattern'] = opportunities.some(
+      (item) => Number.isFinite(item.spoofRisk) && typeof item.historicalMatchSummary === 'string',
+    )
+      ? 'TERSEDIA'
+      : 'TIDAK TERSEDIA';
+
+    const shadowStatus = this.shadowRunState.status;
+    const checks = this.shadowRunState.checks;
+    let verdict: ShadowRunTelegramSummary['verdict'] = 'BELUM SIAP';
+    if (shadowStatus === 'DIBLOK') {
+      verdict = 'DIBLOK';
+    } else if (
+      shadowStatus === 'SELESAI' &&
+      checks.publicMarket === 'LULUS' &&
+      checks.privateAuth === 'LULUS' &&
+      checks.reconciliation === 'LULUS' &&
+      this.shadowRunState.evidenceArchive === 'TERSIMPAN'
+    ) {
+      verdict = 'SIAP SHADOW-RUN AMAN';
+    } else if (runtimeStatus === 'STOPPED') {
+      verdict = 'SIAP CEK OBSERVASI';
+    }
+
+    const summary: ShadowRunTelegramSummary = {
+      runtimeStatus,
+      runtimeDetail: runtimeRaw,
+      shadowStatus,
+      runId: this.shadowRunState.runId,
+      startedAt: this.shadowRunState.startedAt,
+      finishedAt: this.shadowRunState.finishedAt,
+      blockReason: this.shadowRunState.blockReason,
+      failureReason: this.shadowRunState.failureReason,
+      publicMarket: checks.publicMarket,
+      privateAuth: checks.privateAuth,
+      reconciliation: checks.reconciliation,
+      hotlistSignalOpportunity,
+      intelligenceSpoofPattern,
+      evidenceArchive: this.shadowRunState.evidenceArchive,
+      verdict,
+      nextSteps: [],
+    };
+    summary.nextSteps = this.computeNextSteps(summary);
+    return summary;
+  }
+
+  triggerShadowRunFromTelegram(options: RunShadowOptions = {}): ShadowRunTelegramSummary {
+    const runtimeRaw = this.state.get().status;
+    if (runtimeRaw === 'RUNNING' || runtimeRaw === 'STARTING') {
+      this.shadowRunState = {
+        ...this.shadowRunState,
+        status: 'DIBLOK',
+        blockReason: 'Runtime utama masih RUNNING/STARTING. Stop runtime dulu untuk shadow-run aman.',
+        failureReason: null,
+        finishedAt: new Date().toISOString(),
+        checks: {
+          publicMarket: 'DIBLOK',
+          privateAuth: 'DIBLOK',
+          reconciliation: 'DIBLOK',
+        },
+      };
+      return this.getShadowRunTelegramSummary();
+    }
+
+    if (this.shadowRunTask) {
+      return this.getShadowRunTelegramSummary();
+    }
+
+    const startedAt = new Date().toISOString();
+    this.shadowRunState = {
+      status: 'BERJALAN',
+      runId: null,
+      startedAt,
+      finishedAt: null,
+      blockReason: null,
+      failureReason: null,
+      evidenceArchive: 'TIDAK DIUJI',
+      checks: {
+        publicMarket: 'TIDAK DIUJI',
+        privateAuth: 'TIDAK DIUJI',
+        reconciliation: 'TIDAK DIUJI',
+      },
+    };
+
+    this.shadowRunTask = (async () => {
+      try {
+        const evidences = await this.runLiveShadowRun(options);
+        const runId = evidences[0]?.runId ?? null;
+        this.shadowRunState = {
+          ...this.shadowRunState,
+          status: 'SELESAI',
+          runId,
+          finishedAt: new Date().toISOString(),
+          evidenceArchive: 'TERSIMPAN',
+          checks: {
+            publicMarket: this.aggregateShadowCheckStatus(evidences, 'public_market'),
+            privateAuth: this.aggregateShadowCheckStatus(evidences, 'private_auth'),
+            reconciliation: this.aggregateShadowCheckStatus(evidences, 'reconciliation_read_model'),
+          },
+        };
+      } catch (error) {
+        this.shadowRunState = {
+          ...this.shadowRunState,
+          status: 'GAGAL',
+          finishedAt: new Date().toISOString(),
+          evidenceArchive: 'GAGAL TERSIMPAN',
+          failureReason: this.sanitizeError(error).message,
+        };
+      } finally {
+        this.shadowRunTask = null;
+      }
+    })();
+
+    return this.getShadowRunTelegramSummary();
+  }
+
+  async runLiveShadowRun(options: RunShadowOptions = {}): Promise<ShadowRunEvidence[]> {
+    const pair = (options.pair ?? 'btc_idr').toLowerCase();
+    const now = new Date().toISOString();
+    const runId = `shadow-${crypto.randomUUID()}`;
+    const accounts = this.accounts.listEnabled();
+
+    if (accounts.length === 0) {
+      const evidence: ShadowRunEvidence = {
+        runId,
+        timestamp: now,
+        exchange: 'indodax',
+        account: 'no-enabled-account',
+        allPassed: false,
+        checks: [
+          this.buildShadowCheck({
+            check: 'private_auth',
+            endpoint: 'POST /tapi method=getInfo',
+            account: 'no-enabled-account',
+            summary: { reason: 'no enabled account configured' },
+            error: { message: 'No enabled account found' },
+          }),
+        ],
+      };
+      await this.journal.recordShadowRunEvidence(evidence);
+      return [evidence];
+    }
+
+    const publicCheck = await (async (): Promise<ShadowRunCheckResult> => {
+      try {
+        const tickers = await this.indodax.getTickers();
+        const ticker = tickers[pair];
+        const depth = await this.indodax.getDepth(pair);
+        return this.buildShadowCheck({
+          check: 'public_market',
+          endpoint: `GET /api/tickers + GET /api/depth/${pair}`,
+          account: 'public',
+          summary: {
+            pair,
+            tickerFound: Boolean(ticker),
+            bestBid: depth.buy[0]?.[0] ?? null,
+            bestAsk: depth.sell[0]?.[0] ?? null,
+            bidLevels: depth.buy.length,
+            askLevels: depth.sell.length,
+          },
+        });
+      } catch (error) {
+        return this.buildShadowCheck({
+          check: 'public_market',
+          endpoint: `GET /api/tickers + GET /api/depth/${pair}`,
+          account: 'public',
+          summary: { pair },
+          error: this.sanitizeError(error),
+        });
+      }
+    })();
+
+    const results: ShadowRunEvidence[] = [];
+
+    for (const account of accounts) {
+      const accountLabel = this.safeAccountLabel(account.id);
+      const privateApi = this.indodax.forAccount(account);
+      const checks: ShadowRunCheckResult[] = [publicCheck];
+
+      try {
+        const info = await privateApi.getInfo<{ balance?: Record<string, string | number> }>({
+          lane: 'private_reconciliation',
+          requestPriority: 1,
+        });
+        checks.push(
+          this.buildShadowCheck({
+            check: 'private_auth',
+            endpoint: 'POST /tapi method=getInfo',
+            account: accountLabel,
+            summary: {
+              success: info.success === 1,
+              balanceAssetCount: Object.keys(info.return?.balance ?? {}).length,
+            },
+          }),
+        );
+      } catch (error) {
+        checks.push(
+          this.buildShadowCheck({
+            check: 'private_auth',
+            endpoint: 'POST /tapi method=getInfo',
+            account: accountLabel,
+            summary: {},
+            error: this.sanitizeError(error),
+          }),
+        );
+      }
+
+      try {
+        const openOrders = await privateApi.openOrders(undefined, {
+          lane: 'private_reconciliation',
+          requestPriority: 1,
+          coalesceKey: `shadow-open-orders:${account.id}`,
+        });
+        const historyMode = getIndodaxHistoryMode();
+        let historyCount = 0;
+        if (historyMode === 'v2_only') {
+          const endTime = Date.now();
+          const startTime = endTime - 6 * 60 * 60 * 1000;
+          const histories = await privateApi.orderHistoriesV2(
+            { pair, startTime, endTime, limit: 20, sort: 'desc' },
+            { lane: 'private_reconciliation', requestPriority: 0 },
+          );
+          historyCount = histories.return?.orders?.length ?? 0;
+        } else {
+          const histories = await privateApi.orderHistory(pair, {
+            lane: 'private_reconciliation',
+            requestPriority: 0,
+          });
+          historyCount = histories.return?.orders?.length ?? 0;
+        }
+
+        checks.push(
+          this.buildShadowCheck({
+            check: 'reconciliation_read_model',
+            endpoint: historyMode === 'v2_only'
+              ? 'POST /tapi method=openOrders + GET /api/v2/order/histories'
+              : 'POST /tapi method=openOrders + POST /tapi method=orderHistory',
+            account: accountLabel,
+            summary: {
+              historyMode,
+              pair,
+              openOrderPairCount: Object.keys(openOrders.return?.orders ?? {}).length,
+              recentHistoryCount: historyCount,
+              localActiveOrders: this.orders.listActive().filter((item) => item.accountId === account.id).length,
+              localOpenPositions: this.positions.listOpen().filter((item) => item.accountId === account.id).length,
+            },
+          }),
+        );
+      } catch (error) {
+        checks.push(
+          this.buildShadowCheck({
+            check: 'reconciliation_read_model',
+            endpoint: 'openOrders + orderHistory/orderHistoriesV2',
+            account: accountLabel,
+            summary: { pair },
+            error: this.sanitizeError(error),
+          }),
+        );
+      }
+
+      const evidence: ShadowRunEvidence = {
+        runId,
+        timestamp: now,
+        exchange: 'indodax',
+        account: accountLabel,
+        checks,
+        allPassed: checks.every((check) => check.pass),
+      };
+
+      await this.journal.recordShadowRunEvidence(evidence);
+      await this.journal.info(
+        'LIVE_SHADOW_RUN_COMPLETED',
+        evidence.allPassed ? 'live shadow-run passed' : 'live shadow-run has failures',
+        {
+          runId,
+          account: accountLabel,
+          pair,
+          allPassed: evidence.allPassed,
+          failedChecks: evidence.checks.filter((check) => !check.pass).map((check) => check.check),
+        },
+      );
+      results.push(evidence);
+    }
+
+    return results;
   }
 
   async syncActiveOrders(): Promise<string[]> {
