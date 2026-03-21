@@ -18,6 +18,7 @@ import type {
   IndodaxGetOrderReturn,
   IndodaxOpenOrdersReturn,
   IndodaxOrderHistoryReturn,
+  IndodaxPrivateRequestOptions,
   IndodaxTradeHistoryReturn,
   IndodaxTradeReturn,
 } from '../../integrations/indodax/privateApi';
@@ -594,18 +595,20 @@ export class ExecutionEngine {
 
   private async loadTradeStats(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<ExchangeTradeStats | null> {
     const mode = getIndodaxHistoryMode();
 
     if (mode === 'legacy') {
-      return this.loadTradeStatsLegacy(order);
+      return this.loadTradeStatsLegacy(order, requestOptions);
     }
 
-    return this.loadTradeStatsV2(order);
+    return this.loadTradeStatsV2(order, requestOptions);
   }
 
   private async loadTradeStatsLegacy(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<ExchangeTradeStats | null> {
     const api = this.getPrivateApi(order.accountId);
     if (!api || typeof (api as { tradeHistory?: unknown }).tradeHistory !== 'function') {
@@ -613,7 +616,7 @@ export class ExecutionEngine {
     }
 
     try {
-      const response = await api.tradeHistory(order.pair);
+      const response = await api.tradeHistory(order.pair, requestOptions);
       return this.extractTradeStats(order, response.return ?? {});
     } catch (error) {
       await this.journal.warn(
@@ -631,6 +634,7 @@ export class ExecutionEngine {
 
   private async loadTradeStatsV2(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<ExchangeTradeStats | null> {
     const api = this.getPrivateApi(order.accountId);
     if (!api || typeof (api as { myTradesV2?: unknown }).myTradesV2 !== 'function') {
@@ -638,12 +642,15 @@ export class ExecutionEngine {
     }
 
     try {
-      const response = await api.myTradesV2({
-        pair: order.pair,
-        orderId: order.exchangeOrderId,
-        limit: 1000,
-        sort: 'asc',
-      });
+      const response = await api.myTradesV2(
+        {
+          pair: order.pair,
+          orderId: order.exchangeOrderId,
+          limit: 1000,
+          sort: 'asc',
+        },
+        requestOptions,
+      );
       return this.extractTradeStats(order, response.return ?? {});
     } catch (error) {
       await this.journal.warn(
@@ -661,11 +668,12 @@ export class ExecutionEngine {
 
   private async loadOrderHistorySnapshot(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<{ snapshot: ExchangeOrderSnapshot | null; source: 'orderHistory' | 'orderHistoryV2' | null }> {
     const mode = getIndodaxHistoryMode();
 
     if (mode === 'legacy') {
-      const legacySnapshot = await this.loadOrderHistorySnapshotLegacy(order);
+      const legacySnapshot = await this.loadOrderHistorySnapshotLegacy(order, requestOptions);
       return {
         snapshot: legacySnapshot,
         source: legacySnapshot ? 'orderHistory' : null,
@@ -673,13 +681,14 @@ export class ExecutionEngine {
     }
 
     return {
-      snapshot: await this.loadOrderHistorySnapshotV2(order),
+      snapshot: await this.loadOrderHistorySnapshotV2(order, requestOptions),
       source: 'orderHistoryV2',
     };
   }
 
   private async loadOrderHistorySnapshotLegacy(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<ExchangeOrderSnapshot | null> {
     const api = this.getPrivateApi(order.accountId);
     if (!api || typeof (api as { orderHistory?: unknown }).orderHistory !== 'function') {
@@ -687,7 +696,7 @@ export class ExecutionEngine {
     }
 
     try {
-      const response = await api.orderHistory(order.pair);
+      const response = await api.orderHistory(order.pair, requestOptions);
       const match = this.findOrderHistoryMatch(order, response.return ?? {});
       return match ? this.buildExchangeSnapshotFromOrderFields(order, match, 'closed') : null;
     } catch (error) {
@@ -706,6 +715,7 @@ export class ExecutionEngine {
 
   private async loadOrderHistorySnapshotV2(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<ExchangeOrderSnapshot | null> {
     const api = this.getPrivateApi(order.accountId);
     if (!api || typeof (api as { orderHistoriesV2?: unknown }).orderHistoriesV2 !== 'function') {
@@ -718,13 +728,16 @@ export class ExecutionEngine {
     try {
       for (let index = 0; index < windows.length; index += 1) {
         const window = windows[index];
-        const response = await api.orderHistoriesV2({
-          pair: order.pair,
-          startTime: window.startTime,
-          endTime: window.endTime,
-          limit: 1000,
-          sort: 'asc',
-        });
+        const response = await api.orderHistoriesV2(
+          {
+            pair: order.pair,
+            startTime: window.startTime,
+            endTime: window.endTime,
+            limit: 1000,
+            sort: 'asc',
+          },
+          requestOptions,
+        );
         const match = this.findOrderHistoryMatch(order, response.return ?? {});
         if (!match) {
           continue;
@@ -1048,7 +1061,10 @@ export class ExecutionEngine {
     return updatedOrder;
   }
 
-  private async fetchOpenOrdersForAccount(accountId: string): Promise<Map<string, ExchangeOpenOrderMatch>> {
+  private async fetchOpenOrdersForAccount(
+    accountId: string,
+    requestOptions?: IndodaxPrivateRequestOptions,
+  ): Promise<Map<string, ExchangeOpenOrderMatch>> {
     const account = this.accounts.getById(accountId);
     if (!account) {
       return new Map();
@@ -1059,7 +1075,7 @@ export class ExecutionEngine {
       return new Map();
     }
 
-    const response = await api.openOrders();
+    const response = await api.openOrders(undefined, requestOptions);
     return this.flattenOpenOrders(response.return ?? {});
   }
 
@@ -1133,7 +1149,10 @@ export class ExecutionEngine {
     return updatedPosition;
   }
 
-  private async syncLiveOrder(orderId: string): Promise<OrderRecord | undefined> {
+  private async syncLiveOrder(
+    orderId: string,
+    requestOptions?: IndodaxPrivateRequestOptions,
+  ): Promise<OrderRecord | undefined> {
     const order = this.orders.getById(orderId);
     if (!order?.exchangeOrderId) {
       return order;
@@ -1145,12 +1164,12 @@ export class ExecutionEngine {
     }
 
     const api = this.indodax.forAccount(account);
-    const tradeStats = await this.loadTradeStats(order);
+    const tradeStats = await this.loadTradeStats(order, requestOptions);
     let snapshot: ExchangeOrderSnapshot | null = null;
     let source: 'getOrder' | 'orderHistory' | 'orderHistoryV2' | 'myTradesV2Fallback' = 'getOrder';
 
     try {
-      const response = await api.getOrder(order.pair, order.exchangeOrderId);
+      const response = await api.getOrder(order.pair, order.exchangeOrderId, requestOptions);
       snapshot = this.buildExchangeSnapshot(order, response.return ?? {});
     } catch (error) {
       await this.journal.warn(
@@ -1165,7 +1184,7 @@ export class ExecutionEngine {
     }
 
     if (!snapshot) {
-      const historySnapshot = await this.loadOrderHistorySnapshot(order);
+      const historySnapshot = await this.loadOrderHistorySnapshot(order, requestOptions);
       snapshot = historySnapshot.snapshot;
       if (historySnapshot.source) {
         source = historySnapshot.source;
@@ -1845,7 +1864,12 @@ export class ExecutionEngine {
 
     for (const [accountId, accountOrders] of ordersByAccount.entries()) {
       try {
-        const openOrders = await this.fetchOpenOrdersForAccount(accountId);
+        const recoveryLaneOptions: IndodaxPrivateRequestOptions = {
+          lane: 'background_recovery',
+          requestPriority: -2,
+          coalesceKey: `bg-openOrders:${accountId}`,
+        };
+        const openOrders = await this.fetchOpenOrdersForAccount(accountId, recoveryLaneOptions);
 
         for (const order of accountOrders) {
           if (!order.exchangeOrderId) {
@@ -1875,7 +1899,7 @@ export class ExecutionEngine {
           const beforeStatus = order.status;
           const beforeFilled = order.filledQuantity;
           const snapshot = this.buildExchangeSnapshotFromOrderFields(order, openOrder.order, 'open');
-          const tradeStats = await this.loadTradeStats(order);
+          const tradeStats = await this.loadTradeStats(order, recoveryLaneOptions);
           let synced = await this.syncOrderWithSnapshot(
             order,
             this.mergeTradeStatsIntoSnapshot(snapshot, tradeStats),
@@ -1926,7 +1950,10 @@ export class ExecutionEngine {
 
         const beforeStatus = activeOrder.status;
         const beforeFilled = activeOrder.filledQuantity;
-        let synced = await this.syncLiveOrder(activeOrder.id);
+        let synced = await this.syncLiveOrder(activeOrder.id, {
+          lane: 'background_recovery',
+          requestPriority: -1,
+        });
 
         if (synced && this.shouldCancelStaleBuyOrder(synced)) {
           synced = await this.cancelStaleBuyOrder(synced);

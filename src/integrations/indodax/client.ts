@@ -4,6 +4,8 @@ import { PublicApi, type IndodaxOrderbook, type IndodaxTickerEntry } from './pub
 import { PrivateApi } from './privateApi';
 
 export class IndodaxClient {
+  private readonly privateApiByAccount = new Map<string, PrivateApi>();
+
   constructor(
     private readonly publicApi = new PublicApi(
       env.indodaxPublicBaseUrl,
@@ -21,13 +23,26 @@ export class IndodaxClient {
   }
 
   forAccount(account: StoredAccount): PrivateApi {
-    return new PrivateApi({
+    const cacheKey = `${account.id}:${account.apiKey}`;
+    const existing = this.privateApiByAccount.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
+
+    const client = new PrivateApi({
       baseUrl: env.indodaxPrivateBaseUrl,
       tradeApiV2BaseUrl: env.indodaxTradeApiV2BaseUrl,
       timeoutMs: env.indodaxTimeoutMs,
       minIntervalMs: env.indodaxPrivateMinIntervalMs,
+      laneMinIntervalsMs: {
+        liveTrading: env.indodaxPrivateLiveMinIntervalMs,
+        reconciliation: env.indodaxPrivateReconcileMinIntervalMs,
+        background: env.indodaxPrivateBackgroundMinIntervalMs,
+      },
       apiKey: account.apiKey,
       apiSecret: account.apiSecret,
     });
+    this.privateApiByAccount.set(cacheKey, client);
+    return client;
   }
 }

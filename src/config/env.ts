@@ -49,6 +49,9 @@ export interface EnvConfig {
   indodaxTimeoutMs: number;
   indodaxPublicMinIntervalMs: number;
   indodaxPrivateMinIntervalMs: number;
+  indodaxPrivateLiveMinIntervalMs: number;
+  indodaxPrivateReconcileMinIntervalMs: number;
+  indodaxPrivateBackgroundMinIntervalMs: number;
   indodaxHistoryMode: IndodaxHistoryMode;
   indodaxCallbackPath: string;
   indodaxCallbackPort: number;
@@ -326,6 +329,18 @@ export const env: EnvConfig = {
   indodaxTimeoutMs: readNumber('INDODAX_TIMEOUT_MS', 15_000),
   indodaxPublicMinIntervalMs: readNumber('INDODAX_PUBLIC_MIN_INTERVAL_MS', 250),
   indodaxPrivateMinIntervalMs: readNumber('INDODAX_PRIVATE_MIN_INTERVAL_MS', 300),
+  indodaxPrivateLiveMinIntervalMs: readNumber(
+    'INDODAX_PRIVATE_LIVE_MIN_INTERVAL_MS',
+    readNumber('INDODAX_PRIVATE_MIN_INTERVAL_MS', 300),
+  ),
+  indodaxPrivateReconcileMinIntervalMs: readNumber(
+    'INDODAX_PRIVATE_RECONCILE_MIN_INTERVAL_MS',
+    Math.max(300, readNumber('INDODAX_PRIVATE_MIN_INTERVAL_MS', 300)),
+  ),
+  indodaxPrivateBackgroundMinIntervalMs: readNumber(
+    'INDODAX_PRIVATE_BACKGROUND_MIN_INTERVAL_MS',
+    Math.max(450, readNumber('INDODAX_PRIVATE_MIN_INTERVAL_MS', 300) + 150),
+  ),
   indodaxHistoryMode: normalizeIndodaxHistoryMode(readString('INDODAX_HISTORY_MODE'), 'v2_only'),
   indodaxCallbackPath,
   indodaxCallbackPort: readNumber('INDODAX_CALLBACK_PORT', 3001),
