@@ -3,6 +3,7 @@ import path from 'node:path';
 export type TradingMode = 'OFF' | 'ALERT_ONLY' | 'SEMI_AUTO' | 'FULL_AUTO';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type IndodaxHistoryMode = 'v2_only' | 'legacy';
+export type IndodaxCallbackAuthMode = 'required' | 'disabled';
 
 export interface EnvConfig {
   nodeEnv: string;
@@ -59,6 +60,13 @@ export interface EnvConfig {
   indodaxCallbackAllowedHost: string;
   indodaxEnableCallbackServer: boolean;
   indodaxCallbackUrl: string | null;
+  indodaxCallbackAuthMode: IndodaxCallbackAuthMode;
+  indodaxCallbackSignatureSecret: string;
+  indodaxCallbackSignatureHeader: string;
+  indodaxCallbackTimestampHeader: string;
+  indodaxCallbackNonceHeader: string;
+  indodaxCallbackReplayWindowMs: number;
+  indodaxCallbackMaxSkewMs: number;
 
   pollingIntervalMs: number;
   marketWatchIntervalMs: number;
@@ -173,6 +181,25 @@ function assertProductionRoutingEnv(config: Pick<EnvConfig, 'nodeEnv' | 'indodax
   }
 }
 
+function assertProductionCallbackSecurityEnv(
+  config: Pick<
+    EnvConfig,
+    'nodeEnv' | 'indodaxEnableCallbackServer' | 'indodaxCallbackAuthMode' | 'indodaxCallbackSignatureSecret'
+  >,
+): void {
+  if (config.nodeEnv !== 'production' || !config.indodaxEnableCallbackServer) {
+    return;
+  }
+
+  if (config.indodaxCallbackAuthMode !== 'required') {
+    throw new Error('INDODAX_CALLBACK_AUTH_MODE must be "required" in production when callback server is enabled');
+  }
+
+  if (!config.indodaxCallbackSignatureSecret) {
+    throw new Error('INDODAX_CALLBACK_SIGNATURE_SECRET is required in production when callback server is enabled');
+  }
+}
+
 function readNumber(name: string, fallback: number): number {
   const raw = readString(name);
   if (!raw) {
@@ -247,6 +274,7 @@ function readNumberList(name: string): number[] {
 const tradingModes = ['OFF', 'ALERT_ONLY', 'SEMI_AUTO', 'FULL_AUTO'] as const;
 const logLevels = ['debug', 'info', 'warn', 'error'] as const;
 const historyModes = ['v2_only', 'legacy'] as const;
+const callbackAuthModes = ['required', 'disabled'] as const;
 
 function normalizeIndodaxHistoryMode(raw: string, fallback: IndodaxHistoryMode): IndodaxHistoryMode {
   if (!raw) {
@@ -351,6 +379,26 @@ export const env: EnvConfig = {
   ),
   indodaxEnableCallbackServer: readBoolean('INDODAX_ENABLE_CALLBACK_SERVER', false),
   indodaxCallbackUrl: deriveCallbackUrl(publicBaseUrl, indodaxCallbackPath),
+  indodaxCallbackAuthMode: readStringEnum(
+    'INDODAX_CALLBACK_AUTH_MODE',
+    callbackAuthModes,
+    'required',
+  ),
+  indodaxCallbackSignatureSecret: readString('INDODAX_CALLBACK_SIGNATURE_SECRET', ''),
+  indodaxCallbackSignatureHeader: readString(
+    'INDODAX_CALLBACK_SIGNATURE_HEADER',
+    'x-indodax-signature',
+  ).toLowerCase(),
+  indodaxCallbackTimestampHeader: readString(
+    'INDODAX_CALLBACK_TIMESTAMP_HEADER',
+    'x-indodax-timestamp',
+  ).toLowerCase(),
+  indodaxCallbackNonceHeader: readString(
+    'INDODAX_CALLBACK_NONCE_HEADER',
+    'x-indodax-nonce',
+  ).toLowerCase(),
+  indodaxCallbackReplayWindowMs: readNumber('INDODAX_CALLBACK_REPLAY_WINDOW_MS', 5 * 60 * 1000),
+  indodaxCallbackMaxSkewMs: readNumber('INDODAX_CALLBACK_MAX_SKEW_MS', 60 * 1000),
 
   pollingIntervalMs: readNumber('POLLING_INTERVAL_MS', 5_000),
   marketWatchIntervalMs: readNumber('MARKET_WATCH_INTERVAL_MS', 10_000),
@@ -385,6 +433,7 @@ export const env: EnvConfig = {
 };
 
 assertProductionRoutingEnv(env);
+assertProductionCallbackSecurityEnv(env);
 
 export function isProductionEnv(): boolean {
   return env.nodeEnv === 'production';

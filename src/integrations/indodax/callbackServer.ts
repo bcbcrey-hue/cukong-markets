@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { env } from '../../config/env';
@@ -49,9 +49,53 @@ function extractHost(request: IncomingMessage): string {
 }
 
 function headersToRecord(headers: IncomingMessage['headers']): Record<string, string> {
+  const redactedKeys = new Set([
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-auth-token',
+    env.indodaxCallbackSignatureHeader.toLowerCase(),
+  ]);
+
   return Object.fromEntries(
-    Object.entries(headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : (value ?? '')]),
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      redactedKeys.has(key.toLowerCase()) ? '[redacted]' : (Array.isArray(value) ? value.join(',') : (value ?? '')),
+    ]),
   );
+}
+
+function resolveHeaderValue(request: IncomingMessage, key: string): string {
+  return firstHeaderValue(request.headers[key.toLowerCase()]).trim();
+}
+
+function parseTimestampMs(raw: string): number | null {
+  if (!raw) {
+    return null;
+  }
+
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return null;
+  }
+
+  return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+}
+
+function safeEqual(actual: string, expected: string): boolean {
+  const actualBuffer = Buffer.from(actual, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+
+  if (actualBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export class IndodaxCallbackServer {
@@ -73,21 +117,24 @@ export class IndodaxCallbackServer {
   ) {}
 
   private async loadState(): Promise<void> {
+    const loaded = await this.persistence.readIndodaxCallbackState();
     this.state = {
-      ...(await this.persistence.readIndodaxCallbackState()),
+      ...loaded,
       enabled: env.indodaxEnableCallbackServer,
       callbackPath: env.indodaxCallbackPath,
       callbackUrl: env.indodaxCallbackUrl,
       allowedHost: env.indodaxCallbackAllowedHost || null,
+      lastVerificationAt: loaded.lastVerificationAt ?? null,
+      nonceHistory: Array.isArray(loaded.nonceHistory) ? loaded.nonceHistory : [],
     };
     await this.persistence.saveIndodaxCallbackState(this.state);
   }
 
-  private readBody(request: IncomingMessage): Promise<string> {
+  private readBody(request: IncomingMessage): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       request.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      request.on('end', () => resolve(Buffer.concat(chunks)));
       request.on('error', reject);
     });
   }
@@ -135,6 +182,7 @@ export class IndodaxCallbackServer {
       rejectedCount: this.state.rejectedCount + (event.accepted ? 0 : 1),
       lastEventId: event.id,
       lastSourceHost: event.host,
+      lastVerificationAt: event.verification.verified ? event.receivedAt : this.state.lastVerificationAt,
     };
 
     await this.persistence.saveIndodaxCallbackState(this.state);
@@ -202,6 +250,9 @@ export class IndodaxCallbackServer {
     }
 
     const host = extractHost(request);
+    const rawHeaders = headersToRecord(request.headers);
+    const query = Object.fromEntries(new URL(request.url ?? '/', 'http://localhost').searchParams.entries());
+
     if (request.method !== 'POST') {
       const event: IndodaxCallbackEvent = {
         id: randomUUID(),
@@ -212,10 +263,19 @@ export class IndodaxCallbackServer {
         accepted: false,
         response: 'fail',
         reason: 'method_not_allowed',
-        query: Object.fromEntries(new URL(request.url ?? '/', 'http://localhost').searchParams.entries()),
-        headers: headersToRecord(request.headers),
+        query,
+        headers: rawHeaders,
         bodyText: '',
         parsedBody: null,
+        verification: {
+          mode: env.indodaxCallbackAuthMode,
+          verified: false,
+          signatureHeaderPresent: false,
+          timestampHeaderPresent: false,
+          nonceHeaderPresent: false,
+          timestampAgeMs: null,
+          nonceReused: false,
+        },
         receivedAt: new Date().toISOString(),
       };
       await this.persistEvent(event);
@@ -223,9 +283,80 @@ export class IndodaxCallbackServer {
       return;
     }
 
-    const bodyText = await this.readBody(request);
+    const bodyBuffer = await this.readBody(request);
+    const bodyText = bodyBuffer.toString('utf8');
     const parsedBody = this.parseBody(firstHeaderValue(request.headers['content-type']).toLowerCase(), bodyText);
-    const accepted = this.isAllowedHost(host);
+    const authMode = env.indodaxCallbackAuthMode;
+    const signatureHeader = resolveHeaderValue(request, env.indodaxCallbackSignatureHeader);
+    const timestampHeader = resolveHeaderValue(request, env.indodaxCallbackTimestampHeader);
+    const nonceHeader = resolveHeaderValue(request, env.indodaxCallbackNonceHeader);
+
+    const timestampMs = parseTimestampMs(timestampHeader);
+    const nowMs = Date.now();
+    const timestampAgeMs = timestampMs === null ? null : nowMs - timestampMs;
+    const timestampExpired = timestampAgeMs === null || timestampAgeMs > env.indodaxCallbackReplayWindowMs;
+    const timestampSkewExceeded = timestampAgeMs === null || Math.abs(timestampAgeMs) > env.indodaxCallbackMaxSkewMs;
+
+    const nonceHistory = this.state.nonceHistory.filter(
+      (entry) => nowMs - Date.parse(entry.seenAt) <= env.indodaxCallbackReplayWindowMs,
+    );
+    const nonceReused = nonceHeader.length > 0 && nonceHistory.some((entry) => entry.nonce === nonceHeader);
+
+    const hostAllowed = this.isAllowedHost(host);
+    const signaturePresent = signatureHeader.length > 0;
+    const timestampPresent = timestampHeader.length > 0;
+    const noncePresent = nonceHeader.length > 0;
+
+    const expectedSignature = env.indodaxCallbackSignatureSecret
+      ? createHmac('sha256', env.indodaxCallbackSignatureSecret)
+          .update(timestampHeader)
+          .update('.')
+          .update(nonceHeader)
+          .update('.')
+          .update(bodyBuffer)
+          .digest('hex')
+      : '';
+    const signatureValid = Boolean(expectedSignature && signaturePresent && safeEqual(signatureHeader, expectedSignature));
+
+    let accepted = hostAllowed;
+    let reason: string | undefined;
+
+    if (!hostAllowed) {
+      accepted = false;
+      reason = 'host_not_allowed';
+    } else if (authMode === 'required') {
+      if (!env.indodaxCallbackSignatureSecret) {
+        accepted = false;
+        reason = 'signature_secret_missing';
+      } else if (!signaturePresent || !timestampPresent || !noncePresent) {
+        accepted = false;
+        reason = 'auth_header_missing';
+      } else if (timestampExpired) {
+        accepted = false;
+        reason = 'timestamp_expired';
+      } else if (timestampSkewExceeded) {
+        accepted = false;
+        reason = 'timestamp_skew_exceeded';
+      } else if (nonceReused) {
+        accepted = false;
+        reason = 'nonce_reused';
+      } else if (!signatureValid) {
+        accepted = false;
+        reason = 'signature_invalid';
+      }
+    }
+
+    if (accepted && authMode === 'required') {
+      nonceHistory.push({
+        nonce: nonceHeader,
+        seenAt: new Date(nowMs).toISOString(),
+      });
+    }
+    this.state = {
+      ...this.state,
+      nonceHistory,
+    };
+
     const event: IndodaxCallbackEvent = {
       id: randomUUID(),
       path,
@@ -234,11 +365,20 @@ export class IndodaxCallbackServer {
       allowedHost: env.indodaxCallbackAllowedHost || null,
       accepted,
       response: accepted ? 'ok' : 'fail',
-      reason: accepted ? undefined : 'host_not_allowed',
-      query: Object.fromEntries(new URL(request.url ?? '/', 'http://localhost').searchParams.entries()),
-      headers: headersToRecord(request.headers),
+      reason,
+      query,
+      headers: rawHeaders,
       bodyText,
       parsedBody,
+      verification: {
+        mode: authMode,
+        verified: accepted && authMode === 'required',
+        signatureHeaderPresent: signaturePresent,
+        timestampHeaderPresent: timestampPresent,
+        nonceHeaderPresent: noncePresent,
+        timestampAgeMs,
+        nonceReused,
+      },
       receivedAt: new Date().toISOString(),
     };
 

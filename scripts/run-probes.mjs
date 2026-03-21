@@ -22,6 +22,7 @@ const probes = [
   'tests/app_lifecycle_servers_probe.ts',
   'tests/bootstrap_observability_probe.ts',
   'tests/callback_reconciliation_probe.ts',
+  'tests/callback_security_probe.ts',
   'tests/worker_timeout_probe.ts',
 ];
 
@@ -44,6 +45,16 @@ async function runProbe(probe, index) {
     INDODAX_CALLBACK_BIND_HOST: process.env.INDODAX_CALLBACK_BIND_HOST || '127.0.0.1',
     INDODAX_CALLBACK_ALLOWED_HOST: process.env.INDODAX_CALLBACK_ALLOWED_HOST || 'kangtrade.top',
     INDODAX_ENABLE_CALLBACK_SERVER: process.env.INDODAX_ENABLE_CALLBACK_SERVER || 'true',
+    INDODAX_CALLBACK_AUTH_MODE: process.env.INDODAX_CALLBACK_AUTH_MODE || 'required',
+    INDODAX_CALLBACK_SIGNATURE_SECRET:
+      process.env.INDODAX_CALLBACK_SIGNATURE_SECRET || 'probe-indodax-callback-secret',
+    INDODAX_CALLBACK_SIGNATURE_HEADER:
+      process.env.INDODAX_CALLBACK_SIGNATURE_HEADER || 'x-indodax-signature',
+    INDODAX_CALLBACK_TIMESTAMP_HEADER:
+      process.env.INDODAX_CALLBACK_TIMESTAMP_HEADER || 'x-indodax-timestamp',
+    INDODAX_CALLBACK_NONCE_HEADER: process.env.INDODAX_CALLBACK_NONCE_HEADER || 'x-indodax-nonce',
+    INDODAX_CALLBACK_REPLAY_WINDOW_MS: process.env.INDODAX_CALLBACK_REPLAY_WINDOW_MS || '300000',
+    INDODAX_CALLBACK_MAX_SKEW_MS: process.env.INDODAX_CALLBACK_MAX_SKEW_MS || '60000',
     INDODAX_PUBLIC_BASE_URL: process.env.INDODAX_PUBLIC_BASE_URL || 'https://indodax.com/api',
     INDODAX_PRIVATE_BASE_URL: process.env.INDODAX_PRIVATE_BASE_URL || 'https://indodax.com/tapi',
     INDODAX_TRADE_API_V2_BASE_URL: process.env.INDODAX_TRADE_API_V2_BASE_URL || 'https://tapi.indodax.com',
