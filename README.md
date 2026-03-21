@@ -20,7 +20,7 @@ Yang benar-benar sudah terbukti lewat build/lint/probe:
 - `src/app.ts` sekarang membedakan phase startup penting: persistence, worker, app server, callback server, recovery, evaluasi posisi, Telegram, polling
 - logger Pino sekarang men-serialize `error` dan `err` secara eksplisit, jadi tidak lagi rawan berakhir sebagai `{}`
 - path worker aman untuk runtime build production (`dist/workers/*.js`) dan dev runtime
-- `test:probes` resmi sekarang juga menjalankan `bootstrap_observability_probe` dan `worker_timeout_probe`
+- `test:probes` resmi sekarang juga menjalankan `bootstrap_observability_probe`, `worker_timeout_probe`, dan `buy_entry_price_guard_probe`
 - `.env.example` sekarang benar-benar ada dan sinkron dengan kontrak env runtime yang dipakai source
 - `INDODAX_TIMEOUT_MS` sekarang benar-benar dipakai untuk request public/private API
 - validasi harga entry BUY tidak lagi membiarkan order lahir dari reference/entry price yang invalid

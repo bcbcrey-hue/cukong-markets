@@ -1,5 +1,5 @@
 {
-  "summary": "Backend-only regression and observability validation completed for startup/execution/recovery/deploy-readiness scope. Official probe suite passed, targeted probes passed, and added BUY entry-price guard probe passed.",
+  "summary": "Backend-only regression and observability validation completed for startup/execution/recovery/deploy-readiness scope. Official probe suite passed, including BUY entry-price guard inside scripts/run-probes.mjs.",
   "backend_issues": {
     "critical": [],
     "minor": []
@@ -20,7 +20,6 @@
     "/app/tests/buy_entry_price_guard_probe.ts"
   ],
   "action_items": [
-    "Optional hardening: include /app/tests/buy_entry_price_guard_probe.ts into scripts/run-probes.mjs so BUY entry-price guard becomes an official regression gate.",
     "Keep startup phase logs and worker timeout recovery probes as mandatory CI checks.",
     "Preserve env contract parity between src/config/env.ts and .env.example on every env-related change."
   ],
@@ -40,6 +39,6 @@
   "seed_data_creation": "No persistent seed data. Probes used isolated temporary DATA_DIR.",
   "retest_needed": false,
   "should_main_agent_self_test": true,
-  "context_for_next_testing_agent": "Executed successfully: yarn typecheck:probes, yarn build, node scripts/run-probes.mjs, yarn test:probes, and targeted buy_entry_price_guard_probe. Requested scope validated: bootstrap error clarity on bind failure, startup phase logging, worker timeout recovery without false shutdown error noise, Indodax recovery probes, official probe runner coverage for bootstrap_observability_probe + worker_timeout_probe, and env example/runtime contract sync. Note: exchange/telegram paths in probes include MOCKED components by design.",
+  "context_for_next_testing_agent": "Executed successfully: yarn typecheck:probes, yarn build, node scripts/run-probes.mjs, yarn test:probes, and targeted buy_entry_price_guard_probe. Requested scope validated: bootstrap error clarity on bind failure, startup phase logging, worker timeout recovery without false shutdown error noise, Indodax recovery probes, official probe runner coverage for bootstrap_observability_probe + worker_timeout_probe + buy_entry_price_guard_probe, and env example/runtime contract sync. Note: exchange/telegram paths in probes include MOCKED components by design.",
   "rca of the issue": "No defect reproduced in requested scope after verification. Additional RCA test added to explicitly prove BUY entry invalid path is blocked before order creation."
 }
