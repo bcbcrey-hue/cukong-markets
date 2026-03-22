@@ -38,8 +38,13 @@ export class AppServer {
 
     if (path === '/healthz') {
       const currentHealth = this.health.get();
-      this.writeJson(response, 200, {
-        ok: true,
+      const live = this.health.isLive(currentHealth);
+      const ready = this.health.isReady(currentHealth);
+
+      this.writeJson(response, ready ? 200 : 503, {
+        ok: ready,
+        live,
+        ready,
         app: env.appName,
         server: {
           host: env.appBindHost,
@@ -56,6 +61,18 @@ export class AppServer {
         },
         executionMode: currentHealth.executionMode,
         health: currentHealth,
+      });
+      return;
+    }
+
+    if (path === '/livez') {
+      const currentHealth = this.health.get();
+      const live = this.health.isLive(currentHealth);
+
+      this.writeJson(response, live ? 200 : 503, {
+        ok: live,
+        live,
+        runtimeStatus: currentHealth.runtimeStatus,
       });
       return;
     }

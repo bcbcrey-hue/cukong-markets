@@ -67,12 +67,7 @@ export class HealthService {
       `pendingOrders=${pendingOrders}`,
     ];
 
-    const status: HealthSnapshot['status'] =
-      runtimeStatus === 'ERROR'
-        ? 'down'
-        : params.scannerRunning && params.telegramRunning
-          ? 'healthy'
-          : 'degraded';
+    const status = this.statusFromRuntime(runtimeStatus, params.scannerRunning, params.telegramRunning);
 
     const next: HealthSnapshot = {
       status,
@@ -88,5 +83,29 @@ export class HealthService {
     };
 
     return this.replace(next);
+  }
+
+  isLive(snapshot: HealthSnapshot = this.health): boolean {
+    return snapshot.runtimeStatus !== 'ERROR' && snapshot.runtimeStatus !== 'STOPPED';
+  }
+
+  isReady(snapshot: HealthSnapshot = this.health): boolean {
+    return snapshot.runtimeStatus === 'RUNNING' && snapshot.scannerRunning;
+  }
+
+  private statusFromRuntime(
+    runtimeStatus: RuntimeStatus,
+    scannerRunning: boolean,
+    telegramRunning: boolean,
+  ): HealthSnapshot['status'] {
+    if (runtimeStatus === 'ERROR' || runtimeStatus === 'STOPPED') {
+      return 'down';
+    }
+
+    if (runtimeStatus === 'RUNNING') {
+      return scannerRunning && telegramRunning ? 'healthy' : 'degraded';
+    }
+
+    return 'degraded';
   }
 }

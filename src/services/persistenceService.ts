@@ -107,7 +107,7 @@ export function createDefaultSettings(): BotSettings {
 
 export function createDefaultHealth(): HealthSnapshot {
   return {
-    status: 'healthy',
+    status: 'degraded',
     updatedAt: new Date().toISOString(),
     runtimeStatus: 'IDLE',
     scannerRunning: false,
