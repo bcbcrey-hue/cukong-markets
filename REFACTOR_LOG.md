@@ -2,74 +2,58 @@
 
 Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
-Dokumen ini hanya mencatat perubahan yang benar-benar masuk ke source aktual.
+Dokumen ini mencatat perubahan yang benar-benar masuk ke source aktual, sekaligus membedakan progres historis vs status HEAD saat ini.
 
-## Perubahan inti yang selesai
+## Perubahan inti yang selesai (historis perubahan source)
 
 ### 1. Startup / bootstrap observability
 
-- `src/bootstrap.ts` sekarang memuat runtime secara bertahap dan menangkap error import/runtime start di dalam phase bootstrap
-- failure log bootstrap sekarang memuat phase, stack, dan cause chain yang bisa dipakai untuk debugging production
-- `src/app.ts` sekarang memberi phase log eksplisit untuk:
-  - persistence bootstrap
-  - runtime state load
-  - worker pool start
-  - app server start
-  - callback server start
-  - recovery live orders
-  - evaluasi posisi
-  - Telegram start
-  - polling start
+- `src/bootstrap.ts` memuat runtime bertahap dan membungkus error per phase bootstrap.
+- failure log bootstrap memuat phase, stack, dan cause chain untuk debugging.
+- `src/app.ts` memuat phase log eksplisit untuk startup runtime utama.
 
 ### 2. Logger / error serialization
 
-- `src/core/logger.ts` sekarang men-serialize `error` dan `err`
-- startup failure tidak lagi rawan tampil sebagai objek kosong `{}`
-- `src/core/scheduler.ts` sekarang mengeluarkan log saat job gagal atau overlap
-- `src/core/shutdown.ts` sekarang menyimpan error object penuh, bukan hanya message string
+- `src/core/logger.ts` men-serialize `error` dan `err`.
+- `src/core/scheduler.ts` mengeluarkan log saat job gagal/overlap.
+- `src/core/shutdown.ts` menyimpan error object penuh.
 
-### 3. Worker runtime correctness
+### 3. Worker runtime correctness (historis)
 
-- `src/services/workerPoolService.ts` sekarang memprioritaskan path worker build (`dist/workers/*.js`) lalu fallback ke path dev
-- worker path tidak lagi bergantung hanya pada `process.cwd()`
-- false alarm log saat worker dihentikan secara sengaja sudah dibersihkan
-- timeout worker sekarang tetap terlihat jelas tanpa mengotori log dengan exit-error palsu saat shutdown normal
+- Resolver worker memprioritaskan artifact build (`dist/workers/*.js`) lalu fallback dev path.
+- Worker path tidak bergantung hanya pada `process.cwd()`.
+- Noise log worker exit saat shutdown normal sudah dibersihkan.
 
 ### 4. Execution safety / resilience
 
-- `src/domain/trading/executionEngine.ts` sekarang memvalidasi notional, reference price, entry price, dan quantity sebelum BUY dibuat
-- SELL manual sekarang menolak exit price yang invalid
-- `src/domain/trading/riskEngine.ts` sekarang memblok entry jika ukuran posisi atau reference price signal invalid
-- `src/integrations/indodax/publicApi.ts` dan `src/integrations/indodax/privateApi.ts` sekarang memakai timeout request nyata via `INDODAX_TIMEOUT_MS`
-- GET public/private API sekarang punya retry aman untuk failure retriable; POST trading/cancel tetap tidak di-retry agar tidak memicu duplicate live order
-- live submit yang ambigu karena timeout/network tidak lagi langsung direject; runtime menandai `submission_uncertain`, mencoba reconcile via `openOrders`/history, dan `cancelAllOrders()` tidak lagi melakukan local cancel berbahaya untuk order tanpa `exchangeOrderId`
+- BUY divalidasi untuk notional/reference/entry/quantity sebelum order dibuat.
+- SELL manual menolak exit price invalid.
+- Retry GET public/private API ditambah untuk failure retriable; POST trading/cancel tetap non-retry.
+- Jalur `submission_uncertain` ditambah mitigasi reconcile sebelum finalisasi.
 
 ### 5. Env contract / docs truthfulness
 
-- `.env.example` sekarang benar-benar ada dan sinkron dengan env yang dibaca runtime
-- `README.md` disesuaikan agar tidak lagi overclaim status live trading
-- `test:probes` resmi sekarang memasukkan `bootstrap_observability_probe`, `worker_timeout_probe`, `buy_entry_price_guard_probe`, `live_submission_uncertain_probe`, dan `cancel_submission_uncertain_probe`
+- `.env.example` tersedia dan sinkron dengan env runtime.
+- README sudah diarahkan agar tidak overclaim live readiness.
+- Runner probe resmi mencakup probe safety tambahan (bootstrap/worker timeout/buy guard/submission-uncertain).
 
-## Validasi yang benar-benar dijalankan
+## Riwayat validasi yang pernah dijalankan
 
 - `npm ci`
 - `npm run lint`
 - `npm run build`
 - `npm run typecheck:probes`
 - `npm run test:probes`
-- pada kondisi final, `npm run test:probes` sudah mencakup probe safety tambahan untuk `buy_entry_price_guard`, `live_submission_uncertain`, dan `cancel_submission_uncertain`
 
-## Status jujur saat ini
+Catatan: daftar di atas adalah riwayat eksekusi yang pernah dilakukan pada tahap sebelumnya, **bukan jaminan status hijau HEAD saat ini**.
 
-### SIAP DEPLOY
+## Status HEAD saat ini (sinkron audit 2026-03-22)
 
-Ya, untuk scope source repo dan runtime startup/recovery/observability yang diaudit.
+- `npm run typecheck:probes` lulus.
+- `npm run verify` / `npm run test:probes` belum green penuh karena gagal di `tests/runtime_backend_regression.ts` (assertion worker path).
+- Verdict live trading tetap: **BELUM SIAP LIVE**.
 
-### SIAP LIVE
+## Batas jujur yang masih tersisa
 
-Belum.
-
-Blocker utama yang masih tersisa:
-
-- jalur `submission_uncertain` sudah dimitigasi di source, tetapi belum ada pembuktian exchange nyata untuk semua edge case identifikasi order pasca-timeout
-- belum ada pembuktian operasional nyata dari repo ini untuk live shadow-run/non-destruktif auth check exchange
+- Jalur `submission_uncertain` sudah dimitigasi di source, tetapi belum terbukti end-to-end terhadap exchange nyata untuk semua edge case.
+- Belum ada bukti submit live trading end-to-end dalam jalur verifikasi default repo.

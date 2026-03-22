@@ -2,39 +2,29 @@
 
 Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
-## Posisi project yang sekarang harus dianggap benar
+## Posisi project yang harus dianggap benar (HEAD audit 2026-03-22)
 
-- source code runtime tetap sumber kebenaran utama
-- startup observability sudah diperkuat: bootstrap/app startup sekarang punya phase log yang jelas
-- `.env.example` sekarang tersedia dan sinkron dengan env runtime aktual
-- worker runtime path sudah aman untuk hasil build production
-- official probe suite sekarang juga menjalankan bootstrap observability, worker timeout, buy-entry guard, `live_submission_uncertain`, dan `cancel_submission_uncertain`
-- history/recovery Indodax tetap canonical ke V2 untuk scope migrasi yang memang di-claim source
+- Source code runtime tetap sumber kebenaran utama.
+- Startup observability sudah diperkuat (phase bootstrap/app jelas).
+- `.env.example` tersedia dan sinkron dengan env runtime.
+- Probe suite resmi mencakup bootstrap observability, worker timeout, buy-entry guard, dan jalur submission-uncertain.
+- History/recovery Indodax tetap canonical ke V2 untuk scope yang di-claim source.
 
-## Temuan audit yang sudah ditutup
+## Status verifikasi HEAD terbaru
 
-- error bootstrap yang tadinya bisa menutup root cause sekarang sudah memuat phase, stack, dan cause
-- logger tidak lagi menyembunyikan object error penting sebagai `{}`
-- request public/private API sekarang benar-benar memakai timeout runtime
-- GET public/private API sekarang punya retry aman untuk failure retriable; POST trading tetap tidak di-retry agar tidak memicu duplicate order
-- BUY tidak lagi boleh lahir dari reference/entry price yang invalid
-- live submit yang ambigu sekarang masuk `submission_uncertain` lalu dicoba direkonsiliasi otomatis via `openOrders`/history sebelum dianggap final
-- false alarm worker exit saat shutdown normal sudah dibersihkan dari log
-
-## Status verifikasi terbaru
-
-- `npm run lint` lulus
-- `npm run build` lulus
-- `npm run typecheck:probes` lulus
-- `npm run test:probes` lulus
-- suite resmi sudah mencakup probe safety untuk startup, worker timeout, buy-entry guard, dan submission-uncertain cancel safety
+- `npm run lint` lulus.
+- `npm run build` lulus.
+- `npm run typecheck:probes` lulus.
+- `npm run verify` / `npm run test:probes` **belum lulus penuh** (gagal di `tests/runtime_backend_regression.ts` assertion worker path).
 
 ## Verdict yang harus dipakai pada sesi berikutnya
 
-- deploy-readiness source repo: **SIAP DEPLOY**
-- live trading nyata: **BELUM SIAP LIVE**
+- source verification chain HEAD: **BELUM GREEN PENUH**.
+- deploy-readiness: **BELUM bisa diklaim hijau penuh** selama verify chain resmi belum green.
+- live trading nyata: **BELUM SIAP LIVE**.
 
 ## Blocker jujur yang masih tersisa
 
-- jalur `submission_uncertain` sudah lebih aman di source tetapi belum terbukti end-to-end terhadap exchange nyata untuk seluruh edge case
-- belum ada pembuktian exchange live shadow-run/non-destruktif dari repo ini
+- Proof-chain verifikasi resmi belum bersih/reproducible penuh karena 1 probe runtime masih gagal.
+- Secret handling akun masih membutuhkan penguatan operasional untuk live production.
+- Belum ada pembuktian live trading end-to-end terhadap exchange nyata dalam jalur verify default.

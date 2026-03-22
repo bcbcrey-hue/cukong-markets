@@ -24,7 +24,13 @@ npm run dev
 npm run verify
 ```
 
-`npm run verify` menjalankan lint + typecheck probe + build artifact + seluruh probe runtime.
+`npm run verify` tetap merupakan command verifikasi resmi (`lint` + `typecheck:probes` + `build` + seluruh probe runtime via runner).
+
+**Status HEAD saat audit 2026-03-22:**
+- `npm run typecheck:probes` **lulus**.
+- `npm run verify` / `npm run test:probes` **belum green penuh** karena gagal di `tests/runtime_backend_regression.ts` (assertion worker path).
+
+Lihat detail audit di `AUDIT_HEAD_2026-03-22.md`.
 
 ## Bukti runtime worker production/build
 
@@ -34,7 +40,7 @@ Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_
 2. worker dijalankan sebagai JS worker (bukan `tsx/cli`),
 3. task worker benar-benar diproses sukses.
 
-Probe ini ikut di jalur `npm run verify`.
+Probe ini tetap bagian dari jalur `npm run verify`, meski status chain verify HEAD saat ini belum sepenuhnya hijau.
 
 ## Kontrak env runtime
 
@@ -72,10 +78,10 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
 
 ## Batas yang masih harus jujur
 
-- **SIAP untuk scope source verification/build/probe.**
+- **BELUM GREEN PENUH untuk scope source verification/build/probe pada HEAD audit ini** (karena verify chain masih fail di satu probe runtime).
 - **BELUM TERBUKTI sebagai live trading production end-to-end.**
 
-Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
+Lolos sebagian source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
 
 ## Catatan penting
 
