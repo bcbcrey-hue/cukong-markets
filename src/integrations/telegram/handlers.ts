@@ -102,6 +102,11 @@ function clearPendingFlow(flow: UserFlowState): void {
   flow.pendingSlippageConfirmation = undefined;
 }
 
+function clearAccountManualFlow(flow: UserFlowState): void {
+  flow.pendingManualAccount = undefined;
+  flow.pendingDeleteAccountId = undefined;
+}
+
 function getTopSignal(
   hotlist: HotlistService,
   pair?: string,
@@ -770,6 +775,8 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
           ].join('\n'),
           accountsKeyboard,
         );
+      } else {
+        await replyText(ctx, 'Flow user tidak ditemukan. Coba ulang dari menu Accounts.', accountsKeyboard);
       }
       await ctx.answerCbQuery();
       return;
@@ -1057,24 +1064,41 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
         return;
       }
 
-      await deps.accounts.delete(userFlow.pendingDeleteAccountId);
-      userFlow.pendingDeleteAccountId = undefined;
-      await replyText(
-        ctx,
-        `Account berhasil dihapus.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
-        accountsKeyboard,
-      );
+      try {
+        await deps.accounts.delete(userFlow.pendingDeleteAccountId);
+        userFlow.pendingDeleteAccountId = undefined;
+        await replyText(
+          ctx,
+          `Account berhasil dihapus.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
+          accountsKeyboard,
+        );
+      } catch (error) {
+        userFlow.pendingDeleteAccountId = undefined;
+        await replyText(
+          ctx,
+          [
+            'Gagal menghapus account.',
+            error instanceof Error ? error.message : 'Terjadi error yang tidak diketahui.',
+            'Silakan refresh list account lalu coba lagi.',
+          ].join('\n'),
+          accountsKeyboard,
+        );
+      }
       return;
     }
 
     if (userFlow.pendingManualAccount) {
       if (/^batal$/i.test(text)) {
-        userFlow.pendingManualAccount = undefined;
+        clearAccountManualFlow(userFlow);
         await replyText(ctx, 'Tambah account manual dibatalkan.', accountsKeyboard);
         return;
       }
 
       if (userFlow.pendingManualAccount.step === 'name') {
+        if (!text) {
+          await replyText(ctx, 'Nama account tidak boleh kosong. Kirim nama account atau BATAL.');
+          return;
+        }
         userFlow.pendingManualAccount = {
           step: 'apiKey',
           name: text,
@@ -1084,6 +1108,10 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       }
 
       if (userFlow.pendingManualAccount.step === 'apiKey') {
+        if (!text) {
+          await replyText(ctx, 'API key tidak boleh kosong. Kirim API key atau BATAL.');
+          return;
+        }
         userFlow.pendingManualAccount = {
           ...userFlow.pendingManualAccount,
           step: 'apiSecret',
@@ -1094,20 +1122,37 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       }
 
       if (userFlow.pendingManualAccount.step === 'apiSecret') {
+        if (!text) {
+          await replyText(ctx, 'API secret tidak boleh kosong. Kirim API secret atau BATAL.');
+          return;
+        }
         const name = userFlow.pendingManualAccount.name ?? '';
         const apiKey = userFlow.pendingManualAccount.apiKey ?? '';
 
-        await deps.accounts.addManualAccount({
-          name,
-          apiKey,
-          apiSecret: text,
-        });
-        userFlow.pendingManualAccount = undefined;
-        await replyText(
-          ctx,
-          `Account manual berhasil ditambahkan.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
-          accountsKeyboard,
-        );
+        try {
+          await deps.accounts.addManualAccount({
+            name,
+            apiKey,
+            apiSecret: text,
+          });
+          clearAccountManualFlow(userFlow);
+          await replyText(
+            ctx,
+            `Account manual berhasil ditambahkan.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
+            accountsKeyboard,
+          );
+        } catch (error) {
+          clearAccountManualFlow(userFlow);
+          await replyText(
+            ctx,
+            [
+              'Gagal menambah account manual.',
+              error instanceof Error ? error.message : 'Terjadi error yang tidak diketahui.',
+              'Ulangi dari menu Accounts → Add Manual.',
+            ].join('\n'),
+            accountsKeyboard,
+          );
+        }
         return;
       }
     }
