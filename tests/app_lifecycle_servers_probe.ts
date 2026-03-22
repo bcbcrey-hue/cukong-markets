@@ -89,6 +89,53 @@ async function main() {
       process.env.INDODAX_CALLBACK_PATH,
       'Callback health should reflect callback path from env',
     );
+
+    await app.stopRuntimeFromControl();
+
+    const stoppedHealthResponse = await fetch(`http://127.0.0.1:${appPort}/healthz`);
+    assert.equal(
+      stoppedHealthResponse.status,
+      503,
+      'App health must become not-ready immediately after runtimeControl.stop()',
+    );
+    const stoppedHealth = (await stoppedHealthResponse.json()) as {
+      ok: boolean;
+      ready: boolean;
+      health: { runtimeStatus: string; scannerRunning: boolean; notes: string[] };
+    };
+    assert.equal(stoppedHealth.ok, false, 'Stopped runtime must expose ok=false');
+    assert.equal(stoppedHealth.ready, false, 'Stopped runtime must expose ready=false');
+    assert.equal(stoppedHealth.health.runtimeStatus, 'STOPPED', 'Stopped runtime must expose STOPPED status');
+    assert.equal(stoppedHealth.health.scannerRunning, false, 'Stopped runtime must disable scanner readiness signal');
+    assert.ok(
+      stoppedHealth.health.notes.includes('runtime-control-stop'),
+      'Stopped runtime must persist runtime-control stop marker in health notes',
+    );
+
+    const stoppedLivezResponse = await fetch(`http://127.0.0.1:${appPort}/livez`);
+    assert.equal(stoppedLivezResponse.status, 503, 'Livez must report not-live while runtime status is STOPPED');
+
+    await app.startRuntimeFromControl();
+
+    const resumedHealthResponse = await fetch(`http://127.0.0.1:${appPort}/healthz`);
+    assert.equal(
+      resumedHealthResponse.status,
+      200,
+      'App health must return ready again after runtimeControl.start()',
+    );
+    const resumedHealth = (await resumedHealthResponse.json()) as {
+      ok: boolean;
+      ready: boolean;
+      health: { runtimeStatus: string; scannerRunning: boolean; notes: string[] };
+    };
+    assert.equal(resumedHealth.ok, true, 'Resumed runtime must expose ok=true');
+    assert.equal(resumedHealth.ready, true, 'Resumed runtime must expose ready=true');
+    assert.equal(resumedHealth.health.runtimeStatus, 'RUNNING', 'Resumed runtime must expose RUNNING status');
+    assert.equal(resumedHealth.health.scannerRunning, true, 'Resumed runtime must set scanner readiness signal true');
+    assert.ok(
+      resumedHealth.health.notes.includes('runtime-control-start'),
+      'Resumed runtime must persist runtime-control start marker in health notes',
+    );
   } finally {
     await app.stop();
     TelegramBot.prototype.start = originalStart;
