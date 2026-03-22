@@ -5,7 +5,13 @@ export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
 export type RuntimeStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'ERROR';
 export type EntryTimingState = 'EARLY' | 'READY' | 'LATE' | 'AVOID';
-export type SummaryAccuracy = 'SIMULATED' | 'OPTIMISTIC_LIVE' | 'PARTIAL_LIVE' | 'CONFIRMED_LIVE';
+export type SummaryAccuracy =
+  | 'SIMULATED'
+  | 'OPTIMISTIC_LIVE'
+  | 'PARTIAL_LIVE'
+  | 'CONFIRMED_LIVE'
+  | 'UNCERTAIN_LIVE'
+  | 'UNRESOLVED_LIVE';
 export type MarketRegime =
   | 'QUIET'
   | 'ACCUMULATION'

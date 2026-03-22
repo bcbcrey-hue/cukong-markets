@@ -20,6 +20,7 @@ const probes = [
   'tests/buy_entry_price_guard_probe.ts',
   'tests/live_submission_uncertain_probe.ts',
   'tests/cancel_submission_uncertain_probe.ts',
+  'tests/submission_uncertain_unresolved_probe.ts',
   'tests/indodax_history_v2_probe.ts',
   'tests/app_lifecycle_servers_probe.ts',
   'tests/bootstrap_observability_probe.ts',
