@@ -320,6 +320,16 @@ export async function createApp(): Promise<AppRuntime> {
   const start = async (): Promise<void> => {
     await state.setTradingMode(settings.get().tradingMode);
     await state.setStatus('STARTING');
+    await health.build({
+      scannerRunning: false,
+      telegramRunning: false,
+      tradingEnabled: false,
+      executionMode: settings.getExecutionMode(),
+      positions: positionManager.list(),
+      orders: orderManager.list(),
+      workers: workerPool.snapshot(),
+      notes: ['startup', 'runtime=STARTING', 'readiness=pending'],
+    });
 
     try {
       if (settings.get().workers.enabled) {
@@ -348,6 +358,20 @@ export async function createApp(): Promise<AppRuntime> {
       polling.start();
 
       await state.setStatus('RUNNING');
+      const runningTelegramSignal = telegram.getConnectionSignal();
+      await health.build({
+        scannerRunning: true,
+        telegramRunning:
+          runningTelegramSignal.launched &&
+          runningTelegramSignal.running &&
+          runningTelegramSignal.connected,
+        tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
+        executionMode: settings.getExecutionMode(),
+        positions: positionManager.list(),
+        orders: orderManager.list(),
+        workers: workerPool.snapshot(),
+        notes: [...buildTelegramNotes(runningTelegramSignal), 'startup-complete', 'readiness=ready'],
+      });
 
       await journal.info('APP_STARTED', 'cukong-markets app started', {
         mode: settings.get().tradingMode,
@@ -384,6 +408,20 @@ export async function createApp(): Promise<AppRuntime> {
       );
     } catch (error) {
       await state.setStatus('ERROR');
+      const failedTelegramSignal = telegram.getConnectionSignal();
+      await health.build({
+        scannerRunning: false,
+        telegramRunning:
+          failedTelegramSignal.launched &&
+          failedTelegramSignal.running &&
+          failedTelegramSignal.connected,
+        tradingEnabled: false,
+        executionMode: settings.getExecutionMode(),
+        positions: positionManager.list(),
+        orders: orderManager.list(),
+        workers: workerPool.snapshot(),
+        notes: [...buildTelegramNotes(failedTelegramSignal), 'startup-failed', 'runtime=ERROR'],
+      });
       startupLog.error({ error }, 'app start failed');
       throw error;
     }
@@ -391,6 +429,20 @@ export async function createApp(): Promise<AppRuntime> {
 
   const stop = async (): Promise<void> => {
     await state.setStatus('STOPPING');
+    const stoppingTelegramSignal = telegram.getConnectionSignal();
+    await health.build({
+      scannerRunning: false,
+      telegramRunning:
+        stoppingTelegramSignal.launched &&
+        stoppingTelegramSignal.running &&
+        stoppingTelegramSignal.connected,
+      tradingEnabled: false,
+      executionMode: settings.getExecutionMode(),
+      positions: positionManager.list(),
+      orders: orderManager.list(),
+      workers: workerPool.snapshot(),
+      notes: [...buildTelegramNotes(stoppingTelegramSignal), 'shutdown-started', 'runtime=STOPPING'],
+    });
 
     polling.stop();
     await telegram.stop();
