@@ -475,4 +475,8 @@ export class IndodaxCallbackServer {
   getPort(): number {
     return this.port;
   }
+
+  isRunning(): boolean {
+    return this.server !== null;
+  }
 }

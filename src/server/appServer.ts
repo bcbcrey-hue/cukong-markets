@@ -144,4 +144,8 @@ export class AppServer {
   getPort(): number {
     return this.port;
   }
+
+  isRunning(): boolean {
+    return this.server !== null;
+  }
 }

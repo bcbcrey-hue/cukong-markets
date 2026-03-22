@@ -25,13 +25,16 @@ async function main() {
   const journal = new JournalService(persistence);
 
   await Promise.all([state.load(), health.load(), journal.load()]);
+  await state.setStatus('RUNNING');
   await health.build({
     scannerRunning: true,
-    telegramRunning: true,
+    telegramRunning: false,
+    callbackServerRunning: true,
     tradingEnabled: true,
     executionMode: 'SIMULATED',
     positions: [],
     orders: [],
+    notes: ['probe=telegram-required-for-readiness'],
   });
 
   const appServer = new AppServer(health);
@@ -41,12 +44,50 @@ async function main() {
     await appServer.start();
     await callbackServer.start();
 
+    const degradedHealthResponse = await fetch(`http://127.0.0.1:${appServer.getPort()}/healthz`);
+    assert.equal(
+      degradedHealthResponse.status,
+      503,
+      'App server /healthz must respond 503 when runtime RUNNING but telegram dependency is down',
+    );
+    const degradedHealth = (await degradedHealthResponse.json()) as {
+      ok: boolean;
+      ready: boolean;
+      health: { status: string; telegramRunning: boolean };
+    };
+    assert.equal(degradedHealth.ok, false, 'Degraded readiness response must expose ok=false');
+    assert.equal(degradedHealth.ready, false, 'Degraded readiness response must expose ready=false');
+    assert.equal(
+      degradedHealth.health.status,
+      'degraded',
+      'Health snapshot status must remain degraded until dependencies are fully ready',
+    );
+    assert.equal(
+      degradedHealth.health.telegramRunning,
+      false,
+      'Health snapshot must reflect telegram dependency down',
+    );
+
+    await health.build({
+      scannerRunning: true,
+      telegramRunning: true,
+      callbackServerRunning: true,
+      tradingEnabled: true,
+      executionMode: 'SIMULATED',
+      positions: [],
+      orders: [],
+      notes: ['probe=ready-after-telegram-up'],
+    });
+
     const appHealthResponse = await fetch(`http://127.0.0.1:${appServer.getPort()}/healthz`);
-    assert.equal(appHealthResponse.status, 200, 'App server /healthz must respond 200');
+    assert.equal(appHealthResponse.status, 200, 'App server /healthz must respond 200 when all readiness deps are up');
     const appHealth = (await appHealthResponse.json()) as {
       callback: { path: string; port: number; allowedHost: string | null };
+      health: { status: string; callbackServerRunning: boolean };
     };
     assert.equal(appHealth.callback.path, process.env.INDODAX_CALLBACK_PATH, 'App server must expose callback path from env');
+    assert.equal(appHealth.health.status, 'healthy', 'Health snapshot must become healthy after dependencies are ready');
+    assert.equal(appHealth.health.callbackServerRunning, true, 'Health snapshot must expose callback dependency state');
 
     const callbackHealthResponse = await fetch(`http://127.0.0.1:${callbackServer.getPort()}/healthz`);
     assert.equal(callbackHealthResponse.status, 200, 'Callback server /healthz must respond 200');

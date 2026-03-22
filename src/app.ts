@@ -36,6 +36,8 @@ import { AppServer } from './server/appServer';
 export interface AppRuntime {
   start(): Promise<void>;
   stop(): Promise<void>;
+  startRuntimeFromControl(): Promise<void>;
+  stopRuntimeFromControl(): Promise<void>;
 }
 
 const startupLog = createChildLogger({ module: 'app-runtime' });
@@ -147,6 +149,57 @@ export async function createApp(): Promise<AppRuntime> {
     },
   );
 
+  const startRuntimeFromControl = async (): Promise<void> => {
+    if (settings.get().workers.enabled) {
+      await workerPool.start();
+    }
+
+    polling.start();
+    await executionEngine.syncActiveOrders();
+    await executionEngine.evaluateOpenPositions();
+    await state.setStatus('RUNNING');
+    const resumedTelegramSignal = telegram.getConnectionSignal();
+    await health.build({
+      scannerRunning: true,
+      telegramRunning:
+        resumedTelegramSignal.launched &&
+        resumedTelegramSignal.running &&
+        resumedTelegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
+      tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
+      executionMode: settings.getExecutionMode(),
+      positions: positionManager.list(),
+      orders: orderManager.list(),
+      workers: workerPool.snapshot(),
+      notes: [...buildTelegramNotes(resumedTelegramSignal), 'runtime-control-start', 'readiness=ready'],
+    });
+
+    await journal.info('RUNTIME_STARTED_FROM_TELEGRAM', 'runtime resumed from telegram control');
+  };
+
+  const stopRuntimeFromControl = async (): Promise<void> => {
+    polling.stop();
+    await state.setStatus('STOPPED');
+    const stoppedTelegramSignal = telegram.getConnectionSignal();
+    await health.build({
+      scannerRunning: false,
+      telegramRunning:
+        stoppedTelegramSignal.launched &&
+        stoppedTelegramSignal.running &&
+        stoppedTelegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
+      tradingEnabled: false,
+      executionMode: settings.getExecutionMode(),
+      positions: positionManager.list(),
+      orders: orderManager.list(),
+      workers: workerPool.snapshot(),
+      notes: [...buildTelegramNotes(stoppedTelegramSignal), 'runtime-control-stop', 'readiness=not-ready'],
+    });
+    await journal.info('RUNTIME_STOPPED_FROM_TELEGRAM', 'runtime paused from telegram control');
+  };
+
   const telegram = new TelegramBot({
     report,
     health,
@@ -161,23 +214,8 @@ export async function createApp(): Promise<AppRuntime> {
     journal,
     backtest,
     runtimeControl: {
-      start: async () => {
-        if (settings.get().workers.enabled) {
-          await workerPool.start();
-        }
-
-        polling.start();
-        await executionEngine.syncActiveOrders();
-        await executionEngine.evaluateOpenPositions();
-        await state.setStatus('RUNNING');
-
-        await journal.info('RUNTIME_STARTED_FROM_TELEGRAM', 'runtime resumed from telegram control');
-      },
-      stop: async () => {
-        polling.stop();
-        await state.setStatus('STOPPED');
-        await journal.info('RUNTIME_STOPPED_FROM_TELEGRAM', 'runtime paused from telegram control');
-      },
+      start: startRuntimeFromControl,
+      stop: stopRuntimeFromControl,
     },
   });
   summary.attachNotifier(telegram);
@@ -296,6 +334,7 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: runtime.status === 'RUNNING',
       telegramRunning: telegramSignal.running && telegramSignal.connected,
+      callbackServerRunning: appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -323,6 +362,7 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: false,
       telegramRunning: false,
+      callbackServerRunning: false,
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -365,6 +405,8 @@ export async function createApp(): Promise<AppRuntime> {
           runningTelegramSignal.launched &&
           runningTelegramSignal.running &&
           runningTelegramSignal.connected,
+        callbackServerRunning:
+          appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
         executionMode: settings.getExecutionMode(),
         positions: positionManager.list(),
@@ -415,6 +457,8 @@ export async function createApp(): Promise<AppRuntime> {
           failedTelegramSignal.launched &&
           failedTelegramSignal.running &&
           failedTelegramSignal.connected,
+        callbackServerRunning:
+          appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: false,
         executionMode: settings.getExecutionMode(),
         positions: positionManager.list(),
@@ -436,6 +480,8 @@ export async function createApp(): Promise<AppRuntime> {
         stoppingTelegramSignal.launched &&
         stoppingTelegramSignal.running &&
         stoppingTelegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -457,6 +503,8 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: false,
       telegramRunning: telegramSignal.running && telegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -471,5 +519,5 @@ export async function createApp(): Promise<AppRuntime> {
 
   registerShutdown([stop]);
 
-  return { start, stop };
+  return { start, stop, startRuntimeFromControl, stopRuntimeFromControl };
 }
