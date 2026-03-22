@@ -18,6 +18,7 @@ const officialProbes = [
   'tests/live_execution_hardening_probe.ts',
   'tests/execution_summary_failed_probe.ts',
   'tests/buy_entry_price_guard_probe.ts',
+  'tests/position_mark_pnl_correctness_probe.ts',
   'tests/live_submission_uncertain_probe.ts',
   'tests/cancel_submission_uncertain_probe.ts',
   'tests/submission_uncertain_unresolved_probe.ts',

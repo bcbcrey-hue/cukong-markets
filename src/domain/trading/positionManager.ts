@@ -19,6 +19,15 @@ export class PositionManager {
 
   constructor(private readonly persistence: PersistenceService) {}
 
+  private computeUnrealizedPnl(
+    markPrice: number,
+    averageEntryPrice: number,
+    quantity: number,
+    entryFeesPaid: number,
+  ): number {
+    return (markPrice - averageEntryPrice) * quantity - entryFeesPaid;
+  }
+
   async load(): Promise<PositionRecord[]> {
     const snapshot = await this.persistence.loadAll();
     this.positions = Array.isArray(snapshot.positions)
@@ -76,7 +85,12 @@ export class PositionManager {
       averageExitPrice: null,
       currentPrice: input.entryPrice,
       peakPrice: input.entryPrice,
-      unrealizedPnl: 0,
+      unrealizedPnl: this.computeUnrealizedPnl(
+        input.entryPrice,
+        input.entryPrice,
+        input.quantity,
+        input.entryFeesPaid ?? 0,
+      ),
       realizedPnl: 0,
       entryFeesPaid: input.entryFeesPaid ?? 0,
       totalEntryFeesPaid: input.entryFeesPaid ?? 0,
@@ -112,6 +126,8 @@ export class PositionManager {
         : current.averageEntryPrice;
     const entryFeesPaid = (current.entryFeesPaid ?? 0) + (input.entryFeesPaid ?? 0);
     const totalEntryFeesPaid = (current.totalEntryFeesPaid ?? current.entryFeesPaid ?? 0) + (input.entryFeesPaid ?? 0);
+    const markPrice = current.currentPrice;
+    const peakMarkPrice = current.peakPrice ?? current.currentPrice;
 
     const next: PositionRecord = {
       ...current,
@@ -119,10 +135,14 @@ export class PositionManager {
       quantity: nextQuantity,
       entryPrice: weightedAverageEntryPrice,
       averageEntryPrice: weightedAverageEntryPrice,
-      currentPrice: Math.max(current.currentPrice, input.entryPrice),
-      peakPrice: Math.max(current.peakPrice ?? current.currentPrice, current.currentPrice, input.entryPrice),
-      unrealizedPnl:
-        (current.currentPrice - weightedAverageEntryPrice) * nextQuantity - entryFeesPaid,
+      currentPrice: markPrice,
+      peakPrice: peakMarkPrice,
+      unrealizedPnl: this.computeUnrealizedPnl(
+        markPrice,
+        weightedAverageEntryPrice,
+        nextQuantity,
+        entryFeesPaid,
+      ),
       entryFeesPaid,
       totalEntryFeesPaid,
       totalBoughtQuantity: (current.totalBoughtQuantity ?? current.quantity) + addedQuantity,
@@ -147,8 +167,12 @@ export class PositionManager {
         ...item,
         currentPrice: markPrice,
         peakPrice: Math.max(item.peakPrice ?? item.currentPrice, markPrice),
-        unrealizedPnl:
-          (markPrice - item.averageEntryPrice) * item.quantity - (item.entryFeesPaid ?? 0),
+        unrealizedPnl: this.computeUnrealizedPnl(
+          markPrice,
+          item.averageEntryPrice,
+          item.quantity,
+          item.entryFeesPaid ?? 0,
+        ),
         updatedAt: nowIso(),
       };
     });
@@ -186,29 +210,35 @@ export class PositionManager {
       (exitPrice - current.averageEntryPrice) * safeCloseQuantity -
       entryFeeShare -
       exitFee;
+    const isFullyClosed = remainingQuantity <= 1e-8;
+    const nextMarkPrice = isFullyClosed ? exitPrice : current.currentPrice;
 
     const next: PositionRecord = {
       ...current,
       quantity: remainingQuantity,
-      currentPrice: exitPrice,
+      currentPrice: nextMarkPrice,
       averageExitPrice: averageExitPrice ?? null,
-      peakPrice: Math.max(current.peakPrice ?? current.currentPrice, exitPrice),
+      peakPrice: current.peakPrice ?? current.currentPrice,
       realizedPnl,
-      unrealizedPnl:
-        (exitPrice - current.averageEntryPrice) * remainingQuantity - remainingEntryFeesPaid,
+      unrealizedPnl: this.computeUnrealizedPnl(
+        nextMarkPrice,
+        current.averageEntryPrice,
+        remainingQuantity,
+        remainingEntryFeesPaid,
+      ),
       entryFeesPaid: remainingEntryFeesPaid,
       totalEntryFeesPaid: currentTotalEntryFeesPaid,
       exitFeesPaid: (current.exitFeesPaid ?? 0) + exitFee,
       totalBoughtQuantity: current.totalBoughtQuantity ?? current.quantity,
       totalSoldQuantity: nextTotalSoldQuantity,
       status:
-        remainingQuantity <= 1e-8
+        isFullyClosed
           ? 'CLOSED'
           : safeCloseQuantity > 0
             ? 'PARTIALLY_CLOSED'
             : current.status,
       updatedAt: nowIso(),
-      closedAt: remainingQuantity <= 1e-8 ? nowIso() : current.closedAt,
+      closedAt: isFullyClosed ? nowIso() : current.closedAt,
     };
 
     this.positions = this.positions.map((item) => (item.id === positionId ? next : item));
