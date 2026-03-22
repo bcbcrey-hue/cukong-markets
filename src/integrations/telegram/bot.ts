@@ -36,8 +36,25 @@ export interface TelegramBotDeps {
   };
 }
 
+export interface TelegramConnectionSignal {
+  launched: boolean;
+  running: boolean;
+  connected: boolean;
+  lastLaunchAt: string | null;
+  lastLaunchSuccessAt: string | null;
+  lastLaunchError: string | null;
+}
+
 export class TelegramBot implements SummaryNotifier {
   private readonly bot: Telegraf;
+  private signal: TelegramConnectionSignal = {
+    launched: false,
+    running: false,
+    connected: false,
+    lastLaunchAt: null,
+    lastLaunchSuccessAt: null,
+    lastLaunchError: null,
+  };
 
   constructor(private readonly deps: TelegramBotDeps) {
     this.bot = new TelegrafBot(env.telegramToken);
@@ -45,15 +62,49 @@ export class TelegramBot implements SummaryNotifier {
     registerHandlers(this.bot, {
       ...deps,
       uploadHandler: new UploadHandler(deps.accountStore, deps.accounts),
+      getTelegramSignal: () => this.getConnectionSignal(),
     });
   }
 
   async start(): Promise<void> {
-    await this.bot.launch();
+    this.signal.lastLaunchAt = new Date().toISOString();
+    this.signal.lastLaunchError = null;
+
+    try {
+      await this.bot.telegram.getMe();
+      await this.bot.launch();
+
+      this.signal = {
+        ...this.signal,
+        launched: true,
+        running: true,
+        connected: true,
+        lastLaunchSuccessAt: new Date().toISOString(),
+        lastLaunchError: null,
+      };
+    } catch (error) {
+      this.signal = {
+        ...this.signal,
+        launched: false,
+        running: false,
+        connected: false,
+        lastLaunchError: error instanceof Error ? error.message : String(error),
+      };
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
     this.bot.stop();
+    this.signal = {
+      ...this.signal,
+      running: false,
+      connected: false,
+    };
+  }
+
+  getConnectionSignal(): TelegramConnectionSignal {
+    return { ...this.signal };
   }
 
   async broadcast(message: string): Promise<void> {

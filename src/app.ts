@@ -22,7 +22,7 @@ import { RiskEngine } from './domain/trading/riskEngine';
 
 import { IndodaxClient } from './integrations/indodax/client';
 import { IndodaxCallbackServer } from './integrations/indodax/callbackServer';
-import { TelegramBot } from './integrations/telegram/bot';
+import { TelegramBot, type TelegramConnectionSignal } from './integrations/telegram/bot';
 
 import { HealthService } from './services/healthService';
 import { JournalService } from './services/journalService';
@@ -182,6 +182,15 @@ export async function createApp(): Promise<AppRuntime> {
   });
   summary.attachNotifier(telegram);
 
+  const buildTelegramNotes = (signal: TelegramConnectionSignal): string[] => [
+    `telegramLaunched=${signal.launched}`,
+    `telegramRuntime=${signal.running ? 'running' : 'stopped'}`,
+    `telegramConnected=${signal.connected}`,
+    `telegramLastLaunchAt=${signal.lastLaunchAt ?? '-'}`,
+    `telegramLastLaunchSuccessAt=${signal.lastLaunchSuccessAt ?? '-'}`,
+    `telegramLastLaunchError=${signal.lastLaunchError ?? '-'}`,
+  ];
+
   const runtimePollingIntervalMs = settings.get().scanner.pollingIntervalMs;
   const marketScanIntervalMs = settings.get().scanner.marketWatchIntervalMs;
 
@@ -271,6 +280,7 @@ export async function createApp(): Promise<AppRuntime> {
 
   polling.register('health-heartbeat', runtimePollingIntervalMs, async () => {
     const runtime = state.get();
+    const telegramSignal = telegram.getConnectionSignal();
 
     await state.patch({
       uptimeMs: runtime.startedAt
@@ -285,13 +295,14 @@ export async function createApp(): Promise<AppRuntime> {
 
     await health.build({
       scannerRunning: runtime.status === 'RUNNING',
-      telegramRunning: true,
+      telegramRunning: telegramSignal.running && telegramSignal.connected,
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
       orders: orderManager.list(),
       workers: workerPool.snapshot(),
       notes: [
+        ...buildTelegramNotes(telegramSignal),
         `mode=${settings.get().tradingMode}`,
         `executionFlags=dryRun:${settings.get().dryRun},paperTrade:${settings.get().paperTrade},uiOnly:${settings.get().uiOnly}`,
         `accountsEnabled=${accountRegistry.countEnabled()}`,
@@ -389,15 +400,17 @@ export async function createApp(): Promise<AppRuntime> {
 
     await state.setStatus('STOPPED');
 
+    const telegramSignal = telegram.getConnectionSignal();
+
     await health.build({
       scannerRunning: false,
-      telegramRunning: false,
+      telegramRunning: telegramSignal.running && telegramSignal.connected,
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
       orders: orderManager.list(),
       workers: workerPool.snapshot(),
-      notes: ['shutdown'],
+      notes: [...buildTelegramNotes(telegramSignal), 'shutdown'],
     });
 
     await journal.info('APP_STOPPED', 'cukong-markets app stopped');
