@@ -148,7 +148,11 @@ export class ExecutionEngine {
   }
 
   private isSubmissionUncertainStale(order: OrderRecord): boolean {
-    if (order.exchangeOrderId || order.exchangeStatus !== 'submission_uncertain') {
+    if (
+      order.exchangeOrderId ||
+      (order.exchangeStatus !== 'submission_uncertain' &&
+        order.exchangeStatus !== 'submission_uncertain_unresolved')
+    ) {
       return false;
     }
 
@@ -943,12 +947,12 @@ export class ExecutionEngine {
     order: OrderRecord,
     reason: string,
   ): Promise<OrderRecord | undefined> {
-    if (order.status === 'REJECTED') {
+    if (order.exchangeStatus === 'submission_uncertain_unresolved') {
       return order;
     }
 
     const unresolvedOrder = await this.orders.update(order.id, {
-      status: 'REJECTED',
+      status: 'OPEN',
       exchangeStatus: 'submission_uncertain_unresolved',
       exchangeUpdatedAt: nowIso(),
       notes: this.appendNotes(order.notes, reason),
@@ -964,7 +968,7 @@ export class ExecutionEngine {
       reason,
     );
     await this.journal.warn(
-      'LIVE_ORDER_SUBMISSION_UNCERTAIN_FINALIZED_UNRESOLVED',
+      'LIVE_ORDER_SUBMISSION_UNCERTAIN_FLAGGED_UNRESOLVED',
       reason,
       {
         orderId: unresolvedOrder.id,
@@ -1056,7 +1060,11 @@ export class ExecutionEngine {
     order: OrderRecord,
     openOrders?: Map<string, ExchangeOpenOrderMatch>,
   ): Promise<OrderRecord | undefined> {
-    if (order.exchangeOrderId || order.exchangeStatus !== 'submission_uncertain') {
+    if (
+      order.exchangeOrderId ||
+      (order.exchangeStatus !== 'submission_uncertain' &&
+        order.exchangeStatus !== 'submission_uncertain_unresolved')
+    ) {
       return order;
     }
 
@@ -1118,7 +1126,7 @@ export class ExecutionEngine {
     if (this.isSubmissionUncertainStale(order)) {
       return this.markSubmissionUncertainUnresolved(
         order,
-        'submission uncertain unresolved >30m; marked REJECTED for operator follow-up',
+        'submission uncertain unresolved >30m; still OPEN safety-blocking, operator follow-up required',
       );
     }
 
@@ -2334,7 +2342,12 @@ export class ExecutionEngine {
 
     const activeOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
+      .filter(
+        (order) =>
+          Boolean(order.exchangeOrderId) ||
+          order.exchangeStatus === 'submission_uncertain' ||
+          order.exchangeStatus === 'submission_uncertain_unresolved',
+      );
     const messages: string[] = [];
     const processedOrderIds = new Set<string>();
     const ordersByAccount = new Map<string, OrderRecord[]>();
@@ -2356,16 +2369,27 @@ export class ExecutionEngine {
 
         for (const order of accountOrders) {
           if (!order.exchangeOrderId) {
-            if (order.exchangeStatus !== 'submission_uncertain') {
+            if (
+              order.exchangeStatus !== 'submission_uncertain' &&
+              order.exchangeStatus !== 'submission_uncertain_unresolved'
+            ) {
               continue;
             }
 
             processedOrderIds.add(order.id);
             const beforeExchangeOrderId = order.exchangeOrderId;
+            const beforeExchangeStatus = order.exchangeStatus;
             const resolved = await this.resolveSubmissionUncertainOrder(order, openOrders);
-            if (resolved && (resolved.exchangeOrderId !== beforeExchangeOrderId || resolved.status !== order.status)) {
+            if (
+              resolved &&
+              (
+                resolved.exchangeOrderId !== beforeExchangeOrderId ||
+                resolved.status !== order.status ||
+                resolved.exchangeStatus !== beforeExchangeStatus
+              )
+            ) {
               messages.push(
-                resolved.exchangeOrderId || resolved.status !== 'OPEN'
+                resolved.exchangeOrderId || resolved.exchangeStatus === 'submission_uncertain_unresolved'
                   ? this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved)
                   : `${resolved.side.toUpperCase()} live ${resolved.pair} submission uncertain; reconciliation pending`,
               );
@@ -2421,11 +2445,25 @@ export class ExecutionEngine {
       }
 
       try {
-        if (!activeOrder.exchangeOrderId && activeOrder.exchangeStatus === 'submission_uncertain') {
+        if (
+          !activeOrder.exchangeOrderId &&
+          (
+            activeOrder.exchangeStatus === 'submission_uncertain' ||
+            activeOrder.exchangeStatus === 'submission_uncertain_unresolved'
+          )
+        ) {
+          const beforeExchangeStatus = activeOrder.exchangeStatus;
           const resolved = await this.resolveSubmissionUncertainOrder(activeOrder);
-          if (resolved && (resolved.exchangeOrderId || resolved.status !== activeOrder.status)) {
+          if (
+            resolved &&
+            (
+              resolved.exchangeOrderId ||
+              resolved.status !== activeOrder.status ||
+              resolved.exchangeStatus !== beforeExchangeStatus
+            )
+          ) {
             messages.push(
-              resolved.exchangeOrderId || resolved.status !== 'OPEN'
+              resolved.exchangeOrderId || resolved.exchangeStatus === 'submission_uncertain_unresolved'
                 ? this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved)
                 : `${resolved.side.toUpperCase()} live ${resolved.pair} submission uncertain; reconciliation pending`,
             );
@@ -2474,7 +2512,12 @@ export class ExecutionEngine {
 
     const activeLiveOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
+      .filter(
+        (order) =>
+          Boolean(order.exchangeOrderId) ||
+          order.exchangeStatus === 'submission_uncertain' ||
+          order.exchangeStatus === 'submission_uncertain_unresolved',
+      );
 
     if (activeLiveOrders.length === 0) {
       return [];
@@ -2526,39 +2569,42 @@ export class ExecutionEngine {
 
     let count = 0;
     let unresolved = 0;
-    let finalizedUnresolved = 0;
 
     for (const order of this.orders.listActive()) {
       let currentOrder = order;
       const account = this.accounts.getById(currentOrder.accountId);
 
-      if (!currentOrder.exchangeOrderId && currentOrder.exchangeStatus === 'submission_uncertain') {
+      if (
+        !currentOrder.exchangeOrderId &&
+        (
+          currentOrder.exchangeStatus === 'submission_uncertain' ||
+          currentOrder.exchangeStatus === 'submission_uncertain_unresolved'
+        )
+      ) {
         const resolvedOrder = await this.resolveSubmissionUncertainOrder(currentOrder);
         if (resolvedOrder) {
           currentOrder = resolvedOrder;
         }
       }
 
-      if (!currentOrder.exchangeOrderId && currentOrder.exchangeStatus === 'submission_uncertain') {
+      if (
+        !currentOrder.exchangeOrderId &&
+        (
+          currentOrder.exchangeStatus === 'submission_uncertain' ||
+          currentOrder.exchangeStatus === 'submission_uncertain_unresolved'
+        )
+      ) {
         unresolved += 1;
         await this.journal.warn(
           'CANCEL_SKIPPED_SUBMISSION_UNCERTAIN',
-          'cancel dilewati karena order submission uncertain belum punya exchangeOrderId',
+          'cancel dilewati karena order ambiguous belum punya exchangeOrderId',
           {
             orderId: currentOrder.id,
             pair: currentOrder.pair,
             accountId: currentOrder.accountId,
+            exchangeStatus: currentOrder.exchangeStatus ?? null,
           },
         );
-        continue;
-      }
-
-      if (
-        !currentOrder.exchangeOrderId &&
-        currentOrder.exchangeStatus === 'submission_uncertain_unresolved' &&
-        currentOrder.status === 'REJECTED'
-      ) {
-        finalizedUnresolved += 1;
         continue;
       }
 
@@ -2594,10 +2640,8 @@ export class ExecutionEngine {
 
     const baseSummary = `Canceled ${count} active orders`;
     const unresolvedSummary = unresolved > 0 ? `; unresolved ${unresolved} submission-uncertain orders` : '';
-    const finalizedSummary =
-      finalizedUnresolved > 0 ? `; finalized ${finalizedUnresolved} stale submission-uncertain orders` : '';
 
-    return `${baseSummary}${unresolvedSummary}${finalizedSummary}`;
+    return `${baseSummary}${unresolvedSummary}`;
   }
 
   async sellAllPositions(): Promise<string> {

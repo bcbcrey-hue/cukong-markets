@@ -111,19 +111,24 @@ async function main() {
 
   const afterSync = orderManager.getById(staleOrder.id);
   assert.ok(afterSync, 'Order should still exist');
-  assert.equal(afterSync?.status, 'REJECTED');
+  assert.equal(afterSync?.status, 'OPEN');
   assert.equal(afterSync?.exchangeStatus, 'submission_uncertain_unresolved');
+  assert.equal(
+    orderManager.listActive().some((item) => item.id === staleOrder.id),
+    true,
+    'stale unresolved order must stay active to keep duplicate-entry protection engaged',
+  );
 
   const summaries = await persistence.readExecutionSummaries();
   assert.equal(
     summaries.some(
       (item) =>
         item.orderId === staleOrder.id &&
-        item.status === 'FAILED' &&
+        item.status === 'SUBMITTED' &&
         item.accuracy === 'UNRESOLVED_LIVE',
     ),
     true,
-    'stale unresolved submission_uncertain must emit FAILED summary with UNRESOLVED_LIVE accuracy',
+    'stale unresolved submission_uncertain must stay open but emit UNRESOLVED_LIVE follow-up summary',
   );
 
   console.log('PASS submission_uncertain_unresolved_probe');

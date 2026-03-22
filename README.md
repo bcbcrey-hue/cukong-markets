@@ -17,7 +17,7 @@ Yang benar-benar sudah terbukti lewat build/lint/probe:
 - GET public/private API sekarang punya retry aman untuk status/transport failure yang retriable, sementara POST trading **tidak** di-retry agar tidak berbahaya di kondisi gagal parsial
 - validasi harga entry BUY tidak lagi membiarkan order lahir dari reference/entry price yang invalid
 - submit live order yang gagal ambigu karena timeout/network sekarang masuk state `submission_uncertain` dan dicoba direkonsiliasi otomatis via `openOrders`/history sebelum dianggap final
-- `submission_uncertain` yang tetap unresolved terlalu lama sekarang difinalisasi sebagai `REJECTED` dengan marker `submission_uncertain_unresolved` agar tidak menggantung tanpa keputusan
+- `submission_uncertain` yang tetap unresolved terlalu lama sekarang ditandai `submission_uncertain_unresolved` namun tetap `OPEN` (safety-blocking) agar tidak overclaim finality
 - jalur history/recovery Indodax tetap canonical ke V2 untuk scope migrasi yang memang di-claim repo
 - dead code lama `src/integrations/http/httpClient.ts` dan `src/integrations/indodax/mapper.ts` sudah dihapus karena tidak terhubung runtime/build/probe
 
