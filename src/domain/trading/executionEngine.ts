@@ -982,6 +982,7 @@ export class ExecutionEngine {
 
   private async resolveSubmissionUncertainFromHistory(
     order: OrderRecord,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<OrderRecord | undefined> {
     const api = this.getPrivateApi(order.accountId);
     if (!api) {
@@ -996,22 +997,25 @@ export class ExecutionEngine {
         return order;
       }
 
-      const response = await api.orderHistory(order.pair);
+      const response = await api.orderHistory(order.pair, requestOptions);
       probableMatches.push(...this.findProbableOrderHistoryMatches(order, response.return ?? {}));
     } else {
       if (typeof (api as { orderHistoriesV2?: unknown }).orderHistoriesV2 !== 'function') {
         return order;
       }
 
-      const windows = this.buildOrderHistorySearchWindows(order).slice(0, 2);
+      const windows = this.buildOrderHistorySearchWindows(order).slice(0, 8);
       for (const window of windows) {
-        const response = await api.orderHistoriesV2({
-          pair: order.pair,
-          startTime: window.startTime,
-          endTime: window.endTime,
-          limit: 1000,
-          sort: 'asc',
-        });
+        const response = await api.orderHistoriesV2(
+          {
+            pair: order.pair,
+            startTime: window.startTime,
+            endTime: window.endTime,
+            limit: 1000,
+            sort: 'asc',
+          },
+          requestOptions,
+        );
         probableMatches.push(...this.findProbableOrderHistoryMatches(order, response.return ?? {}));
       }
     }
@@ -1044,7 +1048,7 @@ export class ExecutionEngine {
       return attached;
     }
 
-    const tradeStats = await this.loadTradeStats(attached);
+    const tradeStats = await this.loadTradeStats(attached, requestOptions);
     return this.syncOrderWithSnapshot(
       attached,
       this.mergeTradeStatsIntoSnapshot(
@@ -1059,6 +1063,7 @@ export class ExecutionEngine {
   private async resolveSubmissionUncertainOrder(
     order: OrderRecord,
     openOrders?: Map<string, ExchangeOpenOrderMatch>,
+    requestOptions?: IndodaxPrivateRequestOptions,
   ): Promise<OrderRecord | undefined> {
     if (
       order.exchangeOrderId ||
@@ -1068,7 +1073,8 @@ export class ExecutionEngine {
       return order;
     }
 
-    const accountOpenOrders = openOrders ?? (await this.fetchOpenOrdersForAccount(order.accountId));
+    const accountOpenOrders =
+      openOrders ?? (await this.fetchOpenOrdersForAccount(order.accountId, requestOptions));
     const probableOpenOrder = this.findProbableOpenOrderMatch(order, accountOpenOrders);
 
     if (probableOpenOrder) {
@@ -1084,7 +1090,7 @@ export class ExecutionEngine {
         return attached;
       }
 
-      const tradeStats = await this.loadTradeStats(attached);
+      const tradeStats = await this.loadTradeStats(attached, requestOptions);
       return this.syncOrderWithSnapshot(
         attached,
         this.mergeTradeStatsIntoSnapshot(
@@ -1097,7 +1103,7 @@ export class ExecutionEngine {
     }
 
     try {
-      const resolvedFromHistory = await this.resolveSubmissionUncertainFromHistory(order);
+      const resolvedFromHistory = await this.resolveSubmissionUncertainFromHistory(order, requestOptions);
       if (resolvedFromHistory?.exchangeOrderId) {
         return resolvedFromHistory;
       }
@@ -1126,7 +1132,7 @@ export class ExecutionEngine {
     if (this.isSubmissionUncertainStale(order)) {
       return this.markSubmissionUncertainUnresolved(
         order,
-        'submission uncertain unresolved >30m; still OPEN safety-blocking, operator follow-up required',
+        'submission uncertain unresolved >30m; OPEN safety-blocking tetap aktif. Operator WAJIB verifikasi exchange order langsung sebelum tindakan lanjutan.',
       );
     }
 
@@ -2379,7 +2385,11 @@ export class ExecutionEngine {
             processedOrderIds.add(order.id);
             const beforeExchangeOrderId = order.exchangeOrderId;
             const beforeExchangeStatus = order.exchangeStatus;
-            const resolved = await this.resolveSubmissionUncertainOrder(order, openOrders);
+            const resolved = await this.resolveSubmissionUncertainOrder(
+              order,
+              openOrders,
+              recoveryLaneOptions,
+            );
             if (
               resolved &&
               (
@@ -2453,7 +2463,10 @@ export class ExecutionEngine {
           )
         ) {
           const beforeExchangeStatus = activeOrder.exchangeStatus;
-          const resolved = await this.resolveSubmissionUncertainOrder(activeOrder);
+          const resolved = await this.resolveSubmissionUncertainOrder(activeOrder, undefined, {
+            lane: 'background_recovery',
+            requestPriority: -1,
+          });
           if (
             resolved &&
             (
@@ -2581,7 +2594,10 @@ export class ExecutionEngine {
           currentOrder.exchangeStatus === 'submission_uncertain_unresolved'
         )
       ) {
-        const resolvedOrder = await this.resolveSubmissionUncertainOrder(currentOrder);
+        const resolvedOrder = await this.resolveSubmissionUncertainOrder(currentOrder, undefined, {
+          lane: 'background_recovery',
+          requestPriority: -1,
+        });
         if (resolvedOrder) {
           currentOrder = resolvedOrder;
         }

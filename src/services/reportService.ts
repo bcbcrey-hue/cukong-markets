@@ -347,7 +347,7 @@ export class ReportService {
   }
 
   executionSummaryText(summary: ExecutionSummary): string {
-    return [
+    const lines = [
       '🧾 EXECUTION SUMMARY',
       `account=${summary.account}`,
       `pair=${summary.pair}`,
@@ -364,7 +364,15 @@ export class ReportService {
       `slippageVsRef=${summary.slippageVsReferencePricePct === null ? '-' : asPct(summary.slippageVsReferencePricePct)}`,
       `timestamp=${summary.timestamp}`,
       `reason=${truncate(summary.reason || '-', 180)}`,
-    ].join('\n');
+    ];
+
+    if (summary.accuracy === 'UNCERTAIN_LIVE') {
+      lines.push('operatorAction=Submission masih ambiguous; jangan entry ulang pair/account ini sampai reconciled.');
+    } else if (summary.accuracy === 'UNRESOLVED_LIVE') {
+      lines.push('operatorAction=WAJIB cek langsung di exchange (openOrders + history) sebelum cancel/manual close.');
+    }
+
+    return lines.join('\n');
   }
 
   tradeOutcomeSummaryText(summary: TradeOutcomeSummary): string {

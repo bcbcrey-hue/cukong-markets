@@ -22,6 +22,7 @@ const officialProbes = [
   'tests/live_submission_uncertain_probe.ts',
   'tests/cancel_submission_uncertain_probe.ts',
   'tests/submission_uncertain_unresolved_probe.ts',
+  'tests/submission_uncertain_bounded_history_probe.ts',
   'tests/indodax_history_v2_probe.ts',
   'tests/app_lifecycle_servers_probe.ts',
   'tests/bootstrap_observability_probe.ts',
