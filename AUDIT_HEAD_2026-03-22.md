@@ -1,6 +1,6 @@
 # AUDIT KETAT HEAD REPO (2026-03-22)
 
-Repo acuan: `masreykangtrade-oss/cukong-markets` (HEAD lokal saat audit: `c07ddd8`, branch `work`).
+Repo acuan: `masreykangtrade-oss/cukong-markets` (berdasarkan HEAD branch PR #15 saat audit tanggal 2026-03-22).
 
 ## 1) VERDICT GLOBAL
 
