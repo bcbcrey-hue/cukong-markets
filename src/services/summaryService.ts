@@ -85,6 +85,10 @@ export class SummaryService {
         return ['partial-live'];
       case 'CONFIRMED_LIVE':
         return ['confirmed-live'];
+      case 'UNCERTAIN_LIVE':
+        return ['uncertain-live'];
+      case 'UNRESOLVED_LIVE':
+        return ['unresolved-live'];
       default:
         return [];
     }

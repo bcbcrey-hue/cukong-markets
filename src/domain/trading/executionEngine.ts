@@ -90,6 +90,8 @@ interface ShadowRunLifecycleState {
 }
 
 export class ExecutionEngine {
+  private static readonly SUBMISSION_UNCERTAIN_STALE_MS = 30 * 60 * 1000;
+
   private shadowRunTask: Promise<void> | null = null;
   private shadowRunState: ShadowRunLifecycleState = {
     status: 'IDLE',
@@ -135,6 +137,27 @@ export class ExecutionEngine {
 
   private appendNotes(current: string | undefined, note: string): string {
     return current ? `${current}; ${note}` : note;
+  }
+
+  private getOrderAgeMs(order: OrderRecord): number | null {
+    const createdAtMs = new Date(order.createdAt).getTime();
+    if (!Number.isFinite(createdAtMs)) {
+      return null;
+    }
+    return Math.max(0, Date.now() - createdAtMs);
+  }
+
+  private isSubmissionUncertainStale(order: OrderRecord): boolean {
+    if (
+      order.exchangeOrderId ||
+      (order.exchangeStatus !== 'submission_uncertain' &&
+        order.exchangeStatus !== 'submission_uncertain_unresolved')
+    ) {
+      return false;
+    }
+
+    const ageMs = this.getOrderAgeMs(order);
+    return ageMs !== null && ageMs >= ExecutionEngine.SUBMISSION_UNCERTAIN_STALE_MS;
   }
 
   private getPrivateApi(accountId: string) {
@@ -903,7 +926,7 @@ export class ExecutionEngine {
 
     await this.publishExecutionSummary(
       uncertainOrder,
-      'OPTIMISTIC_LIVE',
+      'UNCERTAIN_LIVE',
       `${side} submission uncertain after transport error`,
     );
     await this.journal.warn(
@@ -918,6 +941,43 @@ export class ExecutionEngine {
     );
 
     return uncertainOrder;
+  }
+
+  private async markSubmissionUncertainUnresolved(
+    order: OrderRecord,
+    reason: string,
+  ): Promise<OrderRecord | undefined> {
+    if (order.exchangeStatus === 'submission_uncertain_unresolved') {
+      return order;
+    }
+
+    const unresolvedOrder = await this.orders.update(order.id, {
+      status: 'OPEN',
+      exchangeStatus: 'submission_uncertain_unresolved',
+      exchangeUpdatedAt: nowIso(),
+      notes: this.appendNotes(order.notes, reason),
+    });
+
+    if (!unresolvedOrder) {
+      return unresolvedOrder;
+    }
+
+    await this.publishExecutionSummary(
+      unresolvedOrder,
+      'UNRESOLVED_LIVE',
+      reason,
+    );
+    await this.journal.warn(
+      'LIVE_ORDER_SUBMISSION_UNCERTAIN_FLAGGED_UNRESOLVED',
+      reason,
+      {
+        orderId: unresolvedOrder.id,
+        pair: unresolvedOrder.pair,
+        accountId: unresolvedOrder.accountId,
+      },
+    );
+
+    return unresolvedOrder;
   }
 
   private async resolveSubmissionUncertainFromHistory(
@@ -1000,7 +1060,11 @@ export class ExecutionEngine {
     order: OrderRecord,
     openOrders?: Map<string, ExchangeOpenOrderMatch>,
   ): Promise<OrderRecord | undefined> {
-    if (order.exchangeOrderId || order.exchangeStatus !== 'submission_uncertain') {
+    if (
+      order.exchangeOrderId ||
+      (order.exchangeStatus !== 'submission_uncertain' &&
+        order.exchangeStatus !== 'submission_uncertain_unresolved')
+    ) {
       return order;
     }
 
@@ -1058,6 +1122,13 @@ export class ExecutionEngine {
         accountId: order.accountId,
       },
     );
+
+    if (this.isSubmissionUncertainStale(order)) {
+      return this.markSubmissionUncertainUnresolved(
+        order,
+        'submission uncertain unresolved >30m; still OPEN safety-blocking, operator follow-up required',
+      );
+    }
 
     return order;
   }
@@ -2271,7 +2342,12 @@ export class ExecutionEngine {
 
     const activeOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
+      .filter(
+        (order) =>
+          Boolean(order.exchangeOrderId) ||
+          order.exchangeStatus === 'submission_uncertain' ||
+          order.exchangeStatus === 'submission_uncertain_unresolved',
+      );
     const messages: string[] = [];
     const processedOrderIds = new Set<string>();
     const ordersByAccount = new Map<string, OrderRecord[]>();
@@ -2293,16 +2369,27 @@ export class ExecutionEngine {
 
         for (const order of accountOrders) {
           if (!order.exchangeOrderId) {
-            if (order.exchangeStatus !== 'submission_uncertain') {
+            if (
+              order.exchangeStatus !== 'submission_uncertain' &&
+              order.exchangeStatus !== 'submission_uncertain_unresolved'
+            ) {
               continue;
             }
 
             processedOrderIds.add(order.id);
             const beforeExchangeOrderId = order.exchangeOrderId;
+            const beforeExchangeStatus = order.exchangeStatus;
             const resolved = await this.resolveSubmissionUncertainOrder(order, openOrders);
-            if (resolved && (resolved.exchangeOrderId !== beforeExchangeOrderId || resolved.status !== order.status)) {
+            if (
+              resolved &&
+              (
+                resolved.exchangeOrderId !== beforeExchangeOrderId ||
+                resolved.status !== order.status ||
+                resolved.exchangeStatus !== beforeExchangeStatus
+              )
+            ) {
               messages.push(
-                resolved.exchangeOrderId
+                resolved.exchangeOrderId || resolved.exchangeStatus === 'submission_uncertain_unresolved'
                   ? this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved)
                   : `${resolved.side.toUpperCase()} live ${resolved.pair} submission uncertain; reconciliation pending`,
               );
@@ -2358,11 +2445,27 @@ export class ExecutionEngine {
       }
 
       try {
-        if (!activeOrder.exchangeOrderId && activeOrder.exchangeStatus === 'submission_uncertain') {
+        if (
+          !activeOrder.exchangeOrderId &&
+          (
+            activeOrder.exchangeStatus === 'submission_uncertain' ||
+            activeOrder.exchangeStatus === 'submission_uncertain_unresolved'
+          )
+        ) {
+          const beforeExchangeStatus = activeOrder.exchangeStatus;
           const resolved = await this.resolveSubmissionUncertainOrder(activeOrder);
-          if (resolved && resolved.exchangeOrderId) {
+          if (
+            resolved &&
+            (
+              resolved.exchangeOrderId ||
+              resolved.status !== activeOrder.status ||
+              resolved.exchangeStatus !== beforeExchangeStatus
+            )
+          ) {
             messages.push(
-              this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved),
+              resolved.exchangeOrderId || resolved.exchangeStatus === 'submission_uncertain_unresolved'
+                ? this.formatLiveOrderMessage(resolved.side.toUpperCase() as 'BUY' | 'SELL', resolved)
+                : `${resolved.side.toUpperCase()} live ${resolved.pair} submission uncertain; reconciliation pending`,
             );
           }
           continue;
@@ -2409,7 +2512,12 @@ export class ExecutionEngine {
 
     const activeLiveOrders = this.orders
       .listActive()
-      .filter((order) => Boolean(order.exchangeOrderId) || order.exchangeStatus === 'submission_uncertain');
+      .filter(
+        (order) =>
+          Boolean(order.exchangeOrderId) ||
+          order.exchangeStatus === 'submission_uncertain' ||
+          order.exchangeStatus === 'submission_uncertain_unresolved',
+      );
 
     if (activeLiveOrders.length === 0) {
       return [];
@@ -2463,30 +2571,51 @@ export class ExecutionEngine {
     let unresolved = 0;
 
     for (const order of this.orders.listActive()) {
-      const account = this.accounts.getById(order.accountId);
+      let currentOrder = order;
+      const account = this.accounts.getById(currentOrder.accountId);
 
-      if (!order.exchangeOrderId && order.exchangeStatus === 'submission_uncertain') {
+      if (
+        !currentOrder.exchangeOrderId &&
+        (
+          currentOrder.exchangeStatus === 'submission_uncertain' ||
+          currentOrder.exchangeStatus === 'submission_uncertain_unresolved'
+        )
+      ) {
+        const resolvedOrder = await this.resolveSubmissionUncertainOrder(currentOrder);
+        if (resolvedOrder) {
+          currentOrder = resolvedOrder;
+        }
+      }
+
+      if (
+        !currentOrder.exchangeOrderId &&
+        (
+          currentOrder.exchangeStatus === 'submission_uncertain' ||
+          currentOrder.exchangeStatus === 'submission_uncertain_unresolved'
+        )
+      ) {
         unresolved += 1;
         await this.journal.warn(
           'CANCEL_SKIPPED_SUBMISSION_UNCERTAIN',
-          'cancel dilewati karena order submission uncertain belum punya exchangeOrderId',
+          'cancel dilewati karena order ambiguous belum punya exchangeOrderId',
           {
-            orderId: order.id,
-            pair: order.pair,
-            accountId: order.accountId,
+            orderId: currentOrder.id,
+            pair: currentOrder.pair,
+            accountId: currentOrder.accountId,
+            exchangeStatus: currentOrder.exchangeStatus ?? null,
           },
         );
         continue;
       }
 
-      if (order.exchangeOrderId && account) {
+      if (currentOrder.exchangeOrderId && account) {
         const api = this.indodax.forAccount(account);
-        await api.cancelOrder(order.pair, order.exchangeOrderId, order.side);
-        const canceledOrder = await this.orders.update(order.id, {
+        await api.cancelOrder(currentOrder.pair, currentOrder.exchangeOrderId, currentOrder.side);
+        const canceledOrder = await this.orders.update(currentOrder.id, {
           status: 'CANCELED',
           exchangeStatus: 'canceled',
           exchangeUpdatedAt: nowIso(),
-          notes: this.appendNotes(order.notes, 'exchange cancel requested'),
+          notes: this.appendNotes(currentOrder.notes, 'exchange cancel requested'),
         });
         if (canceledOrder) {
           await this.publishExecutionSummary(
@@ -2496,7 +2625,7 @@ export class ExecutionEngine {
           );
         }
       } else {
-        const canceledOrder = await this.orders.cancel(order.id, 'local cancel without exchange order id');
+        const canceledOrder = await this.orders.cancel(currentOrder.id, 'local cancel without exchange order id');
         if (canceledOrder) {
           await this.publishExecutionSummary(
             canceledOrder,
@@ -2509,9 +2638,10 @@ export class ExecutionEngine {
       count += 1;
     }
 
-    return unresolved > 0
-      ? `Canceled ${count} active orders; unresolved ${unresolved} submission-uncertain orders`
-      : `Canceled ${count} active orders`;
+    const baseSummary = `Canceled ${count} active orders`;
+    const unresolvedSummary = unresolved > 0 ? `; unresolved ${unresolved} submission-uncertain orders` : '';
+
+    return `${baseSummary}${unresolvedSummary}`;
   }
 
   async sellAllPositions(): Promise<string> {
