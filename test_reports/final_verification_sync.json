@@ -1,0 +1,88 @@
+{
+  "generated_at_utc": "2026-03-22T20:36:30Z",
+  "source_of_truth": "Current tracked repository source files and literal command execution artifacts stored in test_reports/*.txt",
+  "final_status": {
+    "typecheck:probes": {
+      "command": "npm run typecheck:probes",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/typecheck_probes_final.txt"
+    },
+    "probe:list": {
+      "command": "npm run probe:list",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/probe_list_final.txt"
+    },
+    "probe:audit": {
+      "command": "npm run probe:audit",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/probe_audit_final.txt"
+    },
+    "test:probes": {
+      "command": "npm run test:probes",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/test_probes_final.txt"
+    },
+    "verify": {
+      "command": "npm run verify",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/verify_final.txt"
+    }
+  },
+  "non_blocking_environment_warning": {
+    "message": "npm warn Unknown env config \"http-proxy\"",
+    "observed_in": [
+      "test_reports/npm_ci_final.txt",
+      "test_reports/typecheck_probes_final.txt",
+      "test_reports/probe_list_final.txt",
+      "test_reports/probe_audit_final.txt",
+      "test_reports/test_probes_final.txt",
+      "test_reports/verify_final.txt"
+    ],
+    "decision": "Documented as environment-level warning; not hidden; command exit codes remain 0."
+  },
+  "files_opened_directly_final_pass": {
+    "core_verification": [
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "tsconfig.probes.json",
+      "scripts/run-probes.mjs"
+    ],
+    "tests": "tests/*.ts (24 files)",
+    "reports": "test_reports/* (historical iteration_1..iteration_16 + txt artifacts)",
+    "docs_supporting": [
+      "README.md",
+      ".env.example",
+      "REFACTOR_LOG.md",
+      "SESSION_CONTEXT_NEXT.md",
+      "memory/PRD.md",
+      "scripts/render-nginx-conf.mjs",
+      "deploy/nginx/cukong-markets.nginx.conf",
+      "deploy/nginx/cukong-markets.nginx.conf.template",
+      "src/config/env.ts",
+      "src/services/workerPoolService.ts"
+    ]
+  },
+  "docs_output_mismatch_found": [
+    "No blocking mismatch found in README claims after literal npm run verify PASS was captured.",
+    "Historical reports still contain /app paths and yarn commands from prior sessions; kept as historical snapshots and not treated as final proof."
+  ],
+  "files_changed_for_this_finalization": [
+    "test_reports/npm_ci_final.txt",
+    "test_reports/typecheck_probes_final.txt",
+    "test_reports/probe_list_final.txt",
+    "test_reports/probe_audit_final.txt",
+    "test_reports/test_probes_final.txt",
+    "test_reports/verify_final.txt",
+    "test_reports/final_verification_sync.json",
+    "README.md",
+    "REFACTOR_LOG.md",
+    "SESSION_CONTEXT_NEXT.md"
+  ],
+  "historical_files_kept_unchanged": "test_reports/iteration_1.json .. test_reports/iteration_16.json retained as historical snapshots"
+}

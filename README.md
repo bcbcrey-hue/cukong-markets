@@ -38,6 +38,15 @@ npm run probe:list
 npm run verify:shadow-live
 ```
 
+Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
+
+- `test_reports/typecheck_probes_final.txt`
+- `test_reports/probe_list_final.txt`
+- `test_reports/probe_audit_final.txt`
+- `test_reports/test_probes_final.txt`
+- `test_reports/verify_final.txt`
+- ringkasan sinkronisasi akhir: `test_reports/final_verification_sync.json`
+
 ## Bukti runtime worker production/build
 
 Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:

@@ -59,6 +59,12 @@ Dokumen ini hanya mencatat perubahan yang benar-benar masuk ke source aktual.
 - `npm run test:probes`
 - pada kondisi final, `npm run test:probes` sudah mencakup probe safety tambahan untuk `buy_entry_price_guard`, `live_submission_uncertain`, dan `cancel_submission_uncertain`
 
+## Finalisasi verifikasi (2026-03-22 UTC)
+
+- Bukti run literal terbaru disimpan di `test_reports/npm_ci_final.txt`, `test_reports/typecheck_probes_final.txt`, `test_reports/probe_list_final.txt`, `test_reports/probe_audit_final.txt`, `test_reports/test_probes_final.txt`, dan `test_reports/verify_final.txt`.
+- Ringkasan sinkronisasi final disimpan di `test_reports/final_verification_sync.json`.
+- Warning environment npm `Unknown env config "http-proxy"` tetap muncul pada run npm, dicatat sebagai non-blocking warning dan tidak disembunyikan.
+
 ## Status jujur saat ini
 
 ### SIAP DEPLOY
