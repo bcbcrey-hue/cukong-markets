@@ -17,13 +17,18 @@ import { SummaryService } from '../src/services/summaryService';
 
 class WindowedHistoryApi {
   orderHistoryCalls = 0;
+  openOrdersOptions: Array<Record<string, unknown> | undefined> = [];
+  orderHistoriesOptions: Array<Record<string, unknown> | undefined> = [];
+  myTradesOptions: Array<Record<string, unknown> | undefined> = [];
 
-  async openOrders() {
+  async openOrders(_pair?: string, options?: Record<string, unknown>) {
+    this.openOrdersOptions.push(options);
     return { success: 1, return: { orders: {} } };
   }
 
-  async orderHistoriesV2() {
+  async orderHistoriesV2(_params?: Record<string, unknown>, options?: Record<string, unknown>) {
     this.orderHistoryCalls += 1;
+    this.orderHistoriesOptions.push(options);
 
     if (this.orderHistoryCalls < 3) {
       return { success: 1, return: { orders: [] } };
@@ -46,7 +51,8 @@ class WindowedHistoryApi {
     };
   }
 
-  async myTradesV2() {
+  async myTradesV2(_params?: Record<string, unknown>, options?: Record<string, unknown>) {
+    this.myTradesOptions.push(options);
     return { success: 1, return: { trades: [] } };
   }
 }
@@ -133,6 +139,22 @@ async function main() {
   assert.ok(
     api.orderHistoryCalls >= 3,
     'submission_uncertain reconciliation should not stop at first two orderHistoriesV2 windows',
+  );
+  assert.ok(
+    api.openOrdersOptions.some((options) => options?.lane === 'background_recovery'),
+    'openOrders lookup for ambiguous recovery must use background_recovery lane',
+  );
+  assert.ok(
+    api.orderHistoriesOptions.some((options) => options?.lane === 'background_recovery'),
+    'orderHistoriesV2 lookup for ambiguous recovery must inherit background_recovery lane',
+  );
+  assert.ok(
+    api.myTradesOptions.some((options) => options?.lane === 'background_recovery'),
+    'myTradesV2 trade-stats lookup after history match must inherit background_recovery lane',
+  );
+  assert.ok(
+    api.myTradesOptions.some((options) => options?.requestPriority === -2),
+    'myTradesV2 trade-stats lookup should preserve recovery requestPriority from syncActiveOrders lane',
   );
 
   const afterSync = orderManager.getById(uncertainOrder.id);

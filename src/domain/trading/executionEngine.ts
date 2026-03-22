@@ -1048,7 +1048,7 @@ export class ExecutionEngine {
       return attached;
     }
 
-    const tradeStats = await this.loadTradeStats(attached);
+    const tradeStats = await this.loadTradeStats(attached, requestOptions);
     return this.syncOrderWithSnapshot(
       attached,
       this.mergeTradeStatsIntoSnapshot(
