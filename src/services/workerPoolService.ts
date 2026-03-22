@@ -175,11 +175,22 @@ export class WorkerPoolService {
           ? 'patternWorker'
           : 'backtestWorker';
 
-    const candidates = [
-      path.resolve(__dirname, '../workers', `${fileName}.js`),
-      path.resolve(__dirname, '../workers', `${fileName}.ts`),
-      path.resolve(__dirname, '../../src/workers', `${fileName}.ts`),
-    ];
+    const distWorkerFromRepoRoot = path.resolve(__dirname, '../../dist/workers', `${fileName}.js`);
+    const preferDistWorkers = process.env.CUKONG_PREFER_DIST_WORKERS === '1';
+
+    const candidates = preferDistWorkers
+      ? [
+          distWorkerFromRepoRoot,
+          path.resolve(__dirname, '../workers', `${fileName}.js`),
+          path.resolve(__dirname, '../workers', `${fileName}.ts`),
+          path.resolve(__dirname, '../../src/workers', `${fileName}.ts`),
+        ]
+      : [
+          path.resolve(__dirname, '../workers', `${fileName}.js`),
+          path.resolve(__dirname, '../workers', `${fileName}.ts`),
+          distWorkerFromRepoRoot,
+          path.resolve(__dirname, '../../src/workers', `${fileName}.ts`),
+        ];
 
     for (const candidate of candidates) {
       if (existsSync(candidate)) {

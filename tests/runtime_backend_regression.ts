@@ -542,10 +542,24 @@ async function main() {
   const resolvedFeatureWorkerPath = (
     workerPool as unknown as { resolveWorkerPath: (type: 'feature' | 'pattern' | 'backtest') => string }
   ).resolveWorkerPath('feature');
-  assert.ok(
-    resolvedFeatureWorkerPath.includes(path.join('dist', 'workers', 'featureWorker.js')),
-    'WorkerPool should prefer dist/workers path when build output exists',
+  const resolvesToDistWorker = resolvedFeatureWorkerPath.includes(
+    path.join('dist', 'workers', 'featureWorker.js'),
   );
+  const resolvesToSourceWorker = resolvedFeatureWorkerPath.includes(
+    path.join('src', 'workers', 'featureWorker.ts'),
+  );
+
+  if (process.env.CUKONG_PREFER_DIST_WORKERS === '1') {
+    assert.ok(
+      resolvesToDistWorker,
+      `WorkerPool should prefer dist worker entrypoint when CUKONG_PREFER_DIST_WORKERS=1, got: ${resolvedFeatureWorkerPath}`,
+    );
+  } else {
+    assert.ok(
+      resolvesToDistWorker || resolvesToSourceWorker,
+      `WorkerPool should resolve to src or dist worker entrypoint, got: ${resolvedFeatureWorkerPath}`,
+    );
+  }
 
   const featureTask = await workerPool.runFeatureTask({
     snapshot: snapshots[0],

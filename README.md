@@ -24,7 +24,19 @@ npm run dev
 npm run verify
 ```
 
-`npm run verify` menjalankan lint + typecheck probe + build artifact + seluruh probe runtime.
+`npm run verify` menjalankan lint + typecheck probe (`src/**/*.ts` + `tests/**/*.ts`) + build artifact + seluruh **official runtime probes**.
+
+Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
+
+```bash
+npm run probe:list
+```
+
+`tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
+
+```bash
+npm run verify:shadow-live
+```
 
 ## Bukti runtime worker production/build
 
