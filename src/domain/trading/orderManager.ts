@@ -28,6 +28,24 @@ export class OrderManager {
 
   constructor(private readonly persistence: PersistenceService) {}
 
+  private assertFinitePositive(value: number, label: string): void {
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error(`${label} tidak valid`);
+    }
+  }
+
+  private validateCreateInput(input: CreateOrderInput): void {
+    this.assertFinitePositive(input.price, 'Harga order');
+    this.assertFinitePositive(input.quantity, 'Quantity order');
+
+    if (input.referencePrice !== undefined && input.referencePrice !== null) {
+      this.assertFinitePositive(input.referencePrice, 'Harga referensi order');
+    }
+
+    const notional = input.price * input.quantity;
+    this.assertFinitePositive(notional, 'Notional order');
+  }
+
   async load(): Promise<OrderRecord[]> {
     const snapshot = await this.persistence.loadAll();
     this.orders = Array.isArray(snapshot.orders) ? snapshot.orders : [];
@@ -52,6 +70,8 @@ export class OrderManager {
   }
 
   async create(input: CreateOrderInput): Promise<OrderRecord> {
+    this.validateCreateInput(input);
+
     const now = nowIso();
 
     const order: OrderRecord = {

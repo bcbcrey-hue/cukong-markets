@@ -27,6 +27,7 @@ const probes = [
   'tests/callback_reconciliation_probe.ts',
   'tests/callback_security_probe.ts',
   'tests/worker_timeout_probe.ts',
+  'tests/worker_production_runtime_probe.ts',
 ];
 
 async function runProbe(probe, index) {
