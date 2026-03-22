@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const probes = [
+const officialProbes = [
   'tests/private_api_v2_mapping_probe.ts',
   'tests/nginx_renderer_probe.ts',
   'tests/http_servers_probe.ts',
@@ -30,11 +30,32 @@ const probes = [
   'tests/worker_production_runtime_probe.ts',
 ];
 
+const manualProbes = ['tests/real_exchange_shadow_run_probe.ts'];
+
+async function validateProbeRegistry() {
+  const testFiles = (await readdir(path.resolve(repoRoot, 'tests')))
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => `tests/${file}`)
+    .sort();
+
+  const registered = new Set([...officialProbes, ...manualProbes]);
+  const missingOnDisk = [...registered].filter((probe) => !testFiles.includes(probe));
+  if (missingOnDisk.length > 0) {
+    throw new Error(`Probe registry references missing file(s): ${missingOnDisk.join(', ')}`);
+  }
+
+  const unregistered = testFiles.filter((probe) => !registered.has(probe));
+  if (unregistered.length > 0) {
+    throw new Error(
+      `Found unregistered probe file(s): ${unregistered.join(', ')}. Add them to officialProbes or manualProbes.`,
+    );
+  }
+}
+
 async function runProbe(probe, index) {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), `cukong-probe-${index}-`));
   const appPort = String(3800 + index * 2);
   const callbackPort = String(3900 + index * 2);
-
 
   const callbackAuthMode = probe.includes('callback_security_probe')
     ? 'required'
@@ -66,7 +87,9 @@ async function runProbe(probe, index) {
     INDODAX_CALLBACK_MAX_SKEW_MS: process.env.INDODAX_CALLBACK_MAX_SKEW_MS || '60000',
     INDODAX_PUBLIC_BASE_URL: process.env.INDODAX_PUBLIC_BASE_URL || 'https://indodax.com/api',
     INDODAX_PRIVATE_BASE_URL: process.env.INDODAX_PRIVATE_BASE_URL || 'https://indodax.com/tapi',
-    INDODAX_TRADE_API_V2_BASE_URL: process.env.INDODAX_TRADE_API_V2_BASE_URL || 'https://tapi.indodax.com',
+    INDODAX_TRADE_API_V2_BASE_URL:
+      process.env.INDODAX_TRADE_API_V2_BASE_URL || 'https://tapi.indodax.com',
+    CUKONG_PREFER_DIST_WORKERS: process.env.CUKONG_PREFER_DIST_WORKERS || '1',
     DATA_DIR: dataDir,
     LOG_DIR: path.join(dataDir, 'logs'),
     TEMP_DIR: path.join(dataDir, 'tmp'),
@@ -94,7 +117,24 @@ async function runProbe(probe, index) {
 }
 
 async function main() {
-  for (const [index, probe] of probes.entries()) {
+  await validateProbeRegistry();
+
+  if (process.argv.includes('--list')) {
+    console.log('Official probes:');
+    officialProbes.forEach((probe) => console.log(`- ${probe}`));
+    console.log('\nManual probes (not in npm run verify):');
+    manualProbes.forEach((probe) => console.log(`- ${probe}`));
+    return;
+  }
+
+  if (process.argv.includes('--audit')) {
+    console.log('Probe registry is valid.');
+    console.log(`Official probes: ${officialProbes.length}`);
+    console.log(`Manual probes: ${manualProbes.length}`);
+    return;
+  }
+
+  for (const [index, probe] of officialProbes.entries()) {
     await runProbe(probe, index + 1);
   }
 
