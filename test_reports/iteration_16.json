@@ -1,0 +1,296 @@
+{
+  "generated_at_utc": "2026-03-22T20:15:00Z",
+  "source_of_truth": "Repository working tree at /workspace/cukong-markets (actual source files)",
+  "scope_files_read": {
+    "core": [
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "tsconfig.probes.json",
+      "scripts/run-probes.mjs"
+    ],
+    "tests_glob": "tests/*.ts (24 files, all read directly)",
+    "reports_glob": "test_reports/*.json (15 historical files, all read directly)"
+  },
+  "literal_typecheck": {
+    "command": "npm run typecheck:probes",
+    "evidence_file": "test_reports/typecheck_probes_final.txt",
+    "final_exit_code": 0,
+    "status": "PASS"
+  },
+  "additional_validation": [
+    {
+      "command": "npm run probe:list",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "command": "npm run probe:audit",
+      "exit_code": 0,
+      "result": "PASS"
+    }
+  ],
+  "probe_registry_status": {
+    "official_count": 23,
+    "manual_count": 1,
+    "official_probes": [
+      "tests/private_api_v2_mapping_probe.ts",
+      "tests/nginx_renderer_probe.ts",
+      "tests/http_servers_probe.ts",
+      "tests/telegram_menu_navigation_probe.ts",
+      "tests/telegram_slippage_confirmation_probe.ts",
+      "tests/telegram_manual_accounts_probe.ts",
+      "tests/runtime_backend_regression.ts",
+      "tests/live_execution_hardening_probe.ts",
+      "tests/execution_summary_failed_probe.ts",
+      "tests/buy_entry_price_guard_probe.ts",
+      "tests/position_mark_pnl_correctness_probe.ts",
+      "tests/live_submission_uncertain_probe.ts",
+      "tests/cancel_submission_uncertain_probe.ts",
+      "tests/submission_uncertain_unresolved_probe.ts",
+      "tests/submission_uncertain_bounded_history_probe.ts",
+      "tests/indodax_history_v2_probe.ts",
+      "tests/app_lifecycle_servers_probe.ts",
+      "tests/bootstrap_observability_probe.ts",
+      "tests/startup_health_honesty_probe.ts",
+      "tests/callback_reconciliation_probe.ts",
+      "tests/callback_security_probe.ts",
+      "tests/worker_timeout_probe.ts",
+      "tests/worker_production_runtime_probe.ts"
+    ],
+    "manual_probes": [
+      "tests/real_exchange_shadow_run_probe.ts"
+    ],
+    "unregistered_probe_files": [],
+    "registry_entries_missing_on_disk": [],
+    "registry_change_required": false
+  },
+  "probe_audit": [
+    {
+      "file": "tests/app_lifecycle_servers_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated local servers with patched TelegramBot",
+      "objective": "verifies createApp lifecycle, /healthz and callback health exposure, runtime control stop/start readiness transitions",
+      "primary_dependencies": ["src/app", "src/integrations/telegram/bot"]
+    },
+    {
+      "file": "tests/bootstrap_observability_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "local process/runtime probe",
+      "objective": "ensures bootstrap fails loudly when APP_PORT is occupied and logs startup phase + EADDRINUSE context",
+      "primary_dependencies": ["dist/bootstrap.js"]
+    },
+    {
+      "file": "tests/buy_entry_price_guard_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated exchange",
+      "objective": "rejects invalid BUY entry/reference price and amount before order creation",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager", "src/domain/settings/settingsService"]
+    },
+    {
+      "file": "tests/callback_reconciliation_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated exchange + local callback server",
+      "objective": "validates callback payload variants (order_id/orderId/id) reconcile OPEN orders into FILLED and create positions",
+      "primary_dependencies": ["src/integrations/indodax/callbackServer", "src/domain/trading/executionEngine", "src/domain/trading/orderManager"]
+    },
+    {
+      "file": "tests/callback_security_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local HTTP security checks",
+      "objective": "verifies callback auth protections: signature/timestamp/nonce/host checks and accepted signed request path",
+      "primary_dependencies": ["src/integrations/indodax/callbackServer"]
+    },
+    {
+      "file": "tests/cancel_submission_uncertain_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated exchange",
+      "objective": "ensures cancel flow handles submission_uncertain safely",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager"]
+    },
+    {
+      "file": "tests/execution_summary_failed_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated exchange",
+      "objective": "checks failed execution summary persistence/logging contract for buy/sell failures",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/services/summaryService"]
+    },
+    {
+      "file": "tests/http_servers_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local HTTP servers",
+      "objective": "validates app server + callback server routes, health endpoints, and callback route behavior",
+      "primary_dependencies": ["src/server/appServer", "src/integrations/indodax/callbackServer", "src/services/healthService"]
+    },
+    {
+      "file": "tests/indodax_history_v2_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated API",
+      "objective": "verifies V2 history mapping, explicit time windows, and bounded chunk lookup behavior",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/integrations/indodax/privateApi"]
+    },
+    {
+      "file": "tests/live_execution_hardening_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated live-trade path",
+      "objective": "regression guard for live execution hardening/recovery and duplicate-order protections",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager", "src/domain/trading/positionManager"]
+    },
+    {
+      "file": "tests/live_submission_uncertain_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated",
+      "objective": "verifies submission_uncertain classification and follow-up reconciliation path after ambiguous submit outcomes",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager"]
+    },
+    {
+      "file": "tests/nginx_renderer_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "local script probe",
+      "objective": "checks nginx config renderer output contract from environment",
+      "primary_dependencies": ["scripts/render-nginx-conf.mjs"]
+    },
+    {
+      "file": "tests/position_mark_pnl_correctness_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local domain services",
+      "objective": "validates mark price and PnL correctness handling in position manager/report path",
+      "primary_dependencies": ["src/domain/trading/positionManager", "src/services/reportService"]
+    },
+    {
+      "file": "tests/private_api_v2_mapping_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local mapping checks",
+      "objective": "ensures private API v2 parameter/signature mapping contract",
+      "primary_dependencies": ["src/integrations/indodax/privateApi"]
+    },
+    {
+      "file": "tests/real_exchange_shadow_run_probe.ts",
+      "category": "manual",
+      "official_runner_covered": false,
+      "mode": "manual live-shadow",
+      "objective": "real exchange shadow-run flow; intentionally excluded from official verify path",
+      "primary_dependencies": ["src/app"]
+    },
+    {
+      "file": "tests/runtime_backend_regression.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated broad integration",
+      "objective": "broad backend runtime regression across state/risk/execution/report/telegram-adjacent flows",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/services/*", "src/domain/*"]
+    },
+    {
+      "file": "tests/startup_health_honesty_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local",
+      "objective": "ensures startup health/livez honesty and readiness transitions",
+      "primary_dependencies": ["src/app", "src/services/persistenceService", "src/integrations/telegram/bot"]
+    },
+    {
+      "file": "tests/submission_uncertain_bounded_history_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated",
+      "objective": "ensures bounded history lookup behavior for submission_uncertain reconciliation",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager"]
+    },
+    {
+      "file": "tests/submission_uncertain_unresolved_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked/simulated",
+      "objective": "ensures unresolved submission_uncertain remains unresolved safely when no deterministic match exists",
+      "primary_dependencies": ["src/domain/trading/executionEngine", "src/domain/trading/orderManager"]
+    },
+    {
+      "file": "tests/telegram_manual_accounts_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked Telegram context",
+      "objective": "validates manual account add/delete/menu flows and secret non-disclosure in Telegram responses",
+      "primary_dependencies": ["src/integrations/telegram/handlers", "src/integrations/telegram/callbackRouter"]
+    },
+    {
+      "file": "tests/telegram_menu_navigation_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local keyboard/callback validation",
+      "objective": "ensures callback parseability + handler coverage across Telegram menus and migration defaults",
+      "primary_dependencies": ["src/integrations/telegram/keyboards", "src/integrations/telegram/handlers", "src/integrations/telegram/callbackRouter"]
+    },
+    {
+      "file": "tests/telegram_slippage_confirmation_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "mocked Telegram context",
+      "objective": "checks buy slippage warning+confirmation and execution mode callback behavior",
+      "primary_dependencies": ["src/integrations/telegram/handlers", "src/integrations/telegram/callbackRouter"]
+    },
+    {
+      "file": "tests/worker_production_runtime_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "local dist runtime probe",
+      "objective": "ensures production worker path uses dist JS worker (not tsx CLI) and returns finite feature output",
+      "primary_dependencies": ["dist/services/workerPoolService.js"]
+    },
+    {
+      "file": "tests/worker_timeout_probe.ts",
+      "category": "official",
+      "official_runner_covered": true,
+      "mode": "simulated/local worker timeout",
+      "objective": "verifies worker recovers to idle after timed-out task",
+      "primary_dependencies": ["src/services/workerPoolService", "src/domain/signals/signalEngine"]
+    }
+  ],
+  "test_reports_sync_audit": {
+    "status": "SINKRON DENGAN CATATAN HISTORIS",
+    "historical_reports_kept_unmodified": [
+      "test_reports/iteration_1.json",
+      "test_reports/iteration_2.json",
+      "test_reports/iteration_3.json",
+      "test_reports/iteration_4.json",
+      "test_reports/iteration_5.json",
+      "test_reports/iteration_6.json",
+      "test_reports/iteration_7.json",
+      "test_reports/iteration_8.json",
+      "test_reports/iteration_9.json",
+      "test_reports/iteration_10.json",
+      "test_reports/iteration_11.json",
+      "test_reports/iteration_12.json",
+      "test_reports/iteration_13.json",
+      "test_reports/iteration_14.json",
+      "test_reports/iteration_15.json"
+    ],
+    "mismatches_found": [
+      "Historical reports still contain yarn commands while current truth in package.json uses npm scripts.",
+      "Historical reports still contain /app/... absolute paths that are not the current working tree path representation (/workspace/cukong-markets).",
+      "Historical claims are snapshots from older runs and cannot be treated as proof for current literal npm run typecheck:probes status."
+    ],
+    "historical_vs_current_handling": "Historical files are preserved as snapshots. A new explicit final artifact (this file + typecheck_probes_final.txt) is added to prevent misleading interpretation against current repo truth."
+  },
+  "files_changed_for_this_iteration": [
+    "test_reports/typecheck_probes_final.txt",
+    "test_reports/iteration_16.json"
+  ],
+  "notes": [
+    "No trading/domain production logic changed.",
+    "No probe registry correction required because registry and tests folder are fully aligned."
+  ]
+}
