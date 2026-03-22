@@ -42,6 +42,7 @@ import {
   type TelegramMenuId,
 } from './keyboards';
 import { UploadHandler } from './uploadHandler';
+import type { TelegramConnectionSignal } from './bot';
 
 interface HandlerDeps {
   report: ReportService;
@@ -60,6 +61,7 @@ interface HandlerDeps {
     start(): Promise<void>;
     stop(): Promise<void>;
   };
+  getTelegramSignal?: () => TelegramConnectionSignal;
 }
 
 interface UserFlowState {
@@ -265,13 +267,30 @@ async function replyMainMenu(ctx: Context, text: string): Promise<void> {
 }
 
 async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
+  const telegramSignal = deps.getTelegramSignal?.() ?? {
+    launched: false,
+    running: false,
+    connected: false,
+    lastLaunchAt: null,
+    lastLaunchSuccessAt: null,
+    lastLaunchError: null,
+  };
+
   const health = await deps.health.build({
     scannerRunning: deps.state.get().status === 'RUNNING',
-    telegramRunning: true,
+    telegramRunning: telegramSignal.running && telegramSignal.connected,
     tradingEnabled: deps.settings.get().tradingMode !== 'OFF' && !deps.state.get().emergencyStop,
     executionMode: deps.settings.getExecutionMode(),
     positions: deps.positions.list(),
     orders: deps.orders.list(),
+    notes: [
+      `telegramLaunched=${telegramSignal.launched}`,
+      `telegramRuntime=${telegramSignal.running ? 'running' : 'stopped'}`,
+      `telegramConnected=${telegramSignal.connected}`,
+      `telegramLastLaunchAt=${telegramSignal.lastLaunchAt ?? '-'}`,
+      `telegramLastLaunchSuccessAt=${telegramSignal.lastLaunchSuccessAt ?? '-'}`,
+      `telegramLastLaunchError=${telegramSignal.lastLaunchError ?? '-'}`,
+    ],
   });
 
   await replyText(
