@@ -296,6 +296,7 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: runtime.status === 'RUNNING',
       telegramRunning: telegramSignal.running && telegramSignal.connected,
+      callbackServerRunning: appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -323,6 +324,7 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: false,
       telegramRunning: false,
+      callbackServerRunning: false,
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -365,6 +367,8 @@ export async function createApp(): Promise<AppRuntime> {
           runningTelegramSignal.launched &&
           runningTelegramSignal.running &&
           runningTelegramSignal.connected,
+        callbackServerRunning:
+          appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
         executionMode: settings.getExecutionMode(),
         positions: positionManager.list(),
@@ -415,6 +419,8 @@ export async function createApp(): Promise<AppRuntime> {
           failedTelegramSignal.launched &&
           failedTelegramSignal.running &&
           failedTelegramSignal.connected,
+        callbackServerRunning:
+          appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: false,
         executionMode: settings.getExecutionMode(),
         positions: positionManager.list(),
@@ -436,6 +442,8 @@ export async function createApp(): Promise<AppRuntime> {
         stoppingTelegramSignal.launched &&
         stoppingTelegramSignal.running &&
         stoppingTelegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),
@@ -457,6 +465,8 @@ export async function createApp(): Promise<AppRuntime> {
     await health.build({
       scannerRunning: false,
       telegramRunning: telegramSignal.running && telegramSignal.connected,
+      callbackServerRunning:
+        appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
       executionMode: settings.getExecutionMode(),
       positions: positionManager.list(),

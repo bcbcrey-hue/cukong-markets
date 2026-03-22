@@ -112,6 +112,7 @@ export function createDefaultHealth(): HealthSnapshot {
     runtimeStatus: 'IDLE',
     scannerRunning: false,
     telegramRunning: false,
+    callbackServerRunning: false,
     tradingEnabled: false,
     executionMode: 'SIMULATED',
     activePairsTracked: 0,

@@ -8,10 +8,12 @@ import type {
 } from '../core/types';
 import { PersistenceService, createDefaultHealth } from './persistenceService';
 import { StateService } from './stateService';
+import { env } from '../config/env';
 
 export interface BuildHealthParams {
   scannerRunning: boolean;
   telegramRunning: boolean;
+  callbackServerRunning: boolean;
   tradingEnabled: boolean;
   executionMode: ExecutionMode;
   positions: PositionRecord[];
@@ -67,7 +69,14 @@ export class HealthService {
       `pendingOrders=${pendingOrders}`,
     ];
 
-    const status = this.statusFromRuntime(runtimeStatus, params.scannerRunning, params.telegramRunning);
+    const callbackRequired = env.indodaxEnableCallbackServer;
+    const callbackReady = !callbackRequired || params.callbackServerRunning;
+    const status = this.statusFromRuntime(
+      runtimeStatus,
+      params.scannerRunning,
+      params.telegramRunning,
+      callbackReady,
+    );
 
     const next: HealthSnapshot = {
       status,
@@ -75,6 +84,7 @@ export class HealthService {
       runtimeStatus,
       scannerRunning: params.scannerRunning,
       telegramRunning: params.telegramRunning,
+      callbackServerRunning: params.callbackServerRunning,
       tradingEnabled: params.tradingEnabled,
       executionMode: params.executionMode,
       activePairsTracked: Object.keys(runtime.pairs).length,
@@ -90,20 +100,21 @@ export class HealthService {
   }
 
   isReady(snapshot: HealthSnapshot = this.health): boolean {
-    return snapshot.runtimeStatus === 'RUNNING' && snapshot.scannerRunning;
+    return snapshot.status === 'healthy';
   }
 
   private statusFromRuntime(
     runtimeStatus: RuntimeStatus,
     scannerRunning: boolean,
     telegramRunning: boolean,
+    callbackReady: boolean,
   ): HealthSnapshot['status'] {
     if (runtimeStatus === 'ERROR' || runtimeStatus === 'STOPPED') {
       return 'down';
     }
 
     if (runtimeStatus === 'RUNNING') {
-      return scannerRunning && telegramRunning ? 'healthy' : 'degraded';
+      return scannerRunning && telegramRunning && callbackReady ? 'healthy' : 'degraded';
     }
 
     return 'degraded';

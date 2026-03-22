@@ -35,6 +35,7 @@ async function main() {
     runtimeStatus: 'RUNNING',
     scannerRunning: true,
     telegramRunning: true,
+    callbackServerRunning: true,
     tradingEnabled: true,
     executionMode: 'SIMULATED',
     activePairsTracked: 99,
@@ -50,6 +51,22 @@ async function main() {
   };
   let startupGateSet = false;
   TelegramBot.prototype.start = async function patchedStart() {
+    const signalHolder = this as unknown as {
+      signal: {
+        launched: boolean;
+        running: boolean;
+        connected: boolean;
+        lastLaunchAt: string | null;
+        lastLaunchSuccessAt: string | null;
+        lastLaunchError: string | null;
+      };
+    };
+    signalHolder.signal = {
+      ...signalHolder.signal,
+      launched: true,
+      running: true,
+      connected: true,
+    };
     await new Promise<void>((resolve) => {
       releaseStartup = resolve;
       startupGateSet = true;

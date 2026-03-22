@@ -509,6 +509,7 @@ export interface HealthSnapshot {
   runtimeStatus: RuntimeStatus;
   scannerRunning: boolean;
   telegramRunning: boolean;
+  callbackServerRunning: boolean;
   tradingEnabled: boolean;
   executionMode: ExecutionMode;
   activePairsTracked: number;

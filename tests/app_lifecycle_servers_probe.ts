@@ -15,6 +15,22 @@ async function main() {
   const originalStop = TelegramBot.prototype.stop;
 
   TelegramBot.prototype.start = async function patchedStart() {
+    const signalHolder = this as unknown as {
+      signal: {
+        launched: boolean;
+        running: boolean;
+        connected: boolean;
+        lastLaunchAt: string | null;
+        lastLaunchSuccessAt: string | null;
+        lastLaunchError: string | null;
+      };
+    };
+    signalHolder.signal = {
+      ...signalHolder.signal,
+      launched: true,
+      running: true,
+      connected: true,
+    };
     return;
   };
   TelegramBot.prototype.stop = async function patchedStop() {

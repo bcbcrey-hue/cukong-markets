@@ -279,6 +279,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
   const health = await deps.health.build({
     scannerRunning: deps.state.get().status === 'RUNNING',
     telegramRunning: telegramSignal.running && telegramSignal.connected,
+    callbackServerRunning: deps.health.get().callbackServerRunning,
     tradingEnabled: deps.settings.get().tradingMode !== 'OFF' && !deps.state.get().emergencyStop,
     executionMode: deps.settings.getExecutionMode(),
     positions: deps.positions.list(),
