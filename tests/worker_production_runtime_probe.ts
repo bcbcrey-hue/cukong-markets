@@ -66,15 +66,18 @@ const signal = {
 
 (async () => {
   const pool = new WorkerPoolService(1, true);
+  const featureRuntime = pool.getWorkerRuntimeMetadata('feature');
   await pool.start();
 
-  const workerPath = pool.resolveWorkerPath('feature');
-  const usedTsxCli = workerPath.endsWith('.ts');
   const feature = await pool.runFeatureTask({ snapshot, signal, recentSnapshots: [snapshot] });
 
   await pool.stop();
 
-  console.log(JSON.stringify({ workerPath, usedTsxCli, accumulationScore: feature.accumulationScore }));
+  console.log(JSON.stringify({
+    workerPath: featureRuntime.workerPath,
+    usedTsxCli: featureRuntime.useTsxCli,
+    accumulationScore: feature.accumulationScore,
+  }));
 })().catch((error) => {
   console.error(error);
   process.exit(1);

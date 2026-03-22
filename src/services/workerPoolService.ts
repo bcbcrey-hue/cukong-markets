@@ -25,6 +25,12 @@ import {
 
 type WorkerTaskType = 'feature' | 'pattern' | 'backtest';
 
+export interface WorkerRuntimeMetadata {
+  type: WorkerTaskType;
+  workerPath: string;
+  useTsxCli: boolean;
+}
+
 export interface FeatureTaskInput {
   snapshot: MarketSnapshot;
   signal: SignalCandidate;
@@ -167,6 +173,15 @@ export class WorkerPoolService {
     return this.enqueue('backtest', input, 60_000);
   }
 
+  public getWorkerRuntimeMetadata(type: WorkerTaskType): WorkerRuntimeMetadata {
+    const workerPath = this.resolveWorkerPath(type);
+    return {
+      type,
+      workerPath,
+      useTsxCli: workerPath.endsWith('.ts'),
+    };
+  }
+
   private resolveWorkerPath(type: WorkerTaskType): string {
     const fileName =
       type === 'feature'
@@ -204,8 +219,8 @@ export class WorkerPoolService {
   }
 
   private createWorker(type: WorkerTaskType): WorkerWrapper {
-    const workerPath = this.resolveWorkerPath(type);
-    const useTsxCli = workerPath.endsWith('.ts');
+    const runtimeMetadata = this.getWorkerRuntimeMetadata(type);
+    const { workerPath, useTsxCli } = runtimeMetadata;
 
     const worker = useTsxCli
       ? new Worker(require.resolve('tsx/cli'), {

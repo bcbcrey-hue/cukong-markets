@@ -539,9 +539,7 @@ async function main() {
   const workerPool = new WorkerPoolService(1, true);
   await workerPool.start();
 
-  const resolvedFeatureWorkerPath = (
-    workerPool as unknown as { resolveWorkerPath: (type: 'feature' | 'pattern' | 'backtest') => string }
-  ).resolveWorkerPath('feature');
+  const resolvedFeatureWorkerPath = workerPool.getWorkerRuntimeMetadata('feature').workerPath;
   const resolvesToDistWorker = resolvedFeatureWorkerPath.includes(
     path.join('dist', 'workers', 'featureWorker.js'),
   );
