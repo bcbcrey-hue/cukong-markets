@@ -1,0 +1,38 @@
+timestamp_utc: 2026-03-22T20:33:37Z
+command: npm run probe:list
+exit_code: 0
+--- stdout ---
+
+> cukong-markets@1.0.0 probe:list
+> node scripts/run-probes.mjs --list
+
+Official probes:
+- tests/private_api_v2_mapping_probe.ts
+- tests/nginx_renderer_probe.ts
+- tests/http_servers_probe.ts
+- tests/telegram_menu_navigation_probe.ts
+- tests/telegram_slippage_confirmation_probe.ts
+- tests/telegram_manual_accounts_probe.ts
+- tests/runtime_backend_regression.ts
+- tests/live_execution_hardening_probe.ts
+- tests/execution_summary_failed_probe.ts
+- tests/buy_entry_price_guard_probe.ts
+- tests/position_mark_pnl_correctness_probe.ts
+- tests/live_submission_uncertain_probe.ts
+- tests/cancel_submission_uncertain_probe.ts
+- tests/submission_uncertain_unresolved_probe.ts
+- tests/submission_uncertain_bounded_history_probe.ts
+- tests/indodax_history_v2_probe.ts
+- tests/app_lifecycle_servers_probe.ts
+- tests/bootstrap_observability_probe.ts
+- tests/startup_health_honesty_probe.ts
+- tests/callback_reconciliation_probe.ts
+- tests/callback_security_probe.ts
+- tests/worker_timeout_probe.ts
+- tests/worker_production_runtime_probe.ts
+
+Manual probes (not in npm run verify):
+- tests/real_exchange_shadow_run_probe.ts
+
+--- stderr ---
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.

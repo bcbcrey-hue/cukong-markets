@@ -1,0 +1,14 @@
+timestamp_utc: 2026-03-22T20:33:39Z
+command: npm run probe:audit
+exit_code: 0
+--- stdout ---
+
+> cukong-markets@1.0.0 probe:audit
+> node scripts/run-probes.mjs --audit
+
+Probe registry is valid.
+Official probes: 23
+Manual probes: 1
+
+--- stderr ---
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.

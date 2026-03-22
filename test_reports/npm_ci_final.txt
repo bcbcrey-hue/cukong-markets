@@ -1,0 +1,12 @@
+timestamp_utc: 2026-03-22T20:33:26Z
+command: npm ci
+exit_code: 0
+--- stdout ---
+
+added 89 packages in 2s
+
+11 packages are looking for funding
+  run `npm fund` for details
+
+--- stderr ---
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.

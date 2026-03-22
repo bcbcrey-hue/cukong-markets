@@ -29,6 +29,12 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 - `npm run test:probes` lulus
 - suite resmi sudah mencakup probe safety untuk startup, worker timeout, buy-entry guard, dan submission-uncertain cancel safety
 
+## Finalisasi verifikasi (2026-03-22 UTC)
+
+- Bukti literal terbaru tersedia di `test_reports/typecheck_probes_final.txt`, `test_reports/probe_list_final.txt`, `test_reports/probe_audit_final.txt`, `test_reports/test_probes_final.txt`, dan `test_reports/verify_final.txt`.
+- Ringkasan sinkronisasi final: `test_reports/final_verification_sync.json`.
+- Warning npm `Unknown env config "http-proxy"` tetap muncul sebagai warning environment non-blocking (exit code command tetap 0).
+
 ## Verdict yang harus dipakai pada sesi berikutnya
 
 - deploy-readiness source repo: **SIAP DEPLOY**
