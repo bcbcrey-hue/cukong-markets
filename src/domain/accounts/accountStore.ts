@@ -1,8 +1,17 @@
 import path from 'node:path';
 import { env } from '../../config/env';
-import type { LegacyUploadedAccount, StoredAccount } from '../../core/types';
+import type {
+  LegacyUploadedAccount,
+  RuntimeAccountsFile,
+  StoredAccount,
+} from '../../core/types';
 import { JsonStore } from '../../storage/jsonStore';
-import { validateLegacyAccounts, validateStoredAccounts } from './accountValidator';
+import {
+  validateLegacyAccounts,
+  validateManualAccountInput,
+  validateRuntimeAccountsFile,
+  validateStoredAccounts,
+} from './accountValidator';
 
 type AccountsMetaSource = 'manual' | 'migration' | 'telegram_upload';
 
@@ -32,9 +41,13 @@ function createAccountId(name: string): string {
 }
 
 export class AccountStore {
-  private readonly accountsStore = new JsonStore<StoredAccount[]>({
+  private readonly accountsStore = new JsonStore<RuntimeAccountsFile>({
     filePath: env.accountsFile,
-    fallback: [],
+    fallback: {
+      format: 'runtime_accounts_v1',
+      secretStorage: 'plaintext_local',
+      accounts: [],
+    },
   });
   private readonly metaStore = new JsonStore<AccountsMeta>({
     filePath: path.resolve(env.accountsDir, 'accounts-meta.json'),
@@ -52,7 +65,11 @@ export class AccountStore {
 
   async loadAll(): Promise<StoredAccount[]> {
     const raw = await this.accountsStore.read();
-    return validateStoredAccounts(raw);
+    if (Array.isArray(raw)) {
+      return validateStoredAccounts(raw);
+    }
+
+    return validateRuntimeAccountsFile(raw).accounts;
   }
 
   async loadMeta(): Promise<AccountsMeta> {
@@ -64,7 +81,13 @@ export class AccountStore {
     source: AccountsMetaSource = 'manual',
   ): Promise<StoredAccount[]> {
     const normalized = validateStoredAccounts(accounts);
-    await this.accountsStore.write(normalized);
+    const runtimeFile: RuntimeAccountsFile = {
+      format: 'runtime_accounts_v1',
+      secretStorage: 'plaintext_local',
+      accounts: normalized,
+    };
+
+    await this.accountsStore.write(runtimeFile);
 
     const defaultAccount = normalized.find((item) => item.isDefault) ?? null;
 
@@ -131,8 +154,38 @@ export class AccountStore {
     return this.saveAll(next, 'migration');
   }
 
+  async addManual(input: LegacyUploadedAccount): Promise<StoredAccount[]> {
+    const parsed = validateManualAccountInput(input);
+    const current = await this.loadAll();
+    const now = nowIso();
+    const normalizedName = parsed.name.trim().toLowerCase();
+
+    if (current.some((item) => item.name.trim().toLowerCase() === normalizedName)) {
+      throw new Error(`Nama account "${parsed.name}" sudah ada.`);
+    }
+
+    const next: StoredAccount[] = [
+      ...current,
+      {
+        id: createAccountId(parsed.name),
+        name: parsed.name.trim(),
+        apiKey: parsed.apiKey.trim(),
+        apiSecret: parsed.apiSecret.trim(),
+        enabled: true,
+        isDefault: current.length === 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    return this.saveAll(next, 'manual');
+  }
+
   async delete(accountId: string): Promise<StoredAccount[]> {
     const current = await this.loadAll();
+    if (!current.some((item) => item.id === accountId)) {
+      throw new Error(`Account dengan id "${accountId}" tidak ditemukan.`);
+    }
     const next = current.filter((item) => item.id !== accountId);
     return this.saveAll(next, 'manual');
   }

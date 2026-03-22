@@ -4,6 +4,7 @@ import type {
   ExecutionMode,
   HotlistEntry,
   PositionRecord,
+  StoredAccount,
   TradingMode,
 } from '../../core/types';
 import { buildCallback } from './callbackRouter';
@@ -98,6 +99,8 @@ export const TELEGRAM_ACTION = {
   RISK: '🛡️ Risk Settings',
   ACCOUNTS: '👤 Accounts',
   LIST_ACCOUNTS: '📋 List Accounts',
+  ADD_MANUAL: '➕ Add Manual',
+  DELETE_MANUAL: '🗑️ Delete Manual',
   UPLOAD_JSON: '📤 Upload JSON',
   RELOAD_ACCOUNTS: '♻️ Reload Accounts',
   BACKTEST: '🧪 Backtest',
@@ -233,10 +236,24 @@ export const accountsCategoryKeyboard = Markup.inlineKeyboard([
 
 export const accountsKeyboard = Markup.inlineKeyboard([
   [Markup.button.callback(TELEGRAM_ACTION.LIST_ACCOUNTS, buildCallback({ namespace: 'ACC', action: 'LIST' }))],
+  [Markup.button.callback(TELEGRAM_ACTION.ADD_MANUAL, buildCallback({ namespace: 'ACC', action: 'ADD_MANUAL' }))],
+  [Markup.button.callback(TELEGRAM_ACTION.DELETE_MANUAL, buildCallback({ namespace: 'ACC', action: 'DELETE_MANUAL' }))],
   [Markup.button.callback(TELEGRAM_ACTION.UPLOAD_JSON, buildCallback({ namespace: 'ACC', action: 'UPLOAD' }))],
   [Markup.button.callback(TELEGRAM_ACTION.RELOAD_ACCOUNTS, buildCallback({ namespace: 'ACC', action: 'RELOAD' }))],
   [backButton('ACC')],
 ]);
+
+export function accountsDeleteKeyboard(accounts: StoredAccount[]) {
+  return Markup.inlineKeyboard([
+    ...accounts.slice(0, 10).map((account) => [
+      Markup.button.callback(
+        `Hapus ${account.name}`,
+        buildCallback({ namespace: 'ACC', action: 'DEL_PICK', value: account.id }),
+      ),
+    ]),
+    [backButton('ACC_PANEL')],
+  ]);
+}
 
 export const backtestCategoryKeyboard = Markup.inlineKeyboard([
   [Markup.button.callback(TELEGRAM_ACTION.BACKTEST, openMenuCallback('BKT_PANEL'))],

@@ -61,6 +61,12 @@ export class AccountRegistry {
     return this.accounts;
   }
 
+  async addManualAccount(input: LegacyUploadedAccount): Promise<StoredAccount[]> {
+    const saved = await this.store.addManual(input);
+    this.accounts = saved;
+    return this.accounts;
+  }
+
   async setEnabled(accountId: string, enabled: boolean): Promise<StoredAccount[]> {
     const saved = await this.store.setEnabled(accountId, enabled);
     this.accounts = saved;

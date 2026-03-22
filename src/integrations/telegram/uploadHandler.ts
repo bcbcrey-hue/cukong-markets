@@ -43,6 +43,10 @@ export class UploadHandler {
     const accounts = await this.store.saveLegacyUpload(parsed);
     await this.registry.reload();
 
-    return `Upload berhasil.\n${accounts.length} account tersimpan di data/accounts/accounts.json`;
+    return [
+      'Upload legacy berhasil.',
+      `${accounts.length} account tersimpan.`,
+      'Runtime file: data/accounts/accounts.json (format runtime_accounts_v1, secretStorage=plaintext_local).',
+    ].join('\n');
   }
 }
