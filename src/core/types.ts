@@ -27,6 +27,12 @@ export interface LegacyUploadedAccount {
   apiSecret: string;
 }
 
+export interface RuntimeAccountsFile {
+  format: 'runtime_accounts_v1';
+  secretStorage: 'plaintext_local';
+  accounts: StoredAccount[];
+}
+
 export interface StoredAccount extends LegacyUploadedAccount {
   id: string;
   isDefault: boolean;

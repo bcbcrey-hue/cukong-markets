@@ -24,6 +24,7 @@ import {
   TELEGRAM_ACTION,
   TELEGRAM_MAIN_MENU,
   accountsCategoryKeyboard,
+  accountsDeleteKeyboard,
   accountsKeyboard,
   backtestCategoryKeyboard,
   backtestKeyboard,
@@ -66,6 +67,14 @@ interface HandlerDeps {
 
 interface UserFlowState {
   awaitingUpload: boolean;
+  pendingManualAccount?:
+    | {
+        step: 'name' | 'apiKey' | 'apiSecret';
+        name?: string;
+        apiKey?: string;
+      }
+    | undefined;
+  pendingDeleteAccountId?: string;
   pendingBuyPair?: string;
   pendingBuyBackMenu?: TelegramMenuId;
   pendingConfig?: 'BUY_SLIPPAGE_BPS' | 'TAKE_PROFIT_PCT';
@@ -85,10 +94,17 @@ function getUserFlow(userId: number): UserFlowState {
 
 function clearPendingFlow(flow: UserFlowState): void {
   flow.awaitingUpload = false;
+  flow.pendingManualAccount = undefined;
+  flow.pendingDeleteAccountId = undefined;
   flow.pendingBuyPair = undefined;
   flow.pendingBuyBackMenu = undefined;
   flow.pendingConfig = undefined;
   flow.pendingSlippageConfirmation = undefined;
+}
+
+function clearAccountManualFlow(flow: UserFlowState): void {
+  flow.pendingManualAccount = undefined;
+  flow.pendingDeleteAccountId = undefined;
 }
 
 function getTopSignal(
@@ -154,6 +170,18 @@ function renderAccountsText(report: ReportService, accounts: AccountRegistry): s
   return report.accountsText(accounts.listAll());
 }
 
+function renderAccountsPanelText(report: ReportService, accounts: AccountRegistry): string {
+  const storagePath = accounts.getStoragePath();
+  const meta = [
+    'Storage policy:',
+    '- Runtime account file: accounts.json memakai format "runtime_accounts_v1".',
+    '- secretStorage=plaintext_local (tidak dienkripsi oleh aplikasi ini).',
+    '- Upload JSON tetap support format legacy array sebagai input, lalu dinormalisasi ke format runtime.',
+  ].join('\n');
+
+  return `${renderAccountsText(report, accounts)}\n\n${meta}\nPath: ${storagePath}`;
+}
+
 function renderLogsText(journal: JournalService): string {
   const lines = journal.recent(10).map((item) => {
     const prefix = item.pair ? `${item.pair} | ` : '';
@@ -215,7 +243,14 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
     case 'RUN':
       return ['START', 'STOP', 'STATUS', 'SHADOW_START', 'SHADOW_STATUS'].includes(parsed.action);
     case 'ACC':
-      return ['LIST', 'UPLOAD', 'RELOAD'].includes(parsed.action);
+      return [
+        'LIST',
+        'UPLOAD',
+        'RELOAD',
+        'ADD_MANUAL',
+        'DELETE_MANUAL',
+        'DEL_PICK',
+      ].includes(parsed.action);
     case 'SET':
       return (
         parsed.action === 'BUY_SLIPPAGE' ||
@@ -389,13 +424,13 @@ async function openMenu(
         [
           '👤 ACCOUNTS',
           'Kelola jalur akun dari submenu khusus.',
-          'Legacy upload account JSON dan storage data/accounts/accounts.json tetap dipertahankan.',
+          'Input manual + upload legacy sama-sama tersedia dan disimpan ke runtime format yang konsisten.',
         ].join('\n'),
         accountsCategoryKeyboard,
       );
       return;
     case 'ACC_PANEL':
-      await replyText(ctx, renderAccountsText(deps.report, deps.accounts), accountsKeyboard);
+      await replyText(ctx, renderAccountsPanelText(deps.report, deps.accounts), accountsKeyboard);
       return;
     case 'BKT':
       await replyText(
@@ -692,8 +727,63 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (parsed.namespace === 'ACC' && parsed.action === 'ADD_MANUAL') {
+      if (userFlow) {
+        clearPendingFlow(userFlow);
+        userFlow.pendingManualAccount = { step: 'name' };
+      }
+      await replyText(
+        ctx,
+        [
+          'Tambah account manual dimulai.',
+          'Langkah 1/3: kirim nama account.',
+        ].join('\n'),
+        accountsKeyboard,
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'ACC' && parsed.action === 'DELETE_MANUAL') {
+      const accounts = deps.accounts.listAll();
+      if (accounts.length === 0) {
+        await replyText(ctx, 'Tidak ada account untuk dihapus.', accountsKeyboard);
+      } else {
+        await replyText(
+          ctx,
+          'Pilih account yang ingin dihapus.',
+          accountsDeleteKeyboard(accounts),
+        );
+      }
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'ACC' && parsed.action === 'DEL_PICK' && parsed.value) {
+      const account = deps.accounts.getById(parsed.value);
+      if (!account) {
+        await replyText(ctx, 'Account tidak ditemukan.', accountsKeyboard);
+      } else if (userFlow) {
+        clearPendingFlow(userFlow);
+        userFlow.pendingDeleteAccountId = account.id;
+        await replyText(
+          ctx,
+          [
+            `Konfirmasi hapus account "${account.name}"?`,
+            `Balas HAPUS ${account.id} untuk konfirmasi.`,
+            'Balas BATAL untuk membatalkan.',
+          ].join('\n'),
+          accountsKeyboard,
+        );
+      } else {
+        await replyText(ctx, 'Flow user tidak ditemukan. Coba ulang dari menu Accounts.', accountsKeyboard);
+      }
+      await ctx.answerCbQuery();
+      return;
+    }
+
     if (parsed.namespace === 'ACC' && parsed.action === 'LIST') {
-      await replyText(ctx, renderAccountsText(deps.report, deps.accounts), accountsKeyboard);
+      await replyText(ctx, renderAccountsPanelText(deps.report, deps.accounts), accountsKeyboard);
       await ctx.answerCbQuery();
       return;
     }
@@ -702,7 +792,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       await deps.accounts.reload();
       await replyText(
         ctx,
-        `Accounts berhasil dimuat ulang.\n\n${renderAccountsText(deps.report, deps.accounts)}`,
+        `Accounts berhasil dimuat ulang.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
         accountsKeyboard,
       );
       await ctx.answerCbQuery();
@@ -956,6 +1046,116 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     const userFlow = getUserFlow(userId);
     const text = ctx.message && 'text' in ctx.message ? ctx.message.text.trim() : '';
+
+    if (userFlow.pendingDeleteAccountId) {
+      if (/^batal$/i.test(text)) {
+        userFlow.pendingDeleteAccountId = undefined;
+        await replyText(ctx, 'Hapus account dibatalkan.', accountsKeyboard);
+        return;
+      }
+
+      const expected = `hapus ${userFlow.pendingDeleteAccountId}`.toLowerCase();
+      if (text.toLowerCase() !== expected) {
+        await replyText(
+          ctx,
+          `Konfirmasi tidak cocok. Balas "${expected.toUpperCase()}" atau "BATAL".`,
+          accountsKeyboard,
+        );
+        return;
+      }
+
+      try {
+        await deps.accounts.delete(userFlow.pendingDeleteAccountId);
+        userFlow.pendingDeleteAccountId = undefined;
+        await replyText(
+          ctx,
+          `Account berhasil dihapus.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
+          accountsKeyboard,
+        );
+      } catch (error) {
+        userFlow.pendingDeleteAccountId = undefined;
+        await replyText(
+          ctx,
+          [
+            'Gagal menghapus account.',
+            error instanceof Error ? error.message : 'Terjadi error yang tidak diketahui.',
+            'Silakan refresh list account lalu coba lagi.',
+          ].join('\n'),
+          accountsKeyboard,
+        );
+      }
+      return;
+    }
+
+    if (userFlow.pendingManualAccount) {
+      if (/^batal$/i.test(text)) {
+        clearAccountManualFlow(userFlow);
+        await replyText(ctx, 'Tambah account manual dibatalkan.', accountsKeyboard);
+        return;
+      }
+
+      if (userFlow.pendingManualAccount.step === 'name') {
+        if (!text) {
+          await replyText(ctx, 'Nama account tidak boleh kosong. Kirim nama account atau BATAL.');
+          return;
+        }
+        userFlow.pendingManualAccount = {
+          step: 'apiKey',
+          name: text,
+        };
+        await replyText(ctx, 'Langkah 2/3: kirim API key.');
+        return;
+      }
+
+      if (userFlow.pendingManualAccount.step === 'apiKey') {
+        if (!text) {
+          await replyText(ctx, 'API key tidak boleh kosong. Kirim API key atau BATAL.');
+          return;
+        }
+        userFlow.pendingManualAccount = {
+          ...userFlow.pendingManualAccount,
+          step: 'apiSecret',
+          apiKey: text,
+        };
+        await replyText(ctx, 'Langkah 3/3: kirim API secret.');
+        return;
+      }
+
+      if (userFlow.pendingManualAccount.step === 'apiSecret') {
+        if (!text) {
+          await replyText(ctx, 'API secret tidak boleh kosong. Kirim API secret atau BATAL.');
+          return;
+        }
+        const name = userFlow.pendingManualAccount.name ?? '';
+        const apiKey = userFlow.pendingManualAccount.apiKey ?? '';
+
+        try {
+          await deps.accounts.addManualAccount({
+            name,
+            apiKey,
+            apiSecret: text,
+          });
+          clearAccountManualFlow(userFlow);
+          await replyText(
+            ctx,
+            `Account manual berhasil ditambahkan.\n\n${renderAccountsPanelText(deps.report, deps.accounts)}`,
+            accountsKeyboard,
+          );
+        } catch (error) {
+          clearAccountManualFlow(userFlow);
+          await replyText(
+            ctx,
+            [
+              'Gagal menambah account manual.',
+              error instanceof Error ? error.message : 'Terjadi error yang tidak diketahui.',
+              'Ulangi dari menu Accounts → Add Manual.',
+            ].join('\n'),
+            accountsKeyboard,
+          );
+        }
+        return;
+      }
+    }
 
     if (userFlow.pendingSlippageConfirmation) {
       if (/^(ya|yes|lanjut)$/i.test(text)) {

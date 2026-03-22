@@ -1,4 +1,8 @@
-import type { LegacyUploadedAccount, StoredAccount } from '../../core/types';
+import type {
+  LegacyUploadedAccount,
+  RuntimeAccountsFile,
+  StoredAccount,
+} from '../../core/types';
 
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -41,6 +45,19 @@ export function validateLegacyAccounts(input: unknown): LegacyUploadedAccount[] 
 
     return { name, apiKey, apiSecret };
   });
+}
+
+export function validateManualAccountInput(input: unknown): LegacyUploadedAccount {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Input account manual tidak valid.');
+  }
+
+  const row = input as Record<string, unknown>;
+  const name = normalizeName(requireString(row.name, 'account.name'));
+  const apiKey = requireString(row.apiKey, 'account.apiKey');
+  const apiSecret = requireString(row.apiSecret, 'account.apiSecret');
+
+  return { name, apiKey, apiSecret };
 }
 
 export function validateStoredAccounts(accounts: StoredAccount[]): StoredAccount[] {
@@ -103,6 +120,26 @@ export function validateStoredAccounts(accounts: StoredAccount[]): StoredAccount
 
     return item;
   });
+}
+
+export function validateRuntimeAccountsFile(input: unknown): RuntimeAccountsFile {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Format runtime accounts tidak valid.');
+  }
+
+  const row = input as Record<string, unknown>;
+  if (row.format !== 'runtime_accounts_v1') {
+    throw new Error('Format runtime accounts harus "runtime_accounts_v1".');
+  }
+  if (row.secretStorage !== 'plaintext_local') {
+    throw new Error('secretStorage runtime accounts harus "plaintext_local".');
+  }
+
+  return {
+    format: 'runtime_accounts_v1',
+    secretStorage: 'plaintext_local',
+    accounts: validateStoredAccounts(row.accounts as StoredAccount[]),
+  };
 }
 
 export class AccountValidator {
