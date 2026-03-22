@@ -64,6 +64,19 @@ Saat `NODE_ENV=production`:
 
 Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold strategi (`INDODAX_*_INTERVAL_MS`, `POLLING_INTERVAL_MS`, `RISK_*`, `WORKER_*`, `BUY_*`, dll) bersifat tuning operasional sesuai kebutuhan deployment.
 
+## Yang sudah terbukti dari source/probe
+
+- Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
+- Guard BUY untuk harga/reference/quantity invalid sudah dibuktikan ditolak sebelum persist lewat probe (`tests/buy_entry_price_guard_probe.ts`).
+- `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
+
+## Batas yang masih harus jujur
+
+- **SIAP untuk scope source verification/build/probe.**
+- **BELUM TERBUKTI sebagai live trading production end-to-end.**
+
+Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
+
 ## Catatan penting
 
 - `INDODAX_HISTORY_MODE` runtime default adalah `v2_only`.
