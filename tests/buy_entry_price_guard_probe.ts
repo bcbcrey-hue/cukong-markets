@@ -93,6 +93,25 @@ function makeOpportunity(pair: string, askPrice: number): OpportunityAssessment 
   };
 }
 
+async function expectBuyRejectedWithoutOrder(
+  execution: ExecutionEngine,
+  orderManager: OrderManager,
+  accountId: string,
+  opportunity: OpportunityAssessment,
+  amountIdr: number,
+): Promise<void> {
+  const beforeCount = orderManager.list().length;
+
+  await assert.rejects(
+    () => execution.buy(accountId, opportunity, amountIdr, 'AUTO'),
+    /tidak valid/i,
+    'BUY invalid input must be rejected',
+  );
+
+  const afterCount = orderManager.list().length;
+  assert.equal(afterCount, beforeCount, 'BUY rejection must happen before order is created');
+}
+
 async function main() {
   const tempDataDir = process.env.DATA_DIR;
   assert.ok(tempDataDir, 'DATA_DIR must be provided');
@@ -150,16 +169,63 @@ async function main() {
     summary,
   );
 
-  const beforeCount = orderManager.list().length;
-
-  await assert.rejects(
-    () => execution.buy(defaultAccount.id, makeOpportunity('btc_idr', Number.MAX_VALUE), 100_000, 'AUTO'),
-    /Harga entry BUY tidak valid/,
-    'BUY must be blocked when calculated entry price is non-finite',
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', 0),
+    100_000,
   );
 
-  const afterCount = orderManager.list().length;
-  assert.equal(afterCount, beforeCount, 'BUY rejection must happen before order is created');
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', -10),
+    100_000,
+  );
+
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', Number.NaN),
+    100_000,
+  );
+
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', Number.POSITIVE_INFINITY),
+    100_000,
+  );
+
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', Number.MAX_VALUE),
+    100_000,
+  );
+
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    makeOpportunity('btc_idr', 1_000_000_000),
+    Number.POSITIVE_INFINITY,
+  );
+
+  const missingReference = makeOpportunity('btc_idr', 0);
+  missingReference.referencePrice = Number.NaN;
+  await expectBuyRejectedWithoutOrder(
+    execution,
+    orderManager,
+    defaultAccount.id,
+    missingReference,
+    100_000,
+  );
 
   console.log('PASS buy_entry_price_guard_probe');
 }

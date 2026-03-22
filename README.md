@@ -1,147 +1,84 @@
 # Cukong-Markets
 
-Backend TypeScript untuk bot operasional market Indodax dengan UI utama di Telegram.
+Backend TypeScript untuk operasi market Indodax dengan kontrol utama via Telegram.
 
-## Status source yang sudah diverifikasi
-
-Yang benar-benar sudah terbukti lewat build/lint/probe:
-
-- bootstrap/startup sekarang mengeluarkan phase error yang jelas, termasuk stack dan cause chain
-- `src/bootstrap.ts` tidak lagi kehilangan error saat env import/runtime start gagal
-- `src/app.ts` sekarang membedakan phase startup penting: persistence, worker, app server, callback server, recovery, evaluasi posisi, Telegram, polling
-- logger Pino sekarang men-serialize `error` dan `err` secara eksplisit, jadi tidak lagi rawan berakhir sebagai `{}`
-- path worker aman untuk runtime build production (`dist/workers/*.js`) dan dev runtime
-- `test:probes` resmi sekarang juga menjalankan `bootstrap_observability_probe`, `worker_timeout_probe`, `buy_entry_price_guard_probe`, `live_submission_uncertain_probe`, dan `cancel_submission_uncertain_probe`
-- `.env.example` sekarang benar-benar ada dan sinkron dengan kontrak env runtime yang dipakai source
-- `INDODAX_TIMEOUT_MS` sekarang benar-benar dipakai untuk request public/private API
-- GET public/private API sekarang punya retry aman untuk status/transport failure yang retriable, sementara POST trading **tidak** di-retry agar tidak berbahaya di kondisi gagal parsial
-- validasi harga entry BUY tidak lagi membiarkan order lahir dari reference/entry price yang invalid
-- submit live order yang gagal ambigu karena timeout/network sekarang masuk state `submission_uncertain` dan dicoba direkonsiliasi otomatis via `openOrders`/history sebelum dianggap final
-- `submission_uncertain` yang tetap unresolved terlalu lama sekarang ditandai `submission_uncertain_unresolved` namun tetap `OPEN` (safety-blocking) agar tidak overclaim finality
-- jalur history/recovery Indodax tetap canonical ke V2 untuk scope migrasi yang memang di-claim repo
-- dead code lama `src/integrations/http/httpClient.ts` dan `src/integrations/indodax/mapper.ts` sudah dihapus karena tidak terhubung runtime/build/probe
-
-## Status yang masih harus jujur
-
-### Deploy readiness
-
-Untuk scope source repo, status sekarang: **SIAP DEPLOY**.
-
-Dasarnya:
-
-- `npm run lint` lulus
-- `npm run build` lulus
-- `npm run typecheck:probes` lulus
-- `npm run test:probes` lulus
-- probe startup, callback, recovery, worker timeout, buy-entry guard, submission-uncertain safety, dan history V2 lulus
-
-### Live trading
-
-Untuk live trading nyata, status sekarang: **BELUM SIAP LIVE**.
-
-Blocker jujur yang masih tersisa:
-
-- submit live order ke exchange belum punya pembuktian end-to-end non-destruktif di repo ini
-- jalur `submission_uncertain` sekarang sudah lebih aman, tetapi masih belum terbukti terhadap exchange nyata untuk semua edge case ketika order diterima namun belum bisa diidentifikasi unik dari side exchange
-- tidak ada bukti operasional nyata dari repo ini bahwa auth check exchange dan live shadow-run sudah tervalidasi aman
-
-## Env contract runtime
-
-Salin `.env.example` menjadi `.env`, lalu isi minimal:
-
-- `PUBLIC_BASE_URL`
-- `APP_PORT`
-- `APP_BIND_HOST`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_ALLOWED_USER_IDS`
-- `INDODAX_CALLBACK_PATH`
-- `INDODAX_CALLBACK_PORT`
-- `INDODAX_CALLBACK_BIND_HOST`
-- `INDODAX_CALLBACK_ALLOWED_HOST`
-- `INDODAX_ENABLE_CALLBACK_SERVER`
-- `INDODAX_HISTORY_MODE`
-- `INDODAX_PUBLIC_BASE_URL`
-- `INDODAX_PRIVATE_BASE_URL`
-- `INDODAX_TRADE_API_V2_BASE_URL`
-- `INDODAX_TIMEOUT_MS`
-- `INDODAX_PUBLIC_MIN_INTERVAL_MS`
-- `INDODAX_PRIVATE_MIN_INTERVAL_MS`
-- `INDODAX_PRIVATE_LIVE_MIN_INTERVAL_MS`
-- `INDODAX_PRIVATE_RECONCILE_MIN_INTERVAL_MS`
-- `INDODAX_PRIVATE_BACKGROUND_MIN_INTERVAL_MS`
-- `DATA_DIR`
-- `LOG_DIR`
-- `TEMP_DIR`
-
-Catatan penting:
-
-- `INDODAX_HISTORY_MODE` default final runtime = `v2_only`
-- `legacy` tetap tersedia hanya sebagai jalur eksplisit/manual
-- `v2_prefer` tetap dipetakan sebagai alias kompatibilitas ke `v2_only`
-- `INDODAX_CALLBACK_PATH` harus tetap `/indodax/callback`
-
-
-## Kontrak reproducibility dependency
-
-- Package manager final: **npm** (dipin lewat `packageManager: "npm@11.4.2"` di `package.json`).
-- Instalasi deterministic: jalankan `npm ci` (atau `npm run install:immutable`).
-- `npm run verify` harus dijalankan dari root repository dan tidak mengandalkan path absolut environment tertentu.
-
-## Menjalankan lokal
+## Start cepat
 
 ```bash
 npm ci
 cp .env.example .env
 npm run lint
 npm run build
+npm run start
+```
+
+Untuk mode development gunakan:
+
+```bash
 npm run dev
 ```
 
-Jika `INDODAX_ENABLE_CALLBACK_SERVER=true`, callback server ikut start saat app dijalankan.
-
-## Validasi resmi repo
+## Verifikasi resmi repo
 
 ```bash
 npm run verify
 ```
 
-Probe yang sekarang masuk jalur resmi:
+`npm run verify` menjalankan lint + typecheck probe + build artifact + seluruh probe runtime.
 
-- `tests/private_api_v2_mapping_probe.ts`
-- `tests/nginx_renderer_probe.ts`
-- `tests/http_servers_probe.ts`
-- `tests/telegram_menu_navigation_probe.ts`
-- `tests/telegram_slippage_confirmation_probe.ts`
-- `tests/runtime_backend_regression.ts`
-- `tests/live_execution_hardening_probe.ts`
-- `tests/execution_summary_failed_probe.ts`
-- `tests/buy_entry_price_guard_probe.ts`
-- `tests/live_submission_uncertain_probe.ts`
-- `tests/cancel_submission_uncertain_probe.ts`
-- `tests/submission_uncertain_unresolved_probe.ts`
-- `tests/indodax_history_v2_probe.ts`
-- `tests/app_lifecycle_servers_probe.ts`
-- `tests/bootstrap_observability_probe.ts`
-- `tests/callback_reconciliation_probe.ts`
-- `tests/callback_security_probe.ts`
-- `tests/worker_timeout_probe.ts`
+## Bukti runtime worker production/build
 
-## Validasi shadow-run exchange nyata (non-destruktif)
+Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:
 
-Validasi ini **terpisah** dari `npm run verify` karena butuh secret/runtime nyata.
+1. path worker resolve ke `dist/workers/*.js`,
+2. worker dijalankan sebagai JS worker (bukan `tsx/cli`),
+3. task worker benar-benar diproses sukses.
 
-```bash
-npm run verify:shadow-live
-```
+Probe ini ikut di jalur `npm run verify`.
 
-Catatan:
+## Kontrak env runtime
 
-- command di atas mengeksekusi `tests/real_exchange_shadow_run_probe.ts` dengan `RUN_REAL_EXCHANGE_SHADOW=1`
-- probe hanya memakai endpoint read-only/non-destruktif (`getInfo`, `openOrders`, `orderHistoriesV2`/`orderHistory`, dan market data public)
-- evidence wajib tersimpan ke `history/shadow-run-evidence.jsonl` (atau `DATA_DIR/history/shadow-run-evidence.jsonl`) dan diverifikasi bisa dibaca ulang via `journal.listShadowRunEvidence()`
+Gunakan `.env.example` sebagai sumber nilai awal. Variabel dibagi menjadi 3 kelompok agar tidak rancu.
 
-## File referensi status
+### 1) Minimum lokal (wajib agar app start lokal)
 
-- `AUDIT_FORENSIK_PROMPT.md` = hasil audit keras terbaru
-- `REFACTOR_LOG.md` = daftar perubahan source yang benar-benar masuk
-- `SESSION_CONTEXT_NEXT.md` = ringkasan singkat untuk lanjut sesi berikutnya
+- `NODE_ENV`, `APP_NAME`, `PUBLIC_BASE_URL`, `APP_PORT`, `APP_BIND_HOST`
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `LOG_LEVEL`
+- `DATA_DIR`, `LOG_DIR`, `TEMP_DIR`
+- `INDODAX_CALLBACK_PATH` (harus tetap `/indodax/callback`)
+- `INDODAX_ENABLE_CALLBACK_SERVER`
+
+### 2) Wajib production / callback security
+
+Saat `NODE_ENV=production`:
+
+- wajib: `PUBLIC_BASE_URL`, `APP_PORT`, `APP_BIND_HOST`
+- jika callback server aktif (`INDODAX_ENABLE_CALLBACK_SERVER=true`), wajib:
+  - `INDODAX_CALLBACK_PORT`
+  - `INDODAX_CALLBACK_BIND_HOST`
+  - `INDODAX_CALLBACK_ALLOWED_HOST`
+  - `INDODAX_CALLBACK_AUTH_MODE=required`
+  - `INDODAX_CALLBACK_SIGNATURE_SECRET` (secret kuat, bukan default)
+
+### 3) Tuning opsional
+
+Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold strategi (`INDODAX_*_INTERVAL_MS`, `POLLING_INTERVAL_MS`, `RISK_*`, `WORKER_*`, `BUY_*`, dll) bersifat tuning operasional sesuai kebutuhan deployment.
+
+## Yang sudah terbukti dari source/probe
+
+- Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
+- Guard BUY untuk harga/reference/quantity invalid sudah dibuktikan ditolak sebelum persist lewat probe (`tests/buy_entry_price_guard_probe.ts`).
+- `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
+
+## Batas yang masih harus jujur
+
+- **SIAP untuk scope source verification/build/probe.**
+- **BELUM TERBUKTI sebagai live trading production end-to-end.**
+
+Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
+
+## Catatan penting
+
+- `INDODAX_HISTORY_MODE` runtime default adalah `v2_only`.
+- `INDODAX_CALLBACK_PATH` dikunci ke `/indodax/callback` oleh validasi env.
+- Guard BUY menolak harga referensi/entry/quantity yang invalid sebelum order dipersist.

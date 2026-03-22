@@ -167,10 +167,6 @@ export class WorkerPoolService {
     return this.enqueue('backtest', input, 60_000);
   }
 
-  private isTsRuntime(): boolean {
-    return __filename.endsWith('.ts');
-  }
-
   private resolveWorkerPath(type: WorkerTaskType): string {
     const fileName =
       type === 'feature'
@@ -181,9 +177,8 @@ export class WorkerPoolService {
 
     const candidates = [
       path.resolve(__dirname, '../workers', `${fileName}.js`),
-      path.resolve(process.cwd(), 'dist/workers', `${fileName}.js`),
       path.resolve(__dirname, '../workers', `${fileName}.ts`),
-      path.resolve(process.cwd(), 'src/workers', `${fileName}.ts`),
+      path.resolve(__dirname, '../../src/workers', `${fileName}.ts`),
     ];
 
     for (const candidate of candidates) {
