@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { env } from '../config/env';
 import { createChildLogger } from '../core/logger';
 import { HealthService } from '../services/healthService';
+import { buildRuntimeVerifierContract } from './runtimeVerifier';
 
 const log = createChildLogger({ module: 'app-server' });
 
@@ -40,6 +41,7 @@ export class AppServer {
       const currentHealth = this.health.get();
       const live = this.health.isLive(currentHealth);
       const ready = this.health.isReady(currentHealth);
+      const verifier = buildRuntimeVerifierContract(this.port);
 
       this.writeJson(response, ready ? 200 : 503, {
         ok: ready,
@@ -75,7 +77,25 @@ export class AppServer {
             !env.indodaxEnableCallbackServer || currentHealth.callbackServerRunning,
         },
         executionMode: currentHealth.executionMode,
+        verifier,
         health: currentHealth,
+      });
+      return;
+    }
+
+
+    if (path === '/verifier/runtime-target') {
+      const currentHealth = this.health.get();
+      const live = this.health.isLive(currentHealth);
+      const ready = this.health.isReady(currentHealth);
+      const verifier = buildRuntimeVerifierContract(this.port);
+
+      this.writeJson(response, 200, {
+        ok: true,
+        live,
+        ready,
+        runtimeStatus: currentHealth.runtimeStatus,
+        verifier,
       });
       return;
     }
@@ -98,6 +118,7 @@ export class AppServer {
         app: env.appName,
         message: 'cukong-markets runtime server',
         healthz: '/healthz',
+        runtimeVerifier: '/verifier/runtime-target',
         callbackPath: env.indodaxCallbackPath,
       });
       return;
