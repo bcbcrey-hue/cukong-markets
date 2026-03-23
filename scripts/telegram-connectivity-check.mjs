@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import dns from 'node:dns/promises';
+import net from 'node:net';
+import { spawnSync } from 'node:child_process';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
+const TELEGRAM_HOST = 'api.telegram.org';
+const TELEGRAM_PORT = 443;
 
 function maskToken(token) {
   if (!token) return null;
@@ -56,6 +60,43 @@ function readArgValue(name) {
   const value = process.argv[index + 1];
   if (!value || value.startsWith('--')) return null;
   return value;
+}
+
+function tcpDial(host, port, family, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port, family });
+    let settled = false;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish({ ok: true, error: null }));
+    socket.once('timeout', () => finish({ ok: false, error: 'timeout' }));
+    socket.once('error', (error) => finish({ ok: false, error: String(error?.message || error) }));
+  });
+}
+
+function runCurlCheck(useNoProxy) {
+  const args = ['-sS', '-o', '/dev/null', '-w', 'code=%{http_code} remote_ip=%{remote_ip} err=%{errormsg}', 'https://api.telegram.org'];
+  if (useNoProxy) {
+    args.unshift('*');
+    args.unshift('--noproxy');
+  }
+
+  const result = spawnSync('curl', args, { encoding: 'utf8' });
+  const combined = `${result.stdout || ''} ${result.stderr || ''}`.trim();
+
+  return {
+    ok: result.status === 0,
+    exitCode: result.status,
+    output: combined,
+    classified: classifyError(combined),
+  };
 }
 
 async function readRuntimeHealth(baseUrl) {
@@ -140,6 +181,13 @@ async function main() {
     proxyEnvConfigured: proxyEnv.length > 0,
     proxyEnvKeys: proxyEnv,
     dns: { ok: false, addresses: [], error: null },
+    networkIsolation: {
+      tcpIPv4: { ok: false, error: null },
+      tcpIPv6: { ok: false, error: null },
+      curlViaProxyEnv: { ok: false, exitCode: null, output: null, classified: null },
+      curlDirectNoProxy: { ok: false, exitCode: null, output: null, classified: null },
+      mostLikelyRootCause: null,
+    },
     outboundApi: { ok: false, status: null, errorType: null, error: null },
     getMe: {
       attempted: Boolean(token),
@@ -179,12 +227,56 @@ async function main() {
     verdict: 'BELUM_SELESAI',
   };
 
+  let ipv4 = null;
+  let ipv6 = null;
+
   try {
     const answers = await dns.lookup('api.telegram.org', { all: true });
     summary.dns.ok = true;
-    summary.dns.addresses = answers.map((item) => `${item.family === 6 ? 'IPv6' : 'IPv4'}:${item.address}`);
+    summary.dns.addresses = answers.map((item) => {
+      if (item.family === 4 && !ipv4) ipv4 = item.address;
+      if (item.family === 6 && !ipv6) ipv6 = item.address;
+      return `${item.family === 6 ? 'IPv6' : 'IPv4'}:${item.address}`;
+    });
   } catch (error) {
     summary.dns.error = String(error?.message || error);
+  }
+
+  if (ipv4) {
+    summary.networkIsolation.tcpIPv4 = await tcpDial(ipv4, TELEGRAM_PORT, 4);
+  } else {
+    summary.networkIsolation.tcpIPv4 = { ok: false, error: 'ipv4_not_resolved' };
+  }
+
+  if (ipv6) {
+    summary.networkIsolation.tcpIPv6 = await tcpDial(ipv6, TELEGRAM_PORT, 6);
+  } else {
+    summary.networkIsolation.tcpIPv6 = { ok: false, error: 'ipv6_not_resolved' };
+  }
+
+  const curlProxy = runCurlCheck(false);
+  const curlDirect = runCurlCheck(true);
+  summary.networkIsolation.curlViaProxyEnv = {
+    ok: curlProxy.ok,
+    exitCode: curlProxy.exitCode,
+    output: curlProxy.output,
+    classified: curlProxy.classified,
+  };
+  summary.networkIsolation.curlDirectNoProxy = {
+    ok: curlDirect.ok,
+    exitCode: curlDirect.exitCode,
+    output: curlDirect.output,
+    classified: curlDirect.classified,
+  };
+
+  if (curlProxy.classified === 'proxy_blocked') {
+    summary.networkIsolation.mostLikelyRootCause = 'proxy_connect_blocked';
+  } else if (!summary.networkIsolation.tcpIPv4.ok && !summary.networkIsolation.tcpIPv6.ok) {
+    summary.networkIsolation.mostLikelyRootCause = 'network_route_or_firewall_block';
+  } else if (!summary.dns.ok) {
+    summary.networkIsolation.mostLikelyRootCause = 'dns_resolution_failure';
+  } else {
+    summary.networkIsolation.mostLikelyRootCause = 'unknown';
   }
 
   try {
