@@ -163,6 +163,7 @@ async function main() {
 
   const expectedAppName = process.env.APP_NAME?.trim() || 'cukong-markets';
   const expectedAppPort = Number(process.env.APP_PORT || '3000');
+  const expectedRuntimeProof = process.env.RUNTIME_ALIGNMENT_PROOF?.trim() || '';
 
   const proxyEnv = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
     .filter((key) => (process.env[key] || '').trim().length > 0);
@@ -203,7 +204,11 @@ async function main() {
       skippedReason: includeRuntime ? null : 'use --with-runtime to validate live app runtime sync',
       baseUrl: includeRuntime ? runtimeBaseUrl : null,
       expectedTarget: includeRuntime
-        ? { appName: expectedAppName, appPort: Number.isFinite(expectedAppPort) ? expectedAppPort : null }
+        ? {
+            appName: expectedAppName,
+            appPort: Number.isFinite(expectedAppPort) ? expectedAppPort : null,
+            runtimeProofMasked: maskToken(expectedRuntimeProof),
+          }
         : null,
       healthz: { ok: false, status: null, payload: null, error: null },
       livez: { ok: false, status: null, payload: null, error: null },
@@ -211,6 +216,9 @@ async function main() {
         runtimeTargetMatches: {
           appNameMatches: null,
           appPortMatches: null,
+          runtimePidMatchesBetweenHealthAndLivez: null,
+          runtimeBootedAtMatchesBetweenHealthAndLivez: null,
+          runtimeProofMatches: null,
         },
         tokenConfiguredMatches: null,
         allowedUsersCountMatches: null,
@@ -335,6 +343,7 @@ async function main() {
       expectedTarget: {
         appName: expectedAppName,
         appPort: Number.isFinite(expectedAppPort) ? expectedAppPort : null,
+        runtimeProofMasked: maskToken(expectedRuntimeProof),
       },
     };
 
@@ -347,6 +356,21 @@ async function main() {
       summary.runtime.alignment.runtimeTargetMatches.appPortMatches =
         Number.isFinite(expectedAppPort) &&
         valueOrNull(healthPayload?.server?.port) === expectedAppPort;
+
+      const healthIdentity = healthPayload?.runtimeIdentity ?? null;
+      const liveIdentity = summary.runtime.livez.payload?.runtimeIdentity ?? null;
+      summary.runtime.alignment.runtimeTargetMatches.runtimePidMatchesBetweenHealthAndLivez =
+        Boolean(healthIdentity?.pid) && Boolean(liveIdentity?.pid) && healthIdentity.pid === liveIdentity.pid;
+      summary.runtime.alignment.runtimeTargetMatches.runtimeBootedAtMatchesBetweenHealthAndLivez =
+        Boolean(healthIdentity?.bootedAt) &&
+        Boolean(liveIdentity?.bootedAt) &&
+        healthIdentity.bootedAt === liveIdentity.bootedAt;
+
+      if (expectedRuntimeProof) {
+        summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches =
+          (healthIdentity?.alignmentProofMasked ?? null) === maskToken(expectedRuntimeProof) &&
+          (liveIdentity?.alignmentProofMasked ?? null) === maskToken(expectedRuntimeProof);
+      }
       summary.runtime.alignment.tokenConfiguredMatches =
         healthPayload?.telegram?.configured === summary.tokenConfigured;
       summary.runtime.alignment.allowedUsersCountMatches =
@@ -373,6 +397,9 @@ async function main() {
     summary.runtime.livez.ok &&
     summary.runtime.alignment.runtimeTargetMatches.appNameMatches === true &&
     summary.runtime.alignment.runtimeTargetMatches.appPortMatches === true &&
+    summary.runtime.alignment.runtimeTargetMatches.runtimePidMatchesBetweenHealthAndLivez === true &&
+    summary.runtime.alignment.runtimeTargetMatches.runtimeBootedAtMatchesBetweenHealthAndLivez === true &&
+    (!expectedRuntimeProof || summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches === true) &&
     summary.runtime.alignment.tokenConfiguredMatches === true &&
     summary.runtime.alignment.allowedUsersCountMatches === true &&
     summary.runtime.botLaunch.launchSuccess === true &&
@@ -382,6 +409,9 @@ async function main() {
   if (!summary.outboundApi.ok) summary.gateFailures.push('outbound_telegram_api_failed');
   if (!summary.getMe.ok) summary.gateFailures.push('getme_failed');
   if (!runtimeHealthyAndConnected) summary.gateFailures.push('runtime_not_connected_ready');
+  if (expectedRuntimeProof && summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches !== true) {
+    summary.gateFailures.push('runtime_alignment_proof_mismatch');
+  }
 
   if (summary.tokenConfigured && summary.outboundApi.ok && summary.getMe.ok && runtimeHealthyAndConnected) {
     summary.verdict = 'SELESAI';

@@ -6,11 +6,40 @@ import { HealthService } from '../services/healthService';
 
 const log = createChildLogger({ module: 'app-server' });
 
+function maskRuntimeProof(value: string): string | null {
+  const clean = value.trim();
+  if (!clean) {
+    return null;
+  }
+
+  if (clean.length <= 8) {
+    return `${clean.slice(0, 2)}***`;
+  }
+
+  return `${clean.slice(0, 4)}***${clean.slice(-4)}`;
+}
+
 export class AppServer {
   private server: Server | null = null;
   private port = env.appPort;
+  private readonly bootedAt = new Date().toISOString();
 
   constructor(private readonly health: HealthService) {}
+
+  private runtimeIdentity(): {
+    pid: number;
+    bootedAt: string;
+    alignmentProofConfigured: boolean;
+    alignmentProofMasked: string | null;
+  } {
+    const rawProof = process.env.RUNTIME_ALIGNMENT_PROOF ?? '';
+    return {
+      pid: process.pid,
+      bootedAt: this.bootedAt,
+      alignmentProofConfigured: rawProof.trim().length > 0,
+      alignmentProofMasked: maskRuntimeProof(rawProof),
+    };
+  }
 
   private writeJson(
     response: ServerResponse,
@@ -50,6 +79,7 @@ export class AppServer {
           host: env.appBindHost,
           port: this.port,
         },
+        runtimeIdentity: this.runtimeIdentity(),
         publicBaseUrl: env.publicBaseUrl || null,
         callback: {
           enabled: env.indodaxEnableCallbackServer,
@@ -88,6 +118,7 @@ export class AppServer {
         ok: live,
         live,
         runtimeStatus: currentHealth.runtimeStatus,
+        runtimeIdentity: this.runtimeIdentity(),
       });
       return;
     }
