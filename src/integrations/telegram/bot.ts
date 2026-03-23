@@ -42,8 +42,12 @@ export interface TelegramConnectionSignal {
   launched: boolean;
   running: boolean;
   connected: boolean;
+  lastConnectionStatus: 'never_started' | 'connected' | 'failed' | 'stopped';
+  allowedUsersCount: number;
   botId: number | null;
   botUsername: string | null;
+  botFirstName: string | null;
+  botIsBot: boolean | null;
   lastLaunchAt: string | null;
   lastConnectedAt: string | null;
   lastLaunchSuccessAt: string | null;
@@ -65,8 +69,12 @@ export class TelegramBot implements SummaryNotifier {
     launched: false,
     running: false,
     connected: false,
+    lastConnectionStatus: 'never_started',
+    allowedUsersCount: env.telegramAllowedUserIds.length,
     botId: null,
     botUsername: null,
+    botFirstName: null,
+    botIsBot: null,
     lastLaunchAt: null,
     lastConnectedAt: null,
     lastLaunchSuccessAt: null,
@@ -111,8 +119,12 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        lastConnectionStatus: 'failed',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         botId: null,
         botUsername: null,
+        botFirstName: null,
+        botIsBot: null,
         lastLaunchAt: new Date().toISOString(),
         lastConnectedAt: null,
         lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
@@ -124,6 +136,7 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
           lastLaunchError: this.signal.lastLaunchError,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
@@ -158,8 +171,12 @@ export class TelegramBot implements SummaryNotifier {
         launched: true,
         running: true,
         connected: true,
+        lastConnectionStatus: 'connected',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         botId: me.id,
         botUsername: me.username ?? null,
+        botFirstName: me.first_name ?? null,
+        botIsBot: me.is_bot ?? null,
         lastConnectedAt: connectedAt,
         lastLaunchSuccessAt: connectedAt,
         lastLaunchError: null,
@@ -171,8 +188,12 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
+          allowedUsersCount: this.signal.allowedUsersCount,
           botId: this.signal.botId,
           botUsername: this.signal.botUsername,
+          botFirstName: this.signal.botFirstName,
+          botIsBot: this.signal.botIsBot,
           lastConnectedAt: this.signal.lastConnectedAt,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
@@ -187,8 +208,12 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        lastConnectionStatus: 'failed',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         botId: null,
         botUsername: null,
+        botFirstName: null,
+        botIsBot: null,
         lastConnectedAt: null,
         lastLaunchError: normalizedError.message,
         lastLaunchErrorType: launchErrorType,
@@ -199,6 +224,7 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
           lastLaunchError: this.signal.lastLaunchError,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
@@ -213,6 +239,8 @@ export class TelegramBot implements SummaryNotifier {
         ...this.signal,
         running: false,
         connected: false,
+        lastConnectionStatus: 'stopped',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         lastConnectedAt: null,
       };
       return;
@@ -223,6 +251,8 @@ export class TelegramBot implements SummaryNotifier {
       ...this.signal,
       running: false,
       connected: false,
+      lastConnectionStatus: 'stopped',
+      allowedUsersCount: env.telegramAllowedUserIds.length,
       lastConnectedAt: null,
     };
   }

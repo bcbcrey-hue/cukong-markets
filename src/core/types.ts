@@ -514,8 +514,12 @@ export interface TelegramRuntimeHealth {
   launched: boolean;
   running: boolean;
   connected: boolean;
+  lastConnectionStatus: 'never_started' | 'connected' | 'failed' | 'stopped';
+  allowedUsersCount: number;
   botId: number | null;
   botUsername: string | null;
+  botFirstName: string | null;
+  botIsBot: boolean | null;
   lastLaunchAt: string | null;
   lastConnectedAt: string | null;
   lastLaunchSuccessAt: string | null;
