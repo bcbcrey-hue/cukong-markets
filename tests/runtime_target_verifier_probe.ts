@@ -2,8 +2,38 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createApp } from '../src/app';
+import { TelegramBot } from '../src/integrations/telegram/bot';
 
 async function main(): Promise<void> {
+
+  const originalStart = TelegramBot.prototype.start;
+  const originalStop = TelegramBot.prototype.stop;
+
+  TelegramBot.prototype.start = async function patchedStart() {
+    const signalHolder = this as unknown as {
+      signal: {
+        configured: boolean;
+        launched: boolean;
+        running: boolean;
+        connected: boolean;
+        lastConnectionStatus: string;
+      };
+    };
+
+    signalHolder.signal = {
+      ...signalHolder.signal,
+      configured: true,
+      launched: true,
+      running: true,
+      connected: true,
+      lastConnectionStatus: 'connected',
+    };
+  };
+
+  TelegramBot.prototype.stop = async function patchedStop() {
+    return;
+  };
+
   const app = await createApp();
 
   const foreignProcess = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60_000)'], {
@@ -109,6 +139,8 @@ async function main(): Promise<void> {
     console.log('PASS runtime_target_verifier_probe');
   } finally {
     await app.stop();
+    TelegramBot.prototype.start = originalStart;
+    TelegramBot.prototype.stop = originalStop;
     if (!Number.isNaN(foreignPid) && foreignPid > 0) {
       try {
         process.kill(foreignPid, 'SIGTERM');
