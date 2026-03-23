@@ -28,6 +28,7 @@ async function main() {
   await state.setStatus('RUNNING');
   await health.build({
     scannerRunning: true,
+    telegramConfigured: true,
     telegramRunning: false,
     callbackServerRunning: true,
     tradingEnabled: true,
@@ -68,8 +69,9 @@ async function main() {
       'Health snapshot must reflect telegram dependency down',
     );
 
-    await health.build({
+  await health.build({
       scannerRunning: true,
+      telegramConfigured: true,
       telegramRunning: true,
       callbackServerRunning: true,
       tradingEnabled: true,
