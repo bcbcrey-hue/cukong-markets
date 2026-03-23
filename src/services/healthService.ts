@@ -73,6 +73,13 @@ export class HealthService {
 
     const notes = [
       ...(params.notes ?? []),
+      `telegramGate=${
+        !params.telegramConfigured
+          ? 'not_configured'
+          : params.telegramRunning
+            ? 'operational'
+            : 'configured_not_running'
+      }`,
       `openPositions=${openPositions}`,
       `pendingOrders=${pendingOrders}`,
     ];
