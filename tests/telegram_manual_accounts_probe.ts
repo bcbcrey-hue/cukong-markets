@@ -200,10 +200,25 @@ function createTextContext(messageText: string, replies: string[]) {
   };
 }
 
-async function probeTelegramManualFlows() {
+let probeDataDir: string | null = null;
+
+async function ensureProbeRuntimeEnv(): Promise<string> {
+  if (!probeDataDir) {
+    probeDataDir = await mkdtemp(path.join(os.tmpdir(), 'cukong-accounts-manual-probe-'));
+  }
+
   process.env.NODE_ENV = 'test';
   process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'manual-probe-token';
   process.env.TELEGRAM_ALLOWED_USER_IDS = '11';
+  process.env.DATA_DIR = probeDataDir;
+  process.env.LOG_DIR = path.join(probeDataDir, 'logs');
+  process.env.TEMP_DIR = path.join(probeDataDir, 'tmp');
+
+  return probeDataDir;
+}
+
+async function probeTelegramManualFlows() {
+  await ensureProbeRuntimeEnv();
   const [{ buildCallback }, { registerHandlers }] = await Promise.all([
     import('../src/integrations/telegram/callbackRouter'),
     import('../src/integrations/telegram/handlers'),
@@ -274,13 +289,7 @@ async function probeTelegramManualFlows() {
 }
 
 async function probeRuntimeContract() {
-  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'cukong-accounts-manual-probe-'));
-  process.env.NODE_ENV = 'test';
-  process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'manual-probe-token';
-  process.env.TELEGRAM_ALLOWED_USER_IDS = '11';
-  process.env.DATA_DIR = dataDir;
-  process.env.LOG_DIR = path.join(dataDir, 'logs');
-  process.env.TEMP_DIR = path.join(dataDir, 'tmp');
+  const dataDir = await ensureProbeRuntimeEnv();
 
   const [{ AccountStore }, { AccountRegistry }, { env }, { ReportService: RuntimeReportService }] =
     await Promise.all([
@@ -298,6 +307,11 @@ async function probeRuntimeContract() {
     apiKey: 'runtime-key',
     apiSecret: 'runtime-secret',
   });
+  assert.equal(
+    env.accountsFile,
+    path.join(dataDir, 'accounts', 'accounts.json'),
+    'Contract env.accountsFile harus resolve ke <DATA_DIR>/accounts/accounts.json',
+  );
 
   const raw = JSON.parse(await readFile(env.accountsFile, 'utf8')) as {
     format: string;
