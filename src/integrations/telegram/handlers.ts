@@ -323,6 +323,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
       telegramSignal.configured &&
       telegramSignal.running &&
       telegramSignal.connected,
+    telegramConnection: telegramSignal,
     callbackServerRunning: deps.health.get().callbackServerRunning,
     tradingEnabled: deps.settings.get().tradingMode !== 'OFF' && !deps.state.get().emergencyStop,
     executionMode: deps.settings.getExecutionMode(),

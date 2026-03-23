@@ -509,6 +509,20 @@ export interface WorkerHealth {
   lastError: string | null;
 }
 
+export interface TelegramRuntimeHealth {
+  configured: boolean;
+  launched: boolean;
+  running: boolean;
+  connected: boolean;
+  botId: number | null;
+  botUsername: string | null;
+  lastLaunchAt: string | null;
+  lastConnectedAt: string | null;
+  lastLaunchSuccessAt: string | null;
+  lastLaunchError: string | null;
+  lastLaunchErrorType: 'none' | 'missing_token' | 'invalid_token' | 'proxy_blocked' | 'network' | 'unknown';
+}
+
 export interface HealthSnapshot {
   status: 'healthy' | 'degraded' | 'down';
   updatedAt: string;
@@ -516,6 +530,7 @@ export interface HealthSnapshot {
   scannerRunning: boolean;
   telegramConfigured: boolean;
   telegramRunning: boolean;
+  telegramConnection: TelegramRuntimeHealth;
   callbackServerRunning: boolean;
   tradingEnabled: boolean;
   executionMode: ExecutionMode;

@@ -64,6 +64,7 @@ export class AppServer {
         telegram: {
           configured: currentHealth.telegramConfigured,
           running: currentHealth.telegramRunning,
+          connection: currentHealth.telegramConnection,
         },
         readiness: {
           scannerReady: currentHealth.scannerRunning,
