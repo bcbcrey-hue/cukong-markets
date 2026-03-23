@@ -53,11 +53,13 @@ export class AppServer {
         publicBaseUrl: env.publicBaseUrl || null,
         callback: {
           enabled: env.indodaxEnableCallbackServer,
+          running: currentHealth.callbackServerRunning,
           path: env.indodaxCallbackPath,
           port: env.indodaxCallbackPort,
           bindHost: env.indodaxCallbackBindHost,
           url: env.indodaxCallbackUrl,
           allowedHost: env.indodaxCallbackAllowedHost || null,
+          authMode: env.indodaxCallbackAuthMode,
         },
         telegram: {
           configured: currentHealth.telegramConfigured,
