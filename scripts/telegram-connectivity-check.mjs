@@ -68,8 +68,13 @@ async function readRuntimeHealth(baseUrl) {
     healthz: { ok: false, status: null, payload: null, error: null },
     livez: { ok: false, status: null, payload: null, error: null },
     alignment: {
+      runtimeTargetMatches: {
+        appNameMatches: null,
+        appPortMatches: null,
+      },
       tokenConfiguredMatches: null,
       allowedUsersCountMatches: null,
+      botIdentityMatches: null,
     },
     botLaunch: {
       launchAttempted: null,
@@ -104,12 +109,19 @@ async function readRuntimeHealth(baseUrl) {
   return result;
 }
 
+function valueOrNull(value) {
+  return value === undefined ? null : value;
+}
+
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
   const allowedUsers = (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
     .split(',')
     .map((v) => v.trim())
     .filter(Boolean);
+
+  const expectedAppName = process.env.APP_NAME?.trim() || 'cukong-markets';
+  const expectedAppPort = Number(process.env.APP_PORT || '3000');
 
   const proxyEnv = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
     .filter((key) => (process.env[key] || '').trim().length > 0);
@@ -141,11 +153,19 @@ async function main() {
       checked: false,
       skippedReason: includeRuntime ? null : 'use --with-runtime to validate live app runtime sync',
       baseUrl: includeRuntime ? runtimeBaseUrl : null,
+      expectedTarget: includeRuntime
+        ? { appName: expectedAppName, appPort: Number.isFinite(expectedAppPort) ? expectedAppPort : null }
+        : null,
       healthz: { ok: false, status: null, payload: null, error: null },
       livez: { ok: false, status: null, payload: null, error: null },
       alignment: {
+        runtimeTargetMatches: {
+          appNameMatches: null,
+          appPortMatches: null,
+        },
         tokenConfiguredMatches: null,
         allowedUsersCountMatches: null,
+        botIdentityMatches: null,
       },
       botLaunch: {
         launchAttempted: null,
@@ -215,15 +235,29 @@ async function main() {
   }
 
   if (includeRuntime) {
-    summary.runtime = await readRuntimeHealth(runtimeBaseUrl);
+    summary.runtime = {
+      ...summary.runtime,
+      ...(await readRuntimeHealth(runtimeBaseUrl)),
+      expectedTarget: {
+        appName: expectedAppName,
+        appPort: Number.isFinite(expectedAppPort) ? expectedAppPort : null,
+      },
+    };
+
     const healthPayload = summary.runtime.healthz.payload;
     const connection = healthPayload?.telegram?.connection || null;
 
     if (healthPayload) {
+      summary.runtime.alignment.runtimeTargetMatches.appNameMatches =
+        valueOrNull(healthPayload?.app) === expectedAppName;
+      summary.runtime.alignment.runtimeTargetMatches.appPortMatches =
+        Number.isFinite(expectedAppPort) &&
+        valueOrNull(healthPayload?.server?.port) === expectedAppPort;
       summary.runtime.alignment.tokenConfiguredMatches =
         healthPayload?.telegram?.configured === summary.tokenConfigured;
       summary.runtime.alignment.allowedUsersCountMatches =
         connection?.allowedUsersCount === summary.allowedUsersCount;
+
       summary.runtime.botLaunch.launchAttempted =
         typeof connection?.lastLaunchAt === 'string' && connection.lastLaunchAt.length > 0;
       summary.runtime.botLaunch.launchSuccess = Boolean(connection?.launched && connection?.running && connection?.connected);
@@ -231,15 +265,24 @@ async function main() {
       summary.runtime.botLaunch.lastConnectionStatus = connection?.lastConnectionStatus ?? null;
       summary.runtime.botLaunch.lastLaunchErrorType = connection?.lastLaunchErrorType ?? null;
       summary.runtime.botLaunch.lastLaunchError = connection?.lastLaunchError ?? null;
+
+      if (summary.getMe.ok && summary.getMe.bot) {
+        summary.runtime.alignment.botIdentityMatches =
+          connection?.botId === summary.getMe.bot.id &&
+          (connection?.botUsername ?? null) === (summary.getMe.bot.username ?? null);
+      }
     }
   }
 
   const runtimeHealthyAndConnected = includeRuntime &&
     summary.runtime.healthz.ok &&
     summary.runtime.livez.ok &&
+    summary.runtime.alignment.runtimeTargetMatches.appNameMatches === true &&
+    summary.runtime.alignment.runtimeTargetMatches.appPortMatches === true &&
     summary.runtime.alignment.tokenConfiguredMatches === true &&
     summary.runtime.alignment.allowedUsersCountMatches === true &&
-    summary.runtime.botLaunch.launchSuccess === true;
+    summary.runtime.botLaunch.launchSuccess === true &&
+    (!summary.getMe.ok || summary.runtime.alignment.botIdentityMatches === true);
 
   if (summary.tokenConfigured && summary.outboundApi.ok && summary.getMe.ok && runtimeHealthyAndConnected) {
     summary.verdict = 'SELESAI';
