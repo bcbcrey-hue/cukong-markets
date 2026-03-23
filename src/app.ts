@@ -161,10 +161,8 @@ export async function createApp(): Promise<AppRuntime> {
     const resumedTelegramSignal = telegram.getConnectionSignal();
     await health.build({
       scannerRunning: true,
-      telegramRunning:
-        resumedTelegramSignal.launched &&
-        resumedTelegramSignal.running &&
-        resumedTelegramSignal.connected,
+      telegramConfigured: resumedTelegramSignal.configured,
+      telegramRunning: isTelegramOperational(resumedTelegramSignal),
       callbackServerRunning:
         appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
@@ -184,10 +182,8 @@ export async function createApp(): Promise<AppRuntime> {
     const stoppedTelegramSignal = telegram.getConnectionSignal();
     await health.build({
       scannerRunning: false,
-      telegramRunning:
-        stoppedTelegramSignal.launched &&
-        stoppedTelegramSignal.running &&
-        stoppedTelegramSignal.connected,
+      telegramConfigured: stoppedTelegramSignal.configured,
+      telegramRunning: isTelegramOperational(stoppedTelegramSignal),
       callbackServerRunning:
         appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
@@ -221,6 +217,7 @@ export async function createApp(): Promise<AppRuntime> {
   summary.attachNotifier(telegram);
 
   const buildTelegramNotes = (signal: TelegramConnectionSignal): string[] => [
+    `telegramConfigured=${signal.configured}`,
     `telegramLaunched=${signal.launched}`,
     `telegramRuntime=${signal.running ? 'running' : 'stopped'}`,
     `telegramConnected=${signal.connected}`,
@@ -228,6 +225,12 @@ export async function createApp(): Promise<AppRuntime> {
     `telegramLastLaunchSuccessAt=${signal.lastLaunchSuccessAt ?? '-'}`,
     `telegramLastLaunchError=${signal.lastLaunchError ?? '-'}`,
   ];
+
+  const isTelegramOperational = (signal: TelegramConnectionSignal): boolean =>
+    signal.configured &&
+    signal.launched &&
+    signal.running &&
+    signal.connected;
 
   const runtimePollingIntervalMs = settings.get().scanner.pollingIntervalMs;
   const marketScanIntervalMs = settings.get().scanner.marketWatchIntervalMs;
@@ -333,7 +336,8 @@ export async function createApp(): Promise<AppRuntime> {
 
     await health.build({
       scannerRunning: runtime.status === 'RUNNING',
-      telegramRunning: telegramSignal.running && telegramSignal.connected,
+      telegramConfigured: telegramSignal.configured,
+      telegramRunning: isTelegramOperational(telegramSignal),
       callbackServerRunning: appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: settings.get().tradingMode !== 'OFF' && !runtime.emergencyStop,
       executionMode: settings.getExecutionMode(),
@@ -361,6 +365,7 @@ export async function createApp(): Promise<AppRuntime> {
     await state.setStatus('STARTING');
     await health.build({
       scannerRunning: false,
+      telegramConfigured: Boolean(env.telegramToken),
       telegramRunning: false,
       callbackServerRunning: false,
       tradingEnabled: false,
@@ -401,10 +406,8 @@ export async function createApp(): Promise<AppRuntime> {
       const runningTelegramSignal = telegram.getConnectionSignal();
       await health.build({
         scannerRunning: true,
-        telegramRunning:
-          runningTelegramSignal.launched &&
-          runningTelegramSignal.running &&
-          runningTelegramSignal.connected,
+        telegramConfigured: runningTelegramSignal.configured,
+        telegramRunning: isTelegramOperational(runningTelegramSignal),
         callbackServerRunning:
           appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: settings.get().tradingMode !== 'OFF' && !state.get().emergencyStop,
@@ -453,10 +456,8 @@ export async function createApp(): Promise<AppRuntime> {
       const failedTelegramSignal = telegram.getConnectionSignal();
       await health.build({
         scannerRunning: false,
-        telegramRunning:
-          failedTelegramSignal.launched &&
-          failedTelegramSignal.running &&
-          failedTelegramSignal.connected,
+        telegramConfigured: failedTelegramSignal.configured,
+        telegramRunning: isTelegramOperational(failedTelegramSignal),
         callbackServerRunning:
           appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
         tradingEnabled: false,
@@ -476,10 +477,8 @@ export async function createApp(): Promise<AppRuntime> {
     const stoppingTelegramSignal = telegram.getConnectionSignal();
     await health.build({
       scannerRunning: false,
-      telegramRunning:
-        stoppingTelegramSignal.launched &&
-        stoppingTelegramSignal.running &&
-        stoppingTelegramSignal.connected,
+      telegramConfigured: stoppingTelegramSignal.configured,
+      telegramRunning: isTelegramOperational(stoppingTelegramSignal),
       callbackServerRunning:
         appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,
@@ -502,7 +501,8 @@ export async function createApp(): Promise<AppRuntime> {
 
     await health.build({
       scannerRunning: false,
-      telegramRunning: telegramSignal.running && telegramSignal.connected,
+      telegramConfigured: telegramSignal.configured,
+      telegramRunning: isTelegramOperational(telegramSignal),
       callbackServerRunning:
         appServer.isRunning() && (!env.indodaxEnableCallbackServer || callbackServer.isRunning()),
       tradingEnabled: false,

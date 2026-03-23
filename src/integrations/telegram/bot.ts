@@ -37,6 +37,7 @@ export interface TelegramBotDeps {
 }
 
 export interface TelegramConnectionSignal {
+  configured: boolean;
   launched: boolean;
   running: boolean;
   connected: boolean;
@@ -48,6 +49,7 @@ export interface TelegramConnectionSignal {
 export class TelegramBot implements SummaryNotifier {
   private readonly bot: Telegraf | null;
   private signal: TelegramConnectionSignal = {
+    configured: Boolean(env.telegramToken),
     launched: false,
     running: false,
     connected: false,
@@ -74,6 +76,7 @@ export class TelegramBot implements SummaryNotifier {
     if (!this.bot) {
       this.signal = {
         ...this.signal,
+        configured: false,
         launched: false,
         running: false,
         connected: false,
@@ -92,6 +95,7 @@ export class TelegramBot implements SummaryNotifier {
 
       this.signal = {
         ...this.signal,
+        configured: true,
         launched: true,
         running: true,
         connected: true,
@@ -101,6 +105,7 @@ export class TelegramBot implements SummaryNotifier {
     } catch (error) {
       this.signal = {
         ...this.signal,
+        configured: true,
         launched: false,
         running: false,
         connected: false,

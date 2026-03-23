@@ -303,6 +303,7 @@ async function replyMainMenu(ctx: Context, text: string): Promise<void> {
 
 async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
   const telegramSignal = deps.getTelegramSignal?.() ?? {
+    configured: false,
     launched: false,
     running: false,
     connected: false,
@@ -313,13 +314,18 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
 
   const health = await deps.health.build({
     scannerRunning: deps.state.get().status === 'RUNNING',
-    telegramRunning: telegramSignal.running && telegramSignal.connected,
+    telegramConfigured: telegramSignal.configured,
+    telegramRunning:
+      telegramSignal.configured &&
+      telegramSignal.running &&
+      telegramSignal.connected,
     callbackServerRunning: deps.health.get().callbackServerRunning,
     tradingEnabled: deps.settings.get().tradingMode !== 'OFF' && !deps.state.get().emergencyStop,
     executionMode: deps.settings.getExecutionMode(),
     positions: deps.positions.list(),
     orders: deps.orders.list(),
     notes: [
+      `telegramConfigured=${telegramSignal.configured}`,
       `telegramLaunched=${telegramSignal.launched}`,
       `telegramRuntime=${telegramSignal.running ? 'running' : 'stopped'}`,
       `telegramConnected=${telegramSignal.connected}`,

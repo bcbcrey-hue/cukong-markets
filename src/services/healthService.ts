@@ -12,6 +12,7 @@ import { env } from '../config/env';
 
 export interface BuildHealthParams {
   scannerRunning: boolean;
+  telegramConfigured: boolean;
   telegramRunning: boolean;
   callbackServerRunning: boolean;
   tradingEnabled: boolean;
@@ -74,6 +75,7 @@ export class HealthService {
     const status = this.statusFromRuntime(
       runtimeStatus,
       params.scannerRunning,
+      params.telegramConfigured,
       params.telegramRunning,
       callbackReady,
     );
@@ -106,6 +108,7 @@ export class HealthService {
   private statusFromRuntime(
     runtimeStatus: RuntimeStatus,
     scannerRunning: boolean,
+    telegramConfigured: boolean,
     telegramRunning: boolean,
     callbackReady: boolean,
   ): HealthSnapshot['status'] {
@@ -114,7 +117,8 @@ export class HealthService {
     }
 
     if (runtimeStatus === 'RUNNING') {
-      return scannerRunning && telegramRunning && callbackReady ? 'healthy' : 'degraded';
+      const telegramReady = !telegramConfigured || telegramRunning;
+      return scannerRunning && telegramReady && callbackReady ? 'healthy' : 'degraded';
     }
 
     return 'degraded';
