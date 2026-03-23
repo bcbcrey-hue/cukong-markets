@@ -48,7 +48,13 @@ export interface TelegramConnectionSignal {
   lastConnectedAt: string | null;
   lastLaunchSuccessAt: string | null;
   lastLaunchError: string | null;
-  lastLaunchErrorType: 'none' | 'missing_token' | 'invalid_token' | 'network' | 'unknown';
+  lastLaunchErrorType:
+    | 'none'
+    | 'missing_token'
+    | 'invalid_token'
+    | 'proxy_blocked'
+    | 'network'
+    | 'unknown';
 }
 
 export class TelegramBot implements SummaryNotifier {
@@ -253,10 +259,16 @@ function classifyLaunchError(error: Error): TelegramConnectionSignal['lastLaunch
     .join(' ')
     .toLowerCase();
 
+  if (compact.includes('connect tunnel failed') || compact.includes('proxy') || compact.includes('http 403')) {
+    return 'proxy_blocked';
+  }
+
+  if (compact.includes('request to https://api.telegram.org') && hasProxyEnvConfigured()) {
+    return 'proxy_blocked';
+  }
+
   if (
     compact.includes('request to https://api.telegram.org') ||
-    compact.includes('connect tunnel failed') ||
-    compact.includes('proxy') ||
     compact.includes('econnrefused') ||
     compact.includes('enotfound') ||
     compact.includes('eai_again') ||
@@ -294,5 +306,12 @@ function maskAllowedUserIds(userIds: number[]): string[] {
     }
 
     return `${value.slice(0, 2)}***${value.slice(-2)}`;
+  });
+}
+
+function hasProxyEnvConfigured(): boolean {
+  return ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'].some((name) => {
+    const value = process.env[name];
+    return typeof value === 'string' && value.trim().length > 0;
   });
 }
