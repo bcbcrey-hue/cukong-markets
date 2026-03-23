@@ -119,7 +119,7 @@ export function createDefaultHealth(): HealthSnapshot {
       running: false,
       connected: false,
       lastConnectionStatus: 'never_started',
-      allowedUsersCount: 0,
+      allowedUsersCount: env.telegramAllowedUserIds.length,
       botId: null,
       botUsername: null,
       botFirstName: null,

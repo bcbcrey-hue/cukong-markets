@@ -245,7 +245,7 @@ export async function createApp(): Promise<AppRuntime> {
   const toHealthTelegramConnection = (
     signal?: TelegramConnectionSignal,
   ): TelegramConnectionSignal => signal ?? {
-    configured: false,
+    configured: Boolean(env.telegramToken),
     launched: false,
     running: false,
     connected: false,

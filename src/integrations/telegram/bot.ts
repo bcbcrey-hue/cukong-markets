@@ -121,12 +121,7 @@ export class TelegramBot implements SummaryNotifier {
         connected: false,
         lastConnectionStatus: 'failed',
         allowedUsersCount: env.telegramAllowedUserIds.length,
-        botId: null,
-        botUsername: null,
-        botFirstName: null,
-        botIsBot: null,
         lastLaunchAt: new Date().toISOString(),
-        lastConnectedAt: null,
         lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
         lastLaunchErrorType: 'missing_token',
       };
@@ -210,11 +205,6 @@ export class TelegramBot implements SummaryNotifier {
         connected: false,
         lastConnectionStatus: 'failed',
         allowedUsersCount: env.telegramAllowedUserIds.length,
-        botId: null,
-        botUsername: null,
-        botFirstName: null,
-        botIsBot: null,
-        lastConnectedAt: null,
         lastLaunchError: normalizedError.message,
         lastLaunchErrorType: launchErrorType,
       };
@@ -241,7 +231,6 @@ export class TelegramBot implements SummaryNotifier {
         connected: false,
         lastConnectionStatus: 'stopped',
         allowedUsersCount: env.telegramAllowedUserIds.length,
-        lastConnectedAt: null,
       };
       return;
     }
@@ -253,7 +242,6 @@ export class TelegramBot implements SummaryNotifier {
       connected: false,
       lastConnectionStatus: 'stopped',
       allowedUsersCount: env.telegramAllowedUserIds.length,
-      lastConnectedAt: null,
     };
   }
 
