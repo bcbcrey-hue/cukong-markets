@@ -216,8 +216,12 @@ async function main() {
         runtimeTargetMatches: {
           appNameMatches: null,
           appPortMatches: null,
+          runtimeIdentityPresentInHealthz: null,
+          runtimeIdentityPresentInLivez: null,
           runtimePidMatchesBetweenHealthAndLivez: null,
           runtimeBootedAtMatchesBetweenHealthAndLivez: null,
+          alignmentProofConfiguredMatchesBetweenHealthAndLivez: null,
+          alignmentProofMaskedMatchesBetweenHealthAndLivez: null,
           runtimeProofMatches: null,
         },
         tokenConfiguredMatches: null,
@@ -359,12 +363,20 @@ async function main() {
 
       const healthIdentity = healthPayload?.runtimeIdentity ?? null;
       const liveIdentity = summary.runtime.livez.payload?.runtimeIdentity ?? null;
+      summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInHealthz = Boolean(healthIdentity);
+      summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInLivez = Boolean(liveIdentity);
       summary.runtime.alignment.runtimeTargetMatches.runtimePidMatchesBetweenHealthAndLivez =
         Boolean(healthIdentity?.pid) && Boolean(liveIdentity?.pid) && healthIdentity.pid === liveIdentity.pid;
       summary.runtime.alignment.runtimeTargetMatches.runtimeBootedAtMatchesBetweenHealthAndLivez =
         Boolean(healthIdentity?.bootedAt) &&
         Boolean(liveIdentity?.bootedAt) &&
         healthIdentity.bootedAt === liveIdentity.bootedAt;
+      summary.runtime.alignment.runtimeTargetMatches.alignmentProofConfiguredMatchesBetweenHealthAndLivez =
+        typeof healthIdentity?.alignmentProofConfigured === 'boolean' &&
+        typeof liveIdentity?.alignmentProofConfigured === 'boolean' &&
+        healthIdentity.alignmentProofConfigured === liveIdentity.alignmentProofConfigured;
+      summary.runtime.alignment.runtimeTargetMatches.alignmentProofMaskedMatchesBetweenHealthAndLivez =
+        (healthIdentity?.alignmentProofMasked ?? null) === (liveIdentity?.alignmentProofMasked ?? null);
 
       if (expectedRuntimeProof) {
         summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches =
@@ -397,8 +409,12 @@ async function main() {
     summary.runtime.livez.ok &&
     summary.runtime.alignment.runtimeTargetMatches.appNameMatches === true &&
     summary.runtime.alignment.runtimeTargetMatches.appPortMatches === true &&
+    summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInHealthz === true &&
+    summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInLivez === true &&
     summary.runtime.alignment.runtimeTargetMatches.runtimePidMatchesBetweenHealthAndLivez === true &&
     summary.runtime.alignment.runtimeTargetMatches.runtimeBootedAtMatchesBetweenHealthAndLivez === true &&
+    summary.runtime.alignment.runtimeTargetMatches.alignmentProofConfiguredMatchesBetweenHealthAndLivez === true &&
+    summary.runtime.alignment.runtimeTargetMatches.alignmentProofMaskedMatchesBetweenHealthAndLivez === true &&
     (!expectedRuntimeProof || summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches === true) &&
     summary.runtime.alignment.tokenConfiguredMatches === true &&
     summary.runtime.alignment.allowedUsersCountMatches === true &&
@@ -409,6 +425,24 @@ async function main() {
   if (!summary.outboundApi.ok) summary.gateFailures.push('outbound_telegram_api_failed');
   if (!summary.getMe.ok) summary.gateFailures.push('getme_failed');
   if (!runtimeHealthyAndConnected) summary.gateFailures.push('runtime_not_connected_ready');
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInHealthz !== true) {
+    summary.gateFailures.push('runtime_identity_missing_in_healthz');
+  }
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.runtimeIdentityPresentInLivez !== true) {
+    summary.gateFailures.push('runtime_identity_missing_in_livez');
+  }
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.runtimePidMatchesBetweenHealthAndLivez !== true) {
+    summary.gateFailures.push('runtime_identity_pid_mismatch_healthz_livez');
+  }
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.runtimeBootedAtMatchesBetweenHealthAndLivez !== true) {
+    summary.gateFailures.push('runtime_identity_bootedAt_mismatch_healthz_livez');
+  }
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.alignmentProofConfiguredMatchesBetweenHealthAndLivez !== true) {
+    summary.gateFailures.push('runtime_identity_proof_config_mismatch_healthz_livez');
+  }
+  if (includeRuntime && summary.runtime.alignment.runtimeTargetMatches.alignmentProofMaskedMatchesBetweenHealthAndLivez !== true) {
+    summary.gateFailures.push('runtime_identity_proof_mask_mismatch_healthz_livez');
+  }
   if (expectedRuntimeProof && summary.runtime.alignment.runtimeTargetMatches.runtimeProofMatches !== true) {
     summary.gateFailures.push('runtime_alignment_proof_mismatch');
   }
