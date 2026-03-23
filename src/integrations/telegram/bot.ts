@@ -42,10 +42,23 @@ export interface TelegramConnectionSignal {
   launched: boolean;
   running: boolean;
   connected: boolean;
+  lastConnectionStatus: 'never_started' | 'connected' | 'failed' | 'stopped';
+  allowedUsersCount: number;
+  botId: number | null;
+  botUsername: string | null;
+  botFirstName: string | null;
+  botIsBot: boolean | null;
   lastLaunchAt: string | null;
+  lastConnectedAt: string | null;
   lastLaunchSuccessAt: string | null;
   lastLaunchError: string | null;
-  lastLaunchErrorType: 'none' | 'missing_token' | 'invalid_token' | 'network' | 'unknown';
+  lastLaunchErrorType:
+    | 'none'
+    | 'missing_token'
+    | 'invalid_token'
+    | 'proxy_blocked'
+    | 'network'
+    | 'unknown';
 }
 
 export class TelegramBot implements SummaryNotifier {
@@ -56,7 +69,14 @@ export class TelegramBot implements SummaryNotifier {
     launched: false,
     running: false,
     connected: false,
+    lastConnectionStatus: 'never_started',
+    allowedUsersCount: env.telegramAllowedUserIds.length,
+    botId: null,
+    botUsername: null,
+    botFirstName: null,
+    botIsBot: null,
     lastLaunchAt: null,
+    lastConnectedAt: null,
     lastLaunchSuccessAt: null,
     lastLaunchError: null,
     lastLaunchErrorType: 'none',
@@ -66,12 +86,14 @@ export class TelegramBot implements SummaryNotifier {
     const tokenConfigured = Boolean(env.telegramToken);
     const tokenMasked = maskTelegramToken(env.telegramToken);
     const allowedUsersCount = env.telegramAllowedUserIds.length;
+    const allowedUsersPreviewMasked = maskAllowedUserIds(env.telegramAllowedUserIds);
 
     this.log.info(
       {
         tokenConfigured,
         tokenMasked,
         allowedUsersCount,
+        allowedUsersPreviewMasked,
       },
       'telegram runtime config loaded',
     );
@@ -97,6 +119,8 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        lastConnectionStatus: 'failed',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         lastLaunchAt: new Date().toISOString(),
         lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
         lastLaunchErrorType: 'missing_token',
@@ -107,6 +131,7 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
           lastLaunchError: this.signal.lastLaunchError,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
@@ -131,8 +156,9 @@ export class TelegramBot implements SummaryNotifier {
     }
 
     try {
-      await this.bot.telegram.getMe();
+      const me = await this.bot.telegram.getMe();
       await this.bot.launch();
+      const connectedAt = new Date().toISOString();
 
       this.signal = {
         ...this.signal,
@@ -140,7 +166,14 @@ export class TelegramBot implements SummaryNotifier {
         launched: true,
         running: true,
         connected: true,
-        lastLaunchSuccessAt: new Date().toISOString(),
+        lastConnectionStatus: 'connected',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
+        botId: me.id,
+        botUsername: me.username ?? null,
+        botFirstName: me.first_name ?? null,
+        botIsBot: me.is_bot ?? null,
+        lastConnectedAt: connectedAt,
+        lastLaunchSuccessAt: connectedAt,
         lastLaunchError: null,
         lastLaunchErrorType: 'none',
       };
@@ -150,6 +183,13 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
+          allowedUsersCount: this.signal.allowedUsersCount,
+          botId: this.signal.botId,
+          botUsername: this.signal.botUsername,
+          botFirstName: this.signal.botFirstName,
+          botIsBot: this.signal.botIsBot,
+          lastConnectedAt: this.signal.lastConnectedAt,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
         'telegram bot launched and connected',
@@ -163,6 +203,8 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        lastConnectionStatus: 'failed',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
         lastLaunchError: normalizedError.message,
         lastLaunchErrorType: launchErrorType,
       };
@@ -172,6 +214,7 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastConnectionStatus: this.signal.lastConnectionStatus,
           lastLaunchError: this.signal.lastLaunchError,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
@@ -186,6 +229,8 @@ export class TelegramBot implements SummaryNotifier {
         ...this.signal,
         running: false,
         connected: false,
+        lastConnectionStatus: 'stopped',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
       };
       return;
     }
@@ -195,6 +240,8 @@ export class TelegramBot implements SummaryNotifier {
       ...this.signal,
       running: false,
       connected: false,
+      lastConnectionStatus: 'stopped',
+      allowedUsersCount: env.telegramAllowedUserIds.length,
     };
   }
 
@@ -230,10 +277,16 @@ function classifyLaunchError(error: Error): TelegramConnectionSignal['lastLaunch
     .join(' ')
     .toLowerCase();
 
+  if (compact.includes('connect tunnel failed') || compact.includes('proxy') || compact.includes('http 403')) {
+    return 'proxy_blocked';
+  }
+
+  if (compact.includes('request to https://api.telegram.org') && hasProxyEnvConfigured()) {
+    return 'proxy_blocked';
+  }
+
   if (
     compact.includes('request to https://api.telegram.org') ||
-    compact.includes('connect tunnel failed') ||
-    compact.includes('proxy') ||
     compact.includes('econnrefused') ||
     compact.includes('enotfound') ||
     compact.includes('eai_again') ||
@@ -261,4 +314,22 @@ function maskTelegramToken(token: string): string | null {
   }
 
   return `${clean.slice(0, 4)}***${clean.slice(-4)}`;
+}
+
+function maskAllowedUserIds(userIds: number[]): string[] {
+  return userIds.slice(0, 3).map((userId) => {
+    const value = String(userId).trim();
+    if (value.length <= 4) {
+      return `${value.slice(0, 1)}***`;
+    }
+
+    return `${value.slice(0, 2)}***${value.slice(-2)}`;
+  });
+}
+
+function hasProxyEnvConfigured(): boolean {
+  return ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'].some((name) => {
+    const value = process.env[name];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
 }

@@ -175,6 +175,23 @@ export class ReportService {
       `runtime=${params.health.runtimeStatus}`,
       `scanner=${params.health.scannerRunning ? 'on' : 'off'}`,
       `telegram=${params.health.telegramRunning ? 'on' : 'off'}`,
+      `telegramConfigured=${params.health.telegramConnection.configured}`,
+      `telegramLaunched=${params.health.telegramConnection.launched}`,
+      `telegramConnected=${params.health.telegramConnection.connected}`,
+      `telegramLastConnectionStatus=${params.health.telegramConnection.lastConnectionStatus}`,
+      `telegramLastLaunchErrorType=${params.health.telegramConnection.lastLaunchErrorType}`,
+      `telegramLastLaunchError=${truncate(params.health.telegramConnection.lastLaunchError ?? '-', 120)}`,
+      `telegramBotId=${params.health.telegramConnection.botId ?? '-'}`,
+      `telegramBotUsername=${params.health.telegramConnection.botUsername ?? '-'}`,
+      `telegramBotFirstName=${params.health.telegramConnection.botFirstName ?? '-'}`,
+      `telegramBotIsBot=${
+        params.health.telegramConnection.botIsBot === null
+          ? '-'
+          : params.health.telegramConnection.botIsBot
+      }`,
+      `telegramLastConnectedAt=${params.health.telegramConnection.lastConnectedAt ?? '-'}`,
+      `telegramLastLaunchSuccessAt=${params.health.telegramConnection.lastLaunchSuccessAt ?? '-'}`,
+      `telegramAllowedUsersCount=${params.health.telegramConnection.allowedUsersCount}`,
       `trading=${params.health.tradingEnabled ? 'on' : 'off'}`,
       `execution=${params.health.executionMode}`,
       `accounts=${params.activeAccounts}`,

@@ -5,6 +5,7 @@ import type {
   PositionRecord,
   RuntimeStatus,
   WorkerHealth,
+  TelegramRuntimeHealth,
 } from '../core/types';
 import { PersistenceService, createDefaultHealth } from './persistenceService';
 import { StateService } from './stateService';
@@ -14,6 +15,7 @@ export interface BuildHealthParams {
   scannerRunning: boolean;
   telegramConfigured: boolean;
   telegramRunning: boolean;
+  telegramConnection?: TelegramRuntimeHealth;
   callbackServerRunning: boolean;
   tradingEnabled: boolean;
   executionMode: ExecutionMode;
@@ -39,6 +41,26 @@ export class HealthService {
         typeof loaded.telegramConfigured === 'boolean'
           ? loaded.telegramConfigured
           : Boolean(env.telegramToken),
+      telegramConnection: loaded.telegramConnection ?? {
+        configured:
+          typeof loaded.telegramConfigured === 'boolean'
+            ? loaded.telegramConfigured
+            : Boolean(env.telegramToken),
+        launched: false,
+        running: false,
+        connected: false,
+        lastConnectionStatus: 'never_started',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
+        botId: null,
+        botUsername: null,
+        botFirstName: null,
+        botIsBot: null,
+        lastLaunchAt: null,
+        lastConnectedAt: null,
+        lastLaunchSuccessAt: null,
+        lastLaunchError: null,
+        lastLaunchErrorType: 'none',
+      },
     };
     return this.health;
   }
@@ -101,6 +123,23 @@ export class HealthService {
       scannerRunning: params.scannerRunning,
       telegramConfigured: params.telegramConfigured,
       telegramRunning: params.telegramRunning,
+      telegramConnection: params.telegramConnection ?? {
+        configured: params.telegramConfigured,
+        launched: false,
+        running: params.telegramRunning,
+        connected: params.telegramRunning,
+        lastConnectionStatus: params.telegramRunning ? 'connected' : 'never_started',
+        allowedUsersCount: env.telegramAllowedUserIds.length,
+        botId: null,
+        botUsername: null,
+        botFirstName: null,
+        botIsBot: null,
+        lastLaunchAt: null,
+        lastConnectedAt: null,
+        lastLaunchSuccessAt: null,
+        lastLaunchError: null,
+        lastLaunchErrorType: 'none',
+      },
       callbackServerRunning: params.callbackServerRunning,
       tradingEnabled: params.tradingEnabled,
       executionMode: params.executionMode,
