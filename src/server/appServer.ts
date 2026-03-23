@@ -63,6 +63,14 @@ export class AppServer {
           configured: currentHealth.telegramConfigured,
           running: currentHealth.telegramRunning,
         },
+        readiness: {
+          scannerReady: currentHealth.scannerRunning,
+          telegramRequired: currentHealth.telegramConfigured,
+          telegramReady: !currentHealth.telegramConfigured || currentHealth.telegramRunning,
+          callbackRequired: env.indodaxEnableCallbackServer,
+          callbackReady:
+            !env.indodaxEnableCallbackServer || currentHealth.callbackServerRunning,
+        },
         executionMode: currentHealth.executionMode,
         health: currentHealth,
       });
