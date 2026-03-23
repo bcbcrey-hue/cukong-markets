@@ -117,6 +117,18 @@ export class TelegramBot implements SummaryNotifier {
 
     this.signal.lastLaunchAt = new Date().toISOString();
     this.signal.lastLaunchError = null;
+    this.signal.lastLaunchErrorType = 'none';
+
+    if (env.telegramAllowedUserIds.length === 0) {
+      this.log.warn(
+        {
+          configured: true,
+          tokenMasked: maskTelegramToken(env.telegramToken),
+          allowedUsersCount: 0,
+        },
+        'telegram whitelist is empty; all incoming users will be denied',
+      );
+    }
 
     try {
       await this.bot.telegram.getMe();
