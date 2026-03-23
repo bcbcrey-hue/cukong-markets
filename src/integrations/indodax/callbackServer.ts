@@ -233,10 +233,14 @@ export class IndodaxCallbackServer {
     if (path === '/healthz') {
       this.writeJson(response, 200, {
         ok: true,
+        running: this.isRunning(),
         enabled: env.indodaxEnableCallbackServer,
+        bindHost: env.indodaxCallbackBindHost,
+        port: this.port,
         callbackPath: env.indodaxCallbackPath,
         callbackUrl: env.indodaxCallbackUrl,
         allowedHost: env.indodaxCallbackAllowedHost || null,
+        authMode: env.indodaxCallbackAuthMode,
         acceptedCount: this.state.acceptedCount,
         rejectedCount: this.state.rejectedCount,
         lastReceivedAt: this.state.lastReceivedAt,
