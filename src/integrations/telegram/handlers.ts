@@ -310,6 +310,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
     lastLaunchAt: null,
     lastLaunchSuccessAt: null,
     lastLaunchError: null,
+    lastLaunchErrorType: 'none' as const,
   };
 
   const health = await deps.health.build({
@@ -332,6 +333,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
       `telegramLastLaunchAt=${telegramSignal.lastLaunchAt ?? '-'}`,
       `telegramLastLaunchSuccessAt=${telegramSignal.lastLaunchSuccessAt ?? '-'}`,
       `telegramLastLaunchError=${telegramSignal.lastLaunchError ?? '-'}`,
+      `telegramLastLaunchErrorType=${telegramSignal.lastLaunchErrorType}`,
     ],
   });
 

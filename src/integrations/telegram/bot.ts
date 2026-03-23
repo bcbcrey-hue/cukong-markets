@@ -45,6 +45,7 @@ export interface TelegramConnectionSignal {
   lastLaunchAt: string | null;
   lastLaunchSuccessAt: string | null;
   lastLaunchError: string | null;
+  lastLaunchErrorType: 'none' | 'missing_token' | 'invalid_token' | 'network' | 'unknown';
 }
 
 export class TelegramBot implements SummaryNotifier {
@@ -58,6 +59,7 @@ export class TelegramBot implements SummaryNotifier {
     lastLaunchAt: null,
     lastLaunchSuccessAt: null,
     lastLaunchError: null,
+    lastLaunchErrorType: 'none',
   };
 
   constructor(private readonly deps: TelegramBotDeps) {
@@ -97,6 +99,7 @@ export class TelegramBot implements SummaryNotifier {
         connected: false,
         lastLaunchAt: new Date().toISOString(),
         lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
+        lastLaunchErrorType: 'missing_token',
       };
       this.log.warn(
         {
@@ -105,6 +108,7 @@ export class TelegramBot implements SummaryNotifier {
           running: this.signal.running,
           connected: this.signal.connected,
           lastLaunchError: this.signal.lastLaunchError,
+          lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
         'telegram bot not started because token is missing',
       );
@@ -126,6 +130,7 @@ export class TelegramBot implements SummaryNotifier {
         connected: true,
         lastLaunchSuccessAt: new Date().toISOString(),
         lastLaunchError: null,
+        lastLaunchErrorType: 'none',
       };
       this.log.info(
         {
@@ -133,17 +138,21 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
         'telegram bot launched and connected',
       );
     } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      const launchErrorType = classifyLaunchError(normalizedError);
       this.signal = {
         ...this.signal,
         configured: true,
         launched: false,
         running: false,
         connected: false,
-        lastLaunchError: error instanceof Error ? error.message : String(error),
+        lastLaunchError: normalizedError.message,
+        lastLaunchErrorType: launchErrorType,
       };
       this.log.error(
         {
@@ -152,6 +161,7 @@ export class TelegramBot implements SummaryNotifier {
           running: this.signal.running,
           connected: this.signal.connected,
           lastLaunchError: this.signal.lastLaunchError,
+          lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
         'telegram bot launch failed; app will continue in degraded mode',
       );
@@ -190,6 +200,38 @@ export class TelegramBot implements SummaryNotifier {
       env.telegramAllowedUserIds.map((userId) => bot.telegram.sendMessage(userId, message)),
     );
   }
+}
+
+function classifyLaunchError(error: Error): TelegramConnectionSignal['lastLaunchErrorType'] {
+  const codedError = error as Error & {
+    code?: string;
+    response?: { error_code?: number };
+    cause?: { code?: string; message?: string };
+  };
+
+  if (codedError.response?.error_code === 401 || /\b401\b/.test(error.message) || /unauthorized/i.test(error.message)) {
+    return 'invalid_token';
+  }
+
+  const compact = [error.message, codedError.code, codedError.cause?.code, codedError.cause?.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (
+    compact.includes('request to https://api.telegram.org') ||
+    compact.includes('connect tunnel failed') ||
+    compact.includes('proxy') ||
+    compact.includes('econnrefused') ||
+    compact.includes('enotfound') ||
+    compact.includes('eai_again') ||
+    compact.includes('etimedout') ||
+    compact.includes('network')
+  ) {
+    return 'network';
+  }
+
+  return 'unknown';
 }
 
 function maskTelegramToken(token: string): string | null {
