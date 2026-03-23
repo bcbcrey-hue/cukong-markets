@@ -46,6 +46,64 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
   }
 }
 
+function readFlag(name) {
+  return process.argv.includes(name);
+}
+
+function readArgValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) return null;
+  return value;
+}
+
+async function readRuntimeHealth(baseUrl) {
+  const healthzUrl = `${baseUrl.replace(/\/+$/, '')}/healthz`;
+  const livezUrl = `${baseUrl.replace(/\/+$/, '')}/livez`;
+
+  const result = {
+    checked: true,
+    baseUrl,
+    healthz: { ok: false, status: null, payload: null, error: null },
+    livez: { ok: false, status: null, payload: null, error: null },
+    alignment: {
+      tokenConfiguredMatches: null,
+      allowedUsersCountMatches: null,
+    },
+    botLaunch: {
+      launchAttempted: null,
+      launchSuccess: null,
+      connected: null,
+      lastConnectionStatus: null,
+      lastLaunchErrorType: null,
+      lastLaunchError: null,
+    },
+  };
+
+  try {
+    const healthRes = await fetchWithTimeout(healthzUrl, {}, 10000);
+    result.healthz.status = healthRes.status;
+    const payload = await healthRes.json().catch(() => null);
+    result.healthz.ok = healthRes.ok;
+    result.healthz.payload = payload;
+  } catch (error) {
+    result.healthz.error = String(error?.message || error);
+  }
+
+  try {
+    const liveRes = await fetchWithTimeout(livezUrl, {}, 10000);
+    result.livez.status = liveRes.status;
+    const payload = await liveRes.json().catch(() => null);
+    result.livez.ok = liveRes.ok;
+    result.livez.payload = payload;
+  } catch (error) {
+    result.livez.error = String(error?.message || error);
+  }
+
+  return result;
+}
+
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim() || '';
   const allowedUsers = (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
@@ -55,6 +113,12 @@ async function main() {
 
   const proxyEnv = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
     .filter((key) => (process.env[key] || '').trim().length > 0);
+
+  const includeRuntime = readFlag('--with-runtime');
+  const runtimeBaseUrl =
+    readArgValue('--runtime-base-url') ||
+    process.env.TELEGRAM_RUNTIME_BASE_URL ||
+    `http://127.0.0.1:${process.env.APP_PORT || '3000'}`;
 
   const summary = {
     timestamp: new Date().toISOString(),
@@ -72,6 +136,25 @@ async function main() {
       errorType: null,
       error: null,
       bot: null,
+    },
+    runtime: {
+      checked: false,
+      skippedReason: includeRuntime ? null : 'use --with-runtime to validate live app runtime sync',
+      baseUrl: includeRuntime ? runtimeBaseUrl : null,
+      healthz: { ok: false, status: null, payload: null, error: null },
+      livez: { ok: false, status: null, payload: null, error: null },
+      alignment: {
+        tokenConfiguredMatches: null,
+        allowedUsersCountMatches: null,
+      },
+      botLaunch: {
+        launchAttempted: null,
+        launchSuccess: null,
+        connected: null,
+        lastConnectionStatus: null,
+        lastLaunchErrorType: null,
+        lastLaunchError: null,
+      },
     },
     verdict: 'BELUM_SELESAI',
   };
@@ -131,8 +214,35 @@ async function main() {
     summary.getMe.errorType = 'token_missing';
   }
 
-  if (summary.tokenConfigured && summary.outboundApi.ok && summary.getMe.ok) {
-    summary.verdict = 'READY_FOR_LAUNCH_VALIDATION';
+  if (includeRuntime) {
+    summary.runtime = await readRuntimeHealth(runtimeBaseUrl);
+    const healthPayload = summary.runtime.healthz.payload;
+    const connection = healthPayload?.telegram?.connection || null;
+
+    if (healthPayload) {
+      summary.runtime.alignment.tokenConfiguredMatches =
+        healthPayload?.telegram?.configured === summary.tokenConfigured;
+      summary.runtime.alignment.allowedUsersCountMatches =
+        connection?.allowedUsersCount === summary.allowedUsersCount;
+      summary.runtime.botLaunch.launchAttempted =
+        typeof connection?.lastLaunchAt === 'string' && connection.lastLaunchAt.length > 0;
+      summary.runtime.botLaunch.launchSuccess = Boolean(connection?.launched && connection?.running && connection?.connected);
+      summary.runtime.botLaunch.connected = Boolean(connection?.connected);
+      summary.runtime.botLaunch.lastConnectionStatus = connection?.lastConnectionStatus ?? null;
+      summary.runtime.botLaunch.lastLaunchErrorType = connection?.lastLaunchErrorType ?? null;
+      summary.runtime.botLaunch.lastLaunchError = connection?.lastLaunchError ?? null;
+    }
+  }
+
+  const runtimeHealthyAndConnected = includeRuntime &&
+    summary.runtime.healthz.ok &&
+    summary.runtime.livez.ok &&
+    summary.runtime.alignment.tokenConfiguredMatches === true &&
+    summary.runtime.alignment.allowedUsersCountMatches === true &&
+    summary.runtime.botLaunch.launchSuccess === true;
+
+  if (summary.tokenConfigured && summary.outboundApi.ok && summary.getMe.ok && runtimeHealthyAndConnected) {
+    summary.verdict = 'SELESAI';
   }
 
   console.log(JSON.stringify(summary, null, 2));
