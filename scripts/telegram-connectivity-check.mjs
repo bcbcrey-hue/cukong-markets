@@ -168,6 +168,7 @@ async function main() {
     .filter((key) => (process.env[key] || '').trim().length > 0);
 
   const includeRuntime = readFlag('--with-runtime');
+  const requireConnected = readFlag('--require-connected');
   const runtimeBaseUrl =
     readArgValue('--runtime-base-url') ||
     process.env.TELEGRAM_RUNTIME_BASE_URL ||
@@ -224,6 +225,7 @@ async function main() {
         lastLaunchError: null,
       },
     },
+    gateFailures: [],
     verdict: 'BELUM_SELESAI',
   };
 
@@ -376,11 +378,21 @@ async function main() {
     summary.runtime.botLaunch.launchSuccess === true &&
     (!summary.getMe.ok || summary.runtime.alignment.botIdentityMatches === true);
 
+  if (!summary.tokenConfigured) summary.gateFailures.push('token_missing_or_not_injected');
+  if (!summary.outboundApi.ok) summary.gateFailures.push('outbound_telegram_api_failed');
+  if (!summary.getMe.ok) summary.gateFailures.push('getme_failed');
+  if (!runtimeHealthyAndConnected) summary.gateFailures.push('runtime_not_connected_ready');
+
   if (summary.tokenConfigured && summary.outboundApi.ok && summary.getMe.ok && runtimeHealthyAndConnected) {
     summary.verdict = 'SELESAI';
+    summary.gateFailures = [];
   }
 
   console.log(JSON.stringify(summary, null, 2));
+
+  if (requireConnected && summary.verdict !== 'SELESAI') {
+    process.exitCode = 2;
+  }
 }
 
 main().catch((error) => {
