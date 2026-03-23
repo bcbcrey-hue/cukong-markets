@@ -89,6 +89,7 @@ async function main() {
   );
 
   const failed = evidences.flatMap((item) => item.checks.filter((check) => !check.pass));
+  const allowFailedChecks = process.env.SHADOW_RUN_ALLOW_FAILED_CHECKS === '1';
   console.log(
     JSON.stringify(
       {
@@ -97,6 +98,7 @@ async function main() {
         runId,
         accountCount: evidences.length,
         archivedEntries: matching.length,
+        allowFailedChecks,
         failedChecks: failed.map((item) => ({
           check: item.check,
           endpoint: item.endpoint,
@@ -108,6 +110,16 @@ async function main() {
       2,
     ),
   );
+
+  if (!allowFailedChecks) {
+    assert.equal(
+      failed.length,
+      0,
+      `Shadow-run must have zero failed checks before go-live. Failed checks: ${failed
+        .map((item) => `${item.check}@${item.account}`)
+        .join(', ')}`,
+    );
+  }
 
   console.log('PASS real_exchange_shadow_run_probe');
 }
