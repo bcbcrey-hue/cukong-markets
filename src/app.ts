@@ -224,6 +224,8 @@ export async function createApp(): Promise<AppRuntime> {
     `telegramLastLaunchAt=${signal.lastLaunchAt ?? '-'}`,
     `telegramLastLaunchSuccessAt=${signal.lastLaunchSuccessAt ?? '-'}`,
     `telegramLastLaunchError=${signal.lastLaunchError ?? '-'}`,
+    `telegramLastLaunchErrorType=${signal.lastLaunchErrorType}`,
+    `telegramAllowedUsersCount=${env.telegramAllowedUserIds.length}`,
   ];
 
   const isTelegramOperational = (signal: TelegramConnectionSignal): boolean =>
