@@ -79,3 +79,17 @@ Blocker utama yang masih tersisa:
 
 - jalur `submission_uncertain` sudah dimitigasi di source, tetapi belum ada pembuktian exchange nyata untuk semua edge case identifikasi order pasca-timeout
 - belum ada pembuktian operasional nyata dari repo ini untuk live shadow-run/non-destruktif auth check exchange
+
+## Addendum — Phase 2 Batch 3 (Runtime Verifier Contract & Target Proof)
+
+- Menambahkan kontrak verifier runtime VPS yang canonical di `docs/runtime_vps_verifier_contract.md`.
+- Menambahkan helper `scripts/runtime-verifier-contract.mjs` untuk menampilkan target runtime proof dari env aktual (tanpa klaim VPS sudah tervalidasi).
+- Menambahkan npm script `runtime:contract` agar kontrak target dapat dihasilkan konsisten via command resmi.
+- README disinkronkan untuk menunjuk command + dokumen canonical batch ini.
+
+Batas kejujuran tetap:
+
+- dari repo hanya bisa memaku **target proof contract**,
+- koneksi Telegram live, bind/listen aktual VPS, dan probe endpoint pada runtime deploy tetap harus dibuktikan di VPS nyata.
+
+- Revisi helper batch ini agar membaca nilai canonical langsung dari `src/config/env.ts` dan command resmi `npm run runtime:contract` benar-benar menulis artefak ke `test_reports/runtime_contract_batch3_current.json`.

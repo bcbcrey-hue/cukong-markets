@@ -57,6 +57,19 @@ Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_
 
 Probe ini ikut di jalur `npm run verify`.
 
+
+## Runtime verifier contract (Phase 2 Batch 3)
+
+Untuk membekukan target proof runtime VPS, gunakan:
+
+```bash
+npm run runtime:contract
+```
+
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch3_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+
+Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
+
 ## Kontrak env runtime
 
 Gunakan `.env.example` sebagai sumber nilai awal. Variabel dibagi menjadi 3 kelompok agar tidak rancu.

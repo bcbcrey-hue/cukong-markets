@@ -44,3 +44,12 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 
 - jalur `submission_uncertain` sudah lebih aman di source tetapi belum terbukti end-to-end terhadap exchange nyata untuk seluruh edge case
 - belum ada pembuktian exchange live shadow-run/non-destruktif dari repo ini
+
+## Tambahan konteks — Phase 2 Batch 3 (Runtime verifier contract)
+
+- Command resmi baru: `npm run runtime:contract`.
+- Dokumen canonical target proof VPS: `docs/runtime_vps_verifier_contract.md`.
+- Scope batch ini hanya memaku kontrak target + evidence gate; belum memvalidasi VPS nyata.
+- Status kejujuran tidak berubah: pembuktian Telegram live connected dan probe endpoint deploy nyata tetap harus dilakukan di VPS.
+
+- `npm run runtime:contract` sekarang menulis artifact `test_reports/runtime_contract_batch3_current.json` secara otomatis dan nilainya diturunkan dari env canonical `src/config/env.ts`.
