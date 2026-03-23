@@ -85,6 +85,7 @@ export class HealthService {
       updatedAt: new Date().toISOString(),
       runtimeStatus,
       scannerRunning: params.scannerRunning,
+      telegramConfigured: params.telegramConfigured,
       telegramRunning: params.telegramRunning,
       callbackServerRunning: params.callbackServerRunning,
       tradingEnabled: params.tradingEnabled,
