@@ -38,6 +38,14 @@ npm run probe:list
 npm run verify:shadow-live
 ```
 
+Secara default, `verify:shadow-live` sekarang **strict**: command akan gagal jika ada `failedChecks` (contoh: akun exchange belum aktif / auth private gagal). Ini sengaja agar status go-live tidak false positive.
+
+Jika hanya ingin mengarsipkan evidence tanpa menggagalkan command (mode audit eksploratif), gunakan:
+
+```bash
+SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live
+```
+
 Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
 
 - `test_reports/typecheck_probes_final.txt`
