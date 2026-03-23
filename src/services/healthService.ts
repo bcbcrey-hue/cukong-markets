@@ -32,7 +32,14 @@ export class HealthService {
   ) {}
 
   async load(): Promise<HealthSnapshot> {
-    this.health = await this.persistence.readHealth();
+    const loaded = await this.persistence.readHealth();
+    this.health = {
+      ...loaded,
+      telegramConfigured:
+        typeof loaded.telegramConfigured === 'boolean'
+          ? loaded.telegramConfigured
+          : Boolean(env.telegramToken),
+    };
     return this.health;
   }
 
