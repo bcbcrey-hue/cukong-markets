@@ -26,7 +26,7 @@ Gunakan helper berikut untuk memotret target runtime dari env aktual:
 npm run runtime:contract
 ```
 
-Output JSON dari command ini adalah kontrak target yang harus dipenuhi saat validasi di VPS.
+Output JSON dari command ini dicetak ke stdout dan otomatis ditulis ke `test_reports/runtime_contract_batch3_current.json` sebagai artefak resmi kontrak target yang harus dipenuhi saat validasi di VPS.
 
 ## Evidence gate yang WAJIB saat validasi VPS (batch berikutnya)
 

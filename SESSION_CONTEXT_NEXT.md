@@ -51,3 +51,5 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 - Dokumen canonical target proof VPS: `docs/runtime_vps_verifier_contract.md`.
 - Scope batch ini hanya memaku kontrak target + evidence gate; belum memvalidasi VPS nyata.
 - Status kejujuran tidak berubah: pembuktian Telegram live connected dan probe endpoint deploy nyata tetap harus dilakukan di VPS.
+
+- `npm run runtime:contract` sekarang menulis artifact `test_reports/runtime_contract_batch3_current.json` secara otomatis dan nilainya diturunkan dari env canonical `src/config/env.ts`.

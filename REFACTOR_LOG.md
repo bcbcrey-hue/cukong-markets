@@ -91,3 +91,5 @@ Batas kejujuran tetap:
 
 - dari repo hanya bisa memaku **target proof contract**,
 - koneksi Telegram live, bind/listen aktual VPS, dan probe endpoint pada runtime deploy tetap harus dibuktikan di VPS nyata.
+
+- Revisi helper batch ini agar membaca nilai canonical langsung dari `src/config/env.ts` dan command resmi `npm run runtime:contract` benar-benar menulis artefak ke `test_reports/runtime_contract_batch3_current.json`.

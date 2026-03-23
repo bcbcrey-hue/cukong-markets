@@ -1,9 +1,10 @@
 {
-  "generatedAtUtc": "2026-03-23T11:33:46.109Z",
-  "verifierContractVersion": "phase2-batch3-v1",
+  "generatedAtUtc": "2026-03-23T11:51:39.828Z",
+  "verifierContractVersion": "phase2-batch3-v2",
   "sourceOfTruth": {
     "repository": "https://github.com/masreykangtrade-oss/cukong-markets",
-    "roadmap": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP.md"
+    "roadmap": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP.md",
+    "runtimeEnvModule": "src/config/env.ts"
   },
   "processStart": {
     "startCommand": "npm run start",
@@ -44,7 +45,8 @@
       "healthzPath": "/healthz",
       "callbackPath": "/indodax/callback",
       "callbackAllowedHost": "",
-      "callbackAuthMode": "required"
+      "callbackAuthMode": "required",
+      "callbackUrl": null
     }
   },
   "runtimeDirectories": {
@@ -69,7 +71,7 @@
   },
   "repoVsVpsProofBoundary": {
     "provableFromRepo": [
-      "Kontrak env + target probe endpoint + target startup phase log",
+      "Kontrak env canonical dari src/config/env.ts + target probe endpoint + target startup phase log",
       "Worker build path target pada artifact dist"
     ],
     "notProvableFromRepoOnly": [
@@ -77,5 +79,9 @@
       "Bind/listen aktual process di host VPS setelah deploy",
       "Endpoint probe dari jaringan VPS target (post-deploy runtime)"
     ]
+  },
+  "artifact": {
+    "path": "/workspace/cukong-markets/test_reports/runtime_contract_batch3_current.json",
+    "generatedByCommand": "npm run runtime:contract"
   }
 }

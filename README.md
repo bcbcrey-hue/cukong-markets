@@ -66,7 +66,7 @@ Untuk membekukan target proof runtime VPS, gunakan:
 npm run runtime:contract
 ```
 
-Command ini mengeluarkan JSON kontrak target runtime dari env aktual (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch3_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
 
 Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
 

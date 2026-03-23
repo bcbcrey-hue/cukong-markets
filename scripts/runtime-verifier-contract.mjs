@@ -1,42 +1,18 @@
 import 'dotenv/config';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-function read(name, fallback = '') {
-  const value = process.env[name];
-  if (typeof value !== 'string') {
-    return fallback;
-  }
-  return value.trim();
+const runtimeEnvModule = await import('../src/config/env.ts');
+const env = runtimeEnvModule.env ?? runtimeEnvModule.default?.env;
+
+if (!env) {
+  throw new Error('Failed to load canonical runtime env from src/config/env.ts');
 }
 
-function readBoolean(name, fallback = false) {
-  const raw = read(name);
-  if (!raw) {
-    return fallback;
-  }
-
-  const normalized = raw.toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
-    return true;
-  }
-  if (['0', 'false', 'no', 'off'].includes(normalized)) {
-    return false;
-  }
-
-  throw new Error(`Invalid boolean in env ${name}: ${raw}`);
-}
-
-function readNumber(name, fallback) {
-  const raw = read(name);
-  if (!raw) {
-    return fallback;
-  }
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid number in env ${name}: ${raw}`);
-  }
-  return parsed;
-}
+const CONTRACT_OUTPUT_PATH = path.resolve(
+  process.cwd(),
+  'test_reports/runtime_contract_batch3_current.json',
+);
 
 function maskSecret(raw) {
   if (!raw) {
@@ -50,19 +26,13 @@ function maskSecret(raw) {
   return `${raw.slice(0, 4)}***${raw.slice(-2)}`;
 }
 
-const appPort = readNumber('APP_PORT', 3000);
-const appBindHost = read('APP_BIND_HOST', '0.0.0.0');
-const callbackEnabled = readBoolean('INDODAX_ENABLE_CALLBACK_SERVER', false);
-const callbackPort = readNumber('INDODAX_CALLBACK_PORT', 3001);
-const callbackBindHost = read('INDODAX_CALLBACK_BIND_HOST', '0.0.0.0');
-const callbackPath = read('INDODAX_CALLBACK_PATH', '/indodax/callback') || '/indodax/callback';
-
 const runtimeContract = {
   generatedAtUtc: new Date().toISOString(),
-  verifierContractVersion: 'phase2-batch3-v1',
+  verifierContractVersion: 'phase2-batch3-v2',
   sourceOfTruth: {
     repository: 'https://github.com/masreykangtrade-oss/cukong-markets',
     roadmap: 'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP.md',
+    runtimeEnvModule: 'src/config/env.ts',
   },
   processStart: {
     startCommand: 'npm run start',
@@ -87,33 +57,31 @@ const runtimeContract = {
   },
   httpProbeTargets: {
     appServer: {
-      bindHost: appBindHost,
-      port: appPort,
-      baseUrlFromVps: `http://127.0.0.1:${appPort}`,
+      bindHost: env.appBindHost,
+      port: env.appPort,
+      baseUrlFromVps: `http://127.0.0.1:${env.appPort}`,
       endpoints: ['/', '/healthz', '/livez'],
     },
     callbackServer: {
-      enabled: callbackEnabled,
-      bindHost: callbackBindHost,
-      port: callbackPort,
+      enabled: env.indodaxEnableCallbackServer,
+      bindHost: env.indodaxCallbackBindHost,
+      port: env.indodaxCallbackPort,
       healthzPath: '/healthz',
-      callbackPath,
-      callbackAllowedHost: read('INDODAX_CALLBACK_ALLOWED_HOST', ''),
-      callbackAuthMode: read('INDODAX_CALLBACK_AUTH_MODE', 'required'),
+      callbackPath: env.indodaxCallbackPath,
+      callbackAllowedHost: env.indodaxCallbackAllowedHost,
+      callbackAuthMode: env.indodaxCallbackAuthMode,
+      callbackUrl: env.indodaxCallbackUrl,
     },
   },
   runtimeDirectories: {
-    dataDir: path.resolve(read('DATA_DIR', path.resolve(process.cwd(), 'data'))),
-    logDir: path.resolve(read('LOG_DIR', path.resolve(process.cwd(), 'logs'))),
-    tempDir: path.resolve(read('TEMP_DIR', path.resolve(process.cwd(), 'tmp'))),
+    dataDir: env.dataDir,
+    logDir: env.logDir,
+    tempDir: env.tempDir,
   },
   telegramRuntimeTarget: {
-    configuredByToken: Boolean(read('TELEGRAM_BOT_TOKEN', '')),
-    allowedUsersCount: read('TELEGRAM_ALLOWED_USER_IDS', '')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean).length,
-    tokenMasked: maskSecret(read('TELEGRAM_BOT_TOKEN', '')),
+    configuredByToken: Boolean(env.telegramToken),
+    allowedUsersCount: env.telegramAllowedUserIds.length,
+    tokenMasked: maskSecret(env.telegramToken),
     startupEvidenceMarker: 'telegram bot launched and connected',
     note: 'Status connected hanya bisa dibuktikan dari runtime VPS nyata.',
   },
@@ -127,7 +95,7 @@ const runtimeContract = {
   },
   repoVsVpsProofBoundary: {
     provableFromRepo: [
-      'Kontrak env + target probe endpoint + target startup phase log',
+      'Kontrak env canonical dari src/config/env.ts + target probe endpoint + target startup phase log',
       'Worker build path target pada artifact dist',
     ],
     notProvableFromRepoOnly: [
@@ -136,6 +104,22 @@ const runtimeContract = {
       'Endpoint probe dari jaringan VPS target (post-deploy runtime)',
     ],
   },
+  artifact: {
+    path: CONTRACT_OUTPUT_PATH,
+    generatedByCommand: 'npm run runtime:contract',
+  },
 };
 
-console.log(JSON.stringify(runtimeContract, null, 2));
+async function main() {
+  await mkdir(path.dirname(CONTRACT_OUTPUT_PATH), { recursive: true });
+  const content = `${JSON.stringify(runtimeContract, null, 2)}\n`;
+  await writeFile(CONTRACT_OUTPUT_PATH, content, 'utf8');
+
+  process.stdout.write(content);
+  process.stderr.write(`[runtime:contract] artifact written: ${CONTRACT_OUTPUT_PATH}\n`);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});
