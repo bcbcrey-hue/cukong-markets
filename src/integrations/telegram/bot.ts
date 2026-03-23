@@ -42,7 +42,10 @@ export interface TelegramConnectionSignal {
   launched: boolean;
   running: boolean;
   connected: boolean;
+  botId: number | null;
+  botUsername: string | null;
   lastLaunchAt: string | null;
+  lastConnectedAt: string | null;
   lastLaunchSuccessAt: string | null;
   lastLaunchError: string | null;
   lastLaunchErrorType: 'none' | 'missing_token' | 'invalid_token' | 'network' | 'unknown';
@@ -56,7 +59,10 @@ export class TelegramBot implements SummaryNotifier {
     launched: false,
     running: false,
     connected: false,
+    botId: null,
+    botUsername: null,
     lastLaunchAt: null,
+    lastConnectedAt: null,
     lastLaunchSuccessAt: null,
     lastLaunchError: null,
     lastLaunchErrorType: 'none',
@@ -66,12 +72,14 @@ export class TelegramBot implements SummaryNotifier {
     const tokenConfigured = Boolean(env.telegramToken);
     const tokenMasked = maskTelegramToken(env.telegramToken);
     const allowedUsersCount = env.telegramAllowedUserIds.length;
+    const allowedUsersPreviewMasked = maskAllowedUserIds(env.telegramAllowedUserIds);
 
     this.log.info(
       {
         tokenConfigured,
         tokenMasked,
         allowedUsersCount,
+        allowedUsersPreviewMasked,
       },
       'telegram runtime config loaded',
     );
@@ -97,7 +105,10 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        botId: null,
+        botUsername: null,
         lastLaunchAt: new Date().toISOString(),
+        lastConnectedAt: null,
         lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
         lastLaunchErrorType: 'missing_token',
       };
@@ -131,8 +142,9 @@ export class TelegramBot implements SummaryNotifier {
     }
 
     try {
-      await this.bot.telegram.getMe();
+      const me = await this.bot.telegram.getMe();
       await this.bot.launch();
+      const connectedAt = new Date().toISOString();
 
       this.signal = {
         ...this.signal,
@@ -140,7 +152,10 @@ export class TelegramBot implements SummaryNotifier {
         launched: true,
         running: true,
         connected: true,
-        lastLaunchSuccessAt: new Date().toISOString(),
+        botId: me.id,
+        botUsername: me.username ?? null,
+        lastConnectedAt: connectedAt,
+        lastLaunchSuccessAt: connectedAt,
         lastLaunchError: null,
         lastLaunchErrorType: 'none',
       };
@@ -150,6 +165,9 @@ export class TelegramBot implements SummaryNotifier {
           launched: this.signal.launched,
           running: this.signal.running,
           connected: this.signal.connected,
+          botId: this.signal.botId,
+          botUsername: this.signal.botUsername,
+          lastConnectedAt: this.signal.lastConnectedAt,
           lastLaunchErrorType: this.signal.lastLaunchErrorType,
         },
         'telegram bot launched and connected',
@@ -163,6 +181,9 @@ export class TelegramBot implements SummaryNotifier {
         launched: false,
         running: false,
         connected: false,
+        botId: null,
+        botUsername: null,
+        lastConnectedAt: null,
         lastLaunchError: normalizedError.message,
         lastLaunchErrorType: launchErrorType,
       };
@@ -186,6 +207,7 @@ export class TelegramBot implements SummaryNotifier {
         ...this.signal,
         running: false,
         connected: false,
+        lastConnectedAt: null,
       };
       return;
     }
@@ -195,6 +217,7 @@ export class TelegramBot implements SummaryNotifier {
       ...this.signal,
       running: false,
       connected: false,
+      lastConnectedAt: null,
     };
   }
 
@@ -261,4 +284,15 @@ function maskTelegramToken(token: string): string | null {
   }
 
   return `${clean.slice(0, 4)}***${clean.slice(-4)}`;
+}
+
+function maskAllowedUserIds(userIds: number[]): string[] {
+  return userIds.slice(0, 3).map((userId) => {
+    const value = String(userId).trim();
+    if (value.length <= 4) {
+      return `${value.slice(0, 1)}***`;
+    }
+
+    return `${value.slice(0, 2)}***${value.slice(-2)}`;
+  });
 }
