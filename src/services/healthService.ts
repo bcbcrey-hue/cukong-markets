@@ -12,6 +12,7 @@ import { env } from '../config/env';
 
 export interface BuildHealthParams {
   scannerRunning: boolean;
+  telegramConfigured: boolean;
   telegramRunning: boolean;
   callbackServerRunning: boolean;
   tradingEnabled: boolean;
@@ -31,7 +32,14 @@ export class HealthService {
   ) {}
 
   async load(): Promise<HealthSnapshot> {
-    this.health = await this.persistence.readHealth();
+    const loaded = await this.persistence.readHealth();
+    this.health = {
+      ...loaded,
+      telegramConfigured:
+        typeof loaded.telegramConfigured === 'boolean'
+          ? loaded.telegramConfigured
+          : Boolean(env.telegramToken),
+    };
     return this.health;
   }
 
@@ -65,6 +73,13 @@ export class HealthService {
 
     const notes = [
       ...(params.notes ?? []),
+      `telegramGate=${
+        !params.telegramConfigured
+          ? 'not_configured'
+          : params.telegramRunning
+            ? 'operational'
+            : 'configured_not_running'
+      }`,
       `openPositions=${openPositions}`,
       `pendingOrders=${pendingOrders}`,
     ];
@@ -74,6 +89,7 @@ export class HealthService {
     const status = this.statusFromRuntime(
       runtimeStatus,
       params.scannerRunning,
+      params.telegramConfigured,
       params.telegramRunning,
       callbackReady,
     );
@@ -83,6 +99,7 @@ export class HealthService {
       updatedAt: new Date().toISOString(),
       runtimeStatus,
       scannerRunning: params.scannerRunning,
+      telegramConfigured: params.telegramConfigured,
       telegramRunning: params.telegramRunning,
       callbackServerRunning: params.callbackServerRunning,
       tradingEnabled: params.tradingEnabled,
@@ -106,6 +123,7 @@ export class HealthService {
   private statusFromRuntime(
     runtimeStatus: RuntimeStatus,
     scannerRunning: boolean,
+    telegramConfigured: boolean,
     telegramRunning: boolean,
     callbackReady: boolean,
   ): HealthSnapshot['status'] {
@@ -114,7 +132,8 @@ export class HealthService {
     }
 
     if (runtimeStatus === 'RUNNING') {
-      return scannerRunning && telegramRunning && callbackReady ? 'healthy' : 'degraded';
+      const telegramReady = !telegramConfigured || telegramRunning;
+      return scannerRunning && telegramReady && callbackReady ? 'healthy' : 'degraded';
     }
 
     return 'degraded';

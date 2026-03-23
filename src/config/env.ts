@@ -311,7 +311,7 @@ export const env: EnvConfig = {
   appPort: readNumber('APP_PORT', 3000),
   appBindHost: readString('APP_BIND_HOST', '0.0.0.0'),
 
-  telegramToken: readRequiredString('TELEGRAM_BOT_TOKEN'),
+  telegramToken: readString('TELEGRAM_BOT_TOKEN', ''),
   telegramAllowedUserIds: readNumberList('TELEGRAM_ALLOWED_USER_IDS'),
 
   logLevel: readStringEnum('LOG_LEVEL', logLevels, 'info'),

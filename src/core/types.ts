@@ -514,6 +514,7 @@ export interface HealthSnapshot {
   updatedAt: string;
   runtimeStatus: RuntimeStatus;
   scannerRunning: boolean;
+  telegramConfigured: boolean;
   telegramRunning: boolean;
   callbackServerRunning: boolean;
   tradingEnabled: boolean;

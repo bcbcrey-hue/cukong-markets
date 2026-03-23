@@ -59,6 +59,18 @@ export class AppServer {
           url: env.indodaxCallbackUrl,
           allowedHost: env.indodaxCallbackAllowedHost || null,
         },
+        telegram: {
+          configured: currentHealth.telegramConfigured,
+          running: currentHealth.telegramRunning,
+        },
+        readiness: {
+          scannerReady: currentHealth.scannerRunning,
+          telegramRequired: currentHealth.telegramConfigured,
+          telegramReady: !currentHealth.telegramConfigured || currentHealth.telegramRunning,
+          callbackRequired: env.indodaxEnableCallbackServer,
+          callbackReady:
+            !env.indodaxEnableCallbackServer || currentHealth.callbackServerRunning,
+        },
         executionMode: currentHealth.executionMode,
         health: currentHealth,
       });

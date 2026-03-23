@@ -111,6 +111,7 @@ export function createDefaultHealth(): HealthSnapshot {
     updatedAt: new Date().toISOString(),
     runtimeStatus: 'IDLE',
     scannerRunning: false,
+    telegramConfigured: false,
     telegramRunning: false,
     callbackServerRunning: false,
     tradingEnabled: false,

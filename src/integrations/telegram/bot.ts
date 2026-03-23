@@ -37,6 +37,7 @@ export interface TelegramBotDeps {
 }
 
 export interface TelegramConnectionSignal {
+  configured: boolean;
   launched: boolean;
   running: boolean;
   connected: boolean;
@@ -46,8 +47,9 @@ export interface TelegramConnectionSignal {
 }
 
 export class TelegramBot implements SummaryNotifier {
-  private readonly bot: Telegraf;
+  private readonly bot: Telegraf | null;
   private signal: TelegramConnectionSignal = {
+    configured: Boolean(env.telegramToken),
     launched: false,
     running: false,
     connected: false,
@@ -57,16 +59,33 @@ export class TelegramBot implements SummaryNotifier {
   };
 
   constructor(private readonly deps: TelegramBotDeps) {
-    this.bot = new TelegrafBot(env.telegramToken);
+    if (env.telegramToken) {
+      this.bot = new TelegrafBot(env.telegramToken);
+      registerHandlers(this.bot, {
+        ...deps,
+        uploadHandler: new UploadHandler(deps.accountStore, deps.accounts),
+        getTelegramSignal: () => this.getConnectionSignal(),
+      });
+      return;
+    }
 
-    registerHandlers(this.bot, {
-      ...deps,
-      uploadHandler: new UploadHandler(deps.accountStore, deps.accounts),
-      getTelegramSignal: () => this.getConnectionSignal(),
-    });
+    this.bot = null;
   }
 
   async start(): Promise<void> {
+    if (!this.bot) {
+      this.signal = {
+        ...this.signal,
+        configured: false,
+        launched: false,
+        running: false,
+        connected: false,
+        lastLaunchAt: new Date().toISOString(),
+        lastLaunchError: 'telegram token missing: TELEGRAM_BOT_TOKEN',
+      };
+      return;
+    }
+
     this.signal.lastLaunchAt = new Date().toISOString();
     this.signal.lastLaunchError = null;
 
@@ -76,6 +95,7 @@ export class TelegramBot implements SummaryNotifier {
 
       this.signal = {
         ...this.signal,
+        configured: true,
         launched: true,
         running: true,
         connected: true,
@@ -85,6 +105,7 @@ export class TelegramBot implements SummaryNotifier {
     } catch (error) {
       this.signal = {
         ...this.signal,
+        configured: true,
         launched: false,
         running: false,
         connected: false,
@@ -95,6 +116,15 @@ export class TelegramBot implements SummaryNotifier {
   }
 
   async stop(): Promise<void> {
+    if (!this.bot) {
+      this.signal = {
+        ...this.signal,
+        running: false,
+        connected: false,
+      };
+      return;
+    }
+
     this.bot.stop();
     this.signal = {
       ...this.signal,
@@ -108,12 +138,13 @@ export class TelegramBot implements SummaryNotifier {
   }
 
   async broadcast(message: string): Promise<void> {
-    if (env.telegramAllowedUserIds.length === 0) {
+    if (!this.bot || env.telegramAllowedUserIds.length === 0) {
       return;
     }
 
+    const bot = this.bot;
     await Promise.allSettled(
-      env.telegramAllowedUserIds.map((userId) => this.bot.telegram.sendMessage(userId, message)),
+      env.telegramAllowedUserIds.map((userId) => bot.telegram.sendMessage(userId, message)),
     );
   }
 }

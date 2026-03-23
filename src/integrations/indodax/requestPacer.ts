@@ -117,12 +117,14 @@ export class RequestPacer {
 
     if (options.coalesceKey) {
       lane.coalescedPending.set(options.coalesceKey, taskPromise as Promise<unknown>);
-      void taskPromise.finally(() => {
-        const current = lane.coalescedPending.get(options.coalesceKey!);
-        if (current === (taskPromise as Promise<unknown>)) {
-          lane.coalescedPending.delete(options.coalesceKey!);
-        }
-      });
+      void taskPromise
+        .finally(() => {
+          const current = lane.coalescedPending.get(options.coalesceKey!);
+          if (current === (taskPromise as Promise<unknown>)) {
+            lane.coalescedPending.delete(options.coalesceKey!);
+          }
+        })
+        .catch(() => undefined);
     }
 
     this.drain();
