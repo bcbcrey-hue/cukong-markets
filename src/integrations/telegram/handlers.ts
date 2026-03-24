@@ -3,7 +3,6 @@ import type {
   ExecutionMode,
   HotlistEntry,
   PositionRecord,
-  SignalCandidate,
   TradingMode,
 } from '../../core/types';
 import { AccountRegistry } from '../../domain/accounts/accountRegistry';
@@ -110,7 +109,7 @@ function clearAccountManualFlow(flow: UserFlowState): void {
 function getTopSignal(
   hotlist: HotlistService,
   pair?: string,
-): SignalCandidate | HotlistEntry | undefined {
+): HotlistEntry | undefined {
   const list = hotlist.list();
   if (!pair) {
     return list[0];
@@ -494,7 +493,7 @@ async function openMenu(
       await replyStatus(ctx, deps);
       return;
     case 'MW':
-      await replyText(ctx, deps.report.marketWatchText(deps.hotlist.list()), monitoringKeyboard);
+      await replyText(ctx, deps.report.marketWatchText(deps.state.get().lastSignals), monitoringKeyboard);
       return;
     case 'HOT': {
       const list = deps.hotlist.list();

@@ -87,7 +87,7 @@ export class ReportService {
     return lines.join('\n');
   }
 
-  hotlistText(hotlist: Array<HotlistEntry | SignalCandidate>): string {
+  hotlistText(hotlist: HotlistEntry[]): string {
     if (!hotlist.length) {
       return '🔥 Hotlist kosong.';
     }
@@ -114,12 +114,12 @@ export class ReportService {
     return ['🔥 HOTLIST', ...lines].join('\n');
   }
 
-  marketWatchText(hotlist: Array<HotlistEntry | SignalCandidate>): string {
-    if (!hotlist.length) {
+  marketWatchText(signals: SignalCandidate[]): string {
+    if (!signals.length) {
       return '👁️ Market watch belum berisi pair aktif.';
     }
 
-    const lines = hotlist.slice(0, 8).map((item, index) => {
+    const lines = signals.slice(0, 8).map((item, index) => {
       return [
         `${index + 1}. ${item.pair}`,
         `price=${asNum(item.marketPrice, 8)}`,
@@ -145,6 +145,24 @@ export class ReportService {
         `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
         `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
         `Action: ${signal.recommendedAction}`,
+        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
+        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+        `History: ${truncate(signal.historicalMatchSummary, 180)}`,
+      ].join('\n');
+    }
+
+    if ('recommendedAction' in signal) {
+      return [
+        `Pair: ${signal.pair}`,
+        `Score: ${asNum(signal.score, 2)}`,
+        `Pump probability: ${(signal.pumpProbability * 100).toFixed(1)}%`,
+        `Trap probability: ${(signal.trapProbability * 100).toFixed(1)}%`,
+        `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
+        `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
+        `Action: ${signal.recommendedAction}`,
+        `Edge valid: ${signal.edgeValid ? 'YA' : 'TIDAK'}`,
+        `Price: ${asNum(signal.marketPrice, 8)}`,
+        `Spread: ${asPct(signal.spreadPct)}`,
         `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
         `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
         `History: ${truncate(signal.historicalMatchSummary, 180)}`,

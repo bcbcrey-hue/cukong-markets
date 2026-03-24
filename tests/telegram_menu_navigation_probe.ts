@@ -115,6 +115,17 @@ async function main() {
       change5m: 2,
       contributions: [],
       timestamp: Date.now(),
+      recommendedAction: 'ENTER' as const,
+      edgeValid: true,
+      entryTiming: {
+        state: 'READY' as const,
+        quality: 82,
+        reason: 'ready',
+        leadScore: 77,
+      },
+      pumpProbability: 0.8,
+      trapProbability: 0.1,
+      historicalMatchSummary: 'pattern match strong',
     },
   ];
 
