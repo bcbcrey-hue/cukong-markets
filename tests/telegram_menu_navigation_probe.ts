@@ -39,6 +39,17 @@ function collectInlineCallbacks(markup: unknown): string[] {
   return keyboard.flatMap((row) => row.map((button) => button.callback_data).filter(Boolean) as string[]);
 }
 
+function collectInlineButtonTexts(markup: unknown): string[] {
+  const keyboard = (markup as { reply_markup?: { inline_keyboard?: Array<Array<{ text?: string }>> } })
+    .reply_markup?.inline_keyboard;
+
+  if (!keyboard) {
+    return [];
+  }
+
+  return keyboard.flatMap((row) => row.map((button) => button.text ?? '').filter(Boolean));
+}
+
 function collectReplyKeyboardLabels(markup: unknown): string[] {
   const keyboard = (markup as { reply_markup?: { keyboard?: Array<Array<string | { text?: string }>> } })
     .reply_markup?.keyboard;
@@ -130,6 +141,70 @@ async function main() {
       trapProbability: 0.1,
       historicalMatchSummary: 'pattern match strong',
     },
+    {
+      rank: 2,
+      pair: 'eth_idr',
+      score: 72,
+      confidence: 0.7,
+      reasons: ['wait confirmation'],
+      warnings: ['timing masih early'],
+      regime: 'ACCUMULATION' as const,
+      breakoutPressure: 60,
+      volumeAcceleration: 58,
+      orderbookImbalance: 0.2,
+      spreadPct: 0.3,
+      marketPrice: 50_000_000,
+      bestBid: 49_900_000,
+      bestAsk: 50_100_000,
+      liquidityScore: 70,
+      change1m: 0.2,
+      change5m: 0.5,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'CONFIRM_ENTRY' as const,
+      edgeValid: true,
+      entryTiming: {
+        state: 'EARLY' as const,
+        quality: 55,
+        reason: 'menunggu konfirmasi',
+        leadScore: 54,
+      },
+      pumpProbability: 0.55,
+      trapProbability: 0.2,
+      historicalMatchSummary: 'needs confirmation',
+    },
+    {
+      rank: 3,
+      pair: 'xrp_idr',
+      score: 44,
+      confidence: 0.42,
+      reasons: ['risk tinggi'],
+      warnings: ['spread terlalu lebar'],
+      regime: 'TRAP_RISK' as const,
+      breakoutPressure: 30,
+      volumeAcceleration: 25,
+      orderbookImbalance: 0.1,
+      spreadPct: 1.8,
+      marketPrice: 15_000,
+      bestBid: 14_850,
+      bestAsk: 15_150,
+      liquidityScore: 40,
+      change1m: -0.8,
+      change5m: -1.9,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'AVOID' as const,
+      edgeValid: false,
+      entryTiming: {
+        state: 'AVOID' as const,
+        quality: 20,
+        reason: 'hindari entry',
+        leadScore: 18,
+      },
+      pumpProbability: 0.18,
+      trapProbability: 0.66,
+      historicalMatchSummary: 'high trap risk',
+    },
   ];
 
   const samplePositions = [
@@ -191,6 +266,8 @@ async function main() {
 
   const positionsMenuCallbacks = collectInlineCallbacks(positionsMenuKeyboard(migrated)).join('|');
   const strategyCallbacks = collectInlineCallbacks(strategySettingsKeyboard(migrated)).join('|');
+  const hotlistButtons = collectInlineButtonTexts(hotlistKeyboard(sampleHotlist, 'MON'));
+  const hotlistCallbacks = collectInlineCallbacks(hotlistKeyboard(sampleHotlist, 'MON')).join('|');
 
   assert.match(
     positionsMenuCallbacks,
@@ -207,6 +284,13 @@ async function main() {
     /BUY_SLIPPAGE/,
     'Buy Slippage button must be removed from Strategy Settings submenu',
   );
+  assert.ok(
+    hotlistButtons.some((text) => text.includes('[WATCH]') || text.includes('[CAUTION]') || text.includes('[BLOCKED]')),
+    'Hotlist keyboard must expose WATCH/CAUTION/BLOCKED labels for Telegram UI gating visibility',
+  );
+  assert.match(hotlistCallbacks, /BUY\|PICK\|MON\|btc_idr/, 'Actionable hotlist pair should expose BUY callback');
+  assert.doesNotMatch(hotlistCallbacks, /BUY\|PICK\|MON\|eth_idr/, 'Non-actionable caution pair must not expose BUY callback');
+  assert.doesNotMatch(hotlistCallbacks, /BUY\|PICK\|MON\|xrp_idr/, 'Blocked pair must not expose BUY callback');
 
   const hotlistService = new HotlistService();
   const report = new ReportService();
@@ -264,6 +348,7 @@ async function main() {
   const detail = report.signalBreakdownText(runtimeHotlist[0]);
   assert.match(detail, /Action: ENTER/, 'Hotlist detail must show action from HotlistEntry');
   assert.match(detail, /Edge valid: YA/, 'Hotlist detail must show edgeValid from HotlistEntry');
+  assert.match(detail, /Status: READY/, 'Hotlist detail must show UI status derived from action and edge gate');
   assert.match(detail, /Timing: READY \(ready\)/, 'Hotlist detail must show entry timing from HotlistEntry');
   assert.match(detail, /Pump probability: 84\.0%/, 'Hotlist detail must show pump probability from HotlistEntry');
   assert.match(detail, /Trap probability: 12\.0%/, 'Hotlist detail must show trap probability from HotlistEntry');

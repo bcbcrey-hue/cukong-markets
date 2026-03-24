@@ -12,6 +12,7 @@ import type {
   TradeOutcomeSummary,
   TradeRecord,
 } from '../core/types';
+import { evaluateHotlistUiDecision } from '../core/hotlistDecision';
 
 function asNum(value: number, digits = 4): string {
   return Number.isFinite(value) ? value.toFixed(digits) : '0';
@@ -105,6 +106,7 @@ export class ReportService {
     }
 
     const lines = hotlist.slice(0, 10).map((item, index) => {
+      const decision = evaluateHotlistUiDecision(item);
       const reasons = Array.isArray(item.reasons) && item.reasons.length
         ? item.reasons.join('; ')
         : 'belum ada alasan';
@@ -116,6 +118,7 @@ export class ReportService {
       return [
         `${index + 1}. ${item.pair}`,
         `score=${asNum(item.score, 1)}`,
+        `status=${decision.status}`,
         `confidence=${asNum(item.confidence, 2)}`,
         `regime=${item.regime}`,
         `spread=${asPct(item.spreadPct)}`,
@@ -149,6 +152,7 @@ export class ReportService {
     signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
   ): string {
     if (this.isHotlistEntry(signal)) {
+      const decision = evaluateHotlistUiDecision(signal);
       return [
         `Pair: ${signal.pair}`,
         `Score: ${asNum(signal.score, 2)}`,
@@ -158,6 +162,8 @@ export class ReportService {
         `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
         `Action: ${signal.recommendedAction}`,
         `Edge valid: ${signal.edgeValid ? 'YA' : 'TIDAK'}`,
+        `Status: ${decision.status}`,
+        `Gate reason: ${truncate(decision.reason, 180)}`,
         `Price: ${asNum(signal.marketPrice, 8)}`,
         `Spread: ${asPct(signal.spreadPct)}`,
         `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,

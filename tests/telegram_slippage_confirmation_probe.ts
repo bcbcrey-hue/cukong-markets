@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { buildCallback } from '../src/integrations/telegram/callbackRouter';
 import { registerHandlers } from '../src/integrations/telegram/handlers';
+import type { HotlistEntry } from '../src/core/types';
 import { createDefaultSettings } from '../src/services/persistenceService';
 
 type Handler = (ctx: any) => Promise<void> | void;
@@ -75,6 +76,74 @@ class FakeSettingsService {
 function createDeps(settings: FakeSettingsService) {
   const noopAsync = async () => undefined;
   const noopText = () => '';
+  let buyCallCount = 0;
+  const hotlistItems: HotlistEntry[] = [
+    {
+      rank: 1,
+      pair: 'btc_idr',
+      score: 90,
+      confidence: 0.9,
+      reasons: ['ok'],
+      warnings: [],
+      regime: 'BREAKOUT_SETUP' as const,
+      breakoutPressure: 80,
+      volumeAcceleration: 75,
+      orderbookImbalance: 0.4,
+      spreadPct: 0.2,
+      marketPrice: 1_000_000_000,
+      bestBid: 999_000_000,
+      bestAsk: 1_001_000_000,
+      liquidityScore: 85,
+      change1m: 1,
+      change5m: 2,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'ENTER' as const,
+      edgeValid: true,
+      entryTiming: { state: 'READY' as const, quality: 80, reason: 'ready', leadScore: 70 },
+      pumpProbability: 0.8,
+      trapProbability: 0.1,
+      historicalMatchSummary: 'ok',
+    },
+    {
+      rank: 2,
+      pair: 'eth_idr',
+      score: 70,
+      confidence: 0.7,
+      reasons: ['wait'],
+      warnings: ['belum konfirmasi'],
+      regime: 'ACCUMULATION' as const,
+      breakoutPressure: 60,
+      volumeAcceleration: 55,
+      orderbookImbalance: 0.2,
+      spreadPct: 0.3,
+      marketPrice: 50_000_000,
+      bestBid: 49_900_000,
+      bestAsk: 50_100_000,
+      liquidityScore: 68,
+      change1m: 0.2,
+      change5m: 0.5,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'CONFIRM_ENTRY' as const,
+      edgeValid: true,
+      entryTiming: { state: 'EARLY' as const, quality: 50, reason: 'menunggu konfirmasi', leadScore: 52 },
+      pumpProbability: 0.52,
+      trapProbability: 0.2,
+      historicalMatchSummary: 'wait',
+    },
+  ];
+  const upsertHotlistItem = (
+    pair: string,
+    patch: Partial<(typeof hotlistItems)[number]>,
+  ) => {
+    const target = hotlistItems.find((item) => item.pair === pair);
+    if (!target) {
+      return;
+    }
+
+    Object.assign(target, patch);
+  };
 
   return {
     report: {
@@ -101,8 +170,8 @@ function createDeps(settings: FakeSettingsService) {
       setTradingMode: noopAsync,
     },
     hotlist: {
-      list: () => [],
-      get: () => undefined,
+      list: () => hotlistItems,
+      get: (pair: string) => hotlistItems.find((item) => item.pair === pair),
     },
     positions: {
       list: () => [],
@@ -123,13 +192,38 @@ function createDeps(settings: FakeSettingsService) {
       manualSell: async () => 'ok',
       cancelAllOrders: async () => 'ok',
       sellAllPositions: async () => 'ok',
-      buy: async () => 'ok',
+      buy: async () => {
+        buyCallCount += 1;
+        return 'ok';
+      },
     },
     journal: { recent: () => [] },
     uploadHandler: { handleDocument: async () => 'ok' },
     backtest: {
       run: async () => ({}),
       latestResult: async () => ({}),
+    },
+    __probe: {
+      getBuyCallCount: () => buyCallCount,
+      setHotlistAction: (
+        pair: string,
+        update: {
+          recommendedAction: 'WATCH' | 'PREPARE_ENTRY' | 'CONFIRM_ENTRY' | 'AVOID' | 'ENTER';
+          edgeValid: boolean;
+          warning?: string;
+          timingReason?: string;
+        },
+      ) => {
+        upsertHotlistItem(pair, {
+          recommendedAction: update.recommendedAction,
+          edgeValid: update.edgeValid,
+          warnings: update.warning ? [update.warning] : [],
+          entryTiming: {
+            ...hotlistItems.find((item) => item.pair === pair)!.entryTiming,
+            reason: update.timingReason ?? hotlistItems.find((item) => item.pair === pair)!.entryTiming.reason,
+          },
+        });
+      },
     },
   };
 }
@@ -202,6 +296,44 @@ async function main() {
   assert.ok(
     replies.some((text) => text.includes('Execution mode diubah ke LIVE.')),
     'SET|EXECUTION_MODE LIVE should confirm execution mode change',
+  );
+
+  const blockedBuy = buildCallback({ namespace: 'BUY', action: 'PICK', value: 'TRADE', pair: 'eth_idr' });
+  await bot.actionHandler!(createActionContext(blockedBuy, replies));
+  assert.ok(
+    replies.some((text) => text.includes('BUY diblokir untuk eth_idr') && text.includes('Status: CAUTION')),
+    'BUY callback for non-actionable pair must be rejected server-side with status reason',
+  );
+  assert.equal(deps.__probe.getBuyCallCount(), 0, 'Blocked BUY callback must not call execution.buy');
+
+  const actionableBuy = buildCallback({ namespace: 'BUY', action: 'PICK', value: 'TRADE', pair: 'btc_idr' });
+  await bot.actionHandler!(createActionContext(actionableBuy, replies));
+  assert.ok(
+    replies.some((text) => text.includes('Kirim nominal IDR untuk buy btc_idr')),
+    'Actionable BUY callback should enter pending buy flow first',
+  );
+
+  deps.__probe.setHotlistAction('btc_idr', {
+    recommendedAction: 'WATCH',
+    edgeValid: false,
+    warning: 'spread melebar',
+    timingReason: 'momentum memudar',
+  });
+
+  await bot.textHandler!(createTextContext('250000', replies));
+  assert.ok(
+    replies.some(
+      (text) =>
+        text.includes('BUY diblokir untuk btc_idr') &&
+        text.includes('Status: BLOCKED') &&
+        text.includes('Alasan: spread melebar'),
+    ),
+    'Pending manual buy must re-check gate and return blocked status + reason when hotlist state flips',
+  );
+  assert.equal(
+    deps.__probe.getBuyCallCount(),
+    0,
+    'Re-check gate after pending flow must block execution.buy when pair is no longer actionable',
   );
 
   console.log('PASS telegram_slippage_confirmation_probe');
