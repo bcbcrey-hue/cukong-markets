@@ -29,6 +29,17 @@ Repository aktif: `https://github.com/masreykangtrade-oss/cukong-markets`
 - `npm run test:probes` lulus
 - suite resmi sudah mencakup probe safety untuk startup, worker timeout, buy-entry guard, dan submission-uncertain cancel safety
 
+## Sinkronisasi testing terbaru — Telegram hotlist gating + runtime-safe output (2026-03-24 UTC)
+
+- ✅ `npm run lint`
+- ✅ `npm run build`
+- ✅ `npm run typecheck:probes`
+- ⚠️ `npx tsx tests/telegram_menu_navigation_probe.ts`
+  - gagal awal karena `DATA_DIR` belum diset oleh environment lokal probe
+- ✅ `DATA_DIR=/tmp/cukong-probe-nav npx tsx tests/telegram_menu_navigation_probe.ts`
+- ✅ `npx tsx tests/telegram_message_chunking_probe.ts`
+- ✅ `npm run verify`
+
 ## Finalisasi verifikasi (2026-03-22 UTC)
 
 - Bukti literal terbaru tersedia di `test_reports/typecheck_probes_final.txt`, `test_reports/probe_list_final.txt`, `test_reports/probe_audit_final.txt`, `test_reports/test_probes_final.txt`, dan `test_reports/verify_final.txt`.
