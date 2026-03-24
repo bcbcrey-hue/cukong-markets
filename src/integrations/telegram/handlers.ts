@@ -19,6 +19,7 @@ import { StateService } from '../../services/stateService';
 import { denyTelegramAccess } from './auth';
 import type { TelegramCallbackPayload } from './callbackRouter';
 import { parseCallback } from './callbackRouter';
+import { evaluateHotlistUiDecision, isHotlistEntryActionable } from '../../core/hotlistDecision';
 import {
   TELEGRAM_ACTION,
   TELEGRAM_MAIN_MENU,
@@ -910,6 +911,30 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'BUY' && parsed.action === 'PICK' && parsed.pair) {
+      const signal = getTopSignal(deps.hotlist, parsed.pair);
+      const backMenu = resolveHotlistBackMenu(parsed.value);
+      if (!signal) {
+        await replyText(ctx, 'Signal tidak ditemukan.', hotlistKeyboard(deps.hotlist.list(), backMenu));
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      if (!isHotlistEntryActionable(signal)) {
+        const decision = evaluateHotlistUiDecision(signal);
+        await replyText(
+          ctx,
+          [
+            `⛔ BUY diblokir untuk ${parsed.pair}.`,
+            `Status: ${decision.status}`,
+            `Alasan: ${decision.reason}`,
+            `Action=${signal.recommendedAction}, edgeValid=${signal.edgeValid ? 'true' : 'false'}`,
+          ].join('\n'),
+          hotlistKeyboard(deps.hotlist.list(), backMenu),
+        );
+        await ctx.answerCbQuery();
+        return;
+      }
+
       if (userFlow) {
         userFlow.awaitingUpload = false;
         userFlow.pendingBuyPair = parsed.pair;
@@ -1269,6 +1294,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     const signal = getTopSignal(deps.hotlist, userFlow.pendingBuyPair);
     const account = deps.accounts.getDefault();
+    const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
 
     if (!signal || !account) {
       userFlow.pendingBuyPair = undefined;
@@ -1277,8 +1303,24 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (!isHotlistEntryActionable(signal)) {
+      const decision = evaluateHotlistUiDecision(signal);
+      userFlow.pendingBuyPair = undefined;
+      userFlow.pendingBuyBackMenu = undefined;
+      await replyText(
+        ctx,
+        [
+          `⛔ BUY diblokir untuk ${signal.pair}.`,
+          `Status: ${decision.status}`,
+          `Alasan: ${decision.reason}`,
+          `Action=${signal.recommendedAction}, edgeValid=${signal.edgeValid ? 'true' : 'false'}`,
+        ].join('\n'),
+        hotlistKeyboard(deps.hotlist.list(), backMenu),
+      );
+      return;
+    }
+
     const result = await deps.execution.buy(account.id, signal, amountIdr, 'MANUAL');
-    const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
     userFlow.pendingBuyPair = undefined;
     userFlow.pendingBuyBackMenu = undefined;
     await replyText(
