@@ -7,6 +7,7 @@ import type {
   StoredAccount,
   TradingMode,
 } from '../../core/types';
+import { evaluateHotlistUiDecision } from '../../core/hotlistDecision';
 import { buildCallback } from './callbackRouter';
 
 export type TelegramMenuId =
@@ -265,16 +266,26 @@ export function hotlistKeyboard(
   backMenu: TelegramMenuId = 'MON',
 ) {
   return Markup.inlineKeyboard([
-    ...hotlist.slice(0, 8).map((item) => [
-      Markup.button.callback(
-        `${item.rank}. ${item.pair} (${item.score.toFixed(0)})`,
-        buildCallback({ namespace: 'SIG', action: 'DETAIL', value: backMenu, pair: item.pair }),
-      ),
-      Markup.button.callback(
-        `Buy ${item.pair}`,
-        buildCallback({ namespace: 'BUY', action: 'PICK', value: backMenu, pair: item.pair }),
-      ),
-    ]),
+    ...hotlist.slice(0, 8).map((item) => {
+      const decision = evaluateHotlistUiDecision(item);
+      const row = [
+        Markup.button.callback(
+          `${item.rank}. ${item.pair} [${decision.status}] (${item.score.toFixed(0)})`,
+          buildCallback({ namespace: 'SIG', action: 'DETAIL', value: backMenu, pair: item.pair }),
+        ),
+      ];
+
+      if (decision.canManualBuy) {
+        row.push(
+          Markup.button.callback(
+            `Buy ${item.pair}`,
+            buildCallback({ namespace: 'BUY', action: 'PICK', value: backMenu, pair: item.pair }),
+          ),
+        );
+      }
+
+      return row;
+    }),
     [backButton(backMenu)],
   ]);
 }

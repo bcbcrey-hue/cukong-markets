@@ -75,6 +75,63 @@ class FakeSettingsService {
 function createDeps(settings: FakeSettingsService) {
   const noopAsync = async () => undefined;
   const noopText = () => '';
+  let buyCallCount = 0;
+  const hotlistItems = [
+    {
+      rank: 1,
+      pair: 'btc_idr',
+      score: 90,
+      confidence: 0.9,
+      reasons: ['ok'],
+      warnings: [],
+      regime: 'BREAKOUT_SETUP' as const,
+      breakoutPressure: 80,
+      volumeAcceleration: 75,
+      orderbookImbalance: 0.4,
+      spreadPct: 0.2,
+      marketPrice: 1_000_000_000,
+      bestBid: 999_000_000,
+      bestAsk: 1_001_000_000,
+      liquidityScore: 85,
+      change1m: 1,
+      change5m: 2,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'ENTER' as const,
+      edgeValid: true,
+      entryTiming: { state: 'READY' as const, quality: 80, reason: 'ready', leadScore: 70 },
+      pumpProbability: 0.8,
+      trapProbability: 0.1,
+      historicalMatchSummary: 'ok',
+    },
+    {
+      rank: 2,
+      pair: 'eth_idr',
+      score: 70,
+      confidence: 0.7,
+      reasons: ['wait'],
+      warnings: ['belum konfirmasi'],
+      regime: 'ACCUMULATION' as const,
+      breakoutPressure: 60,
+      volumeAcceleration: 55,
+      orderbookImbalance: 0.2,
+      spreadPct: 0.3,
+      marketPrice: 50_000_000,
+      bestBid: 49_900_000,
+      bestAsk: 50_100_000,
+      liquidityScore: 68,
+      change1m: 0.2,
+      change5m: 0.5,
+      contributions: [],
+      timestamp: Date.now(),
+      recommendedAction: 'CONFIRM_ENTRY' as const,
+      edgeValid: true,
+      entryTiming: { state: 'EARLY' as const, quality: 50, reason: 'menunggu konfirmasi', leadScore: 52 },
+      pumpProbability: 0.52,
+      trapProbability: 0.2,
+      historicalMatchSummary: 'wait',
+    },
+  ];
 
   return {
     report: {
@@ -101,8 +158,8 @@ function createDeps(settings: FakeSettingsService) {
       setTradingMode: noopAsync,
     },
     hotlist: {
-      list: () => [],
-      get: () => undefined,
+      list: () => hotlistItems,
+      get: (pair: string) => hotlistItems.find((item) => item.pair === pair),
     },
     positions: {
       list: () => [],
@@ -123,13 +180,19 @@ function createDeps(settings: FakeSettingsService) {
       manualSell: async () => 'ok',
       cancelAllOrders: async () => 'ok',
       sellAllPositions: async () => 'ok',
-      buy: async () => 'ok',
+      buy: async () => {
+        buyCallCount += 1;
+        return 'ok';
+      },
     },
     journal: { recent: () => [] },
     uploadHandler: { handleDocument: async () => 'ok' },
     backtest: {
       run: async () => ({}),
       latestResult: async () => ({}),
+    },
+    __probe: {
+      getBuyCallCount: () => buyCallCount,
     },
   };
 }
@@ -203,6 +266,14 @@ async function main() {
     replies.some((text) => text.includes('Execution mode diubah ke LIVE.')),
     'SET|EXECUTION_MODE LIVE should confirm execution mode change',
   );
+
+  const blockedBuy = buildCallback({ namespace: 'BUY', action: 'PICK', value: 'TRADE', pair: 'eth_idr' });
+  await bot.actionHandler!(createActionContext(blockedBuy, replies));
+  assert.ok(
+    replies.some((text) => text.includes('BUY diblokir untuk eth_idr') && text.includes('Status: CAUTION')),
+    'BUY callback for non-actionable pair must be rejected server-side with status reason',
+  );
+  assert.equal(deps.__probe.getBuyCallCount(), 0, 'Blocked BUY callback must not call execution.buy');
 
   console.log('PASS telegram_slippage_confirmation_probe');
 }
