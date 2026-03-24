@@ -264,17 +264,53 @@ export function hotlistKeyboard(
   hotlist: HotlistEntry[],
   backMenu: TelegramMenuId = 'MON',
 ) {
+  const resolveItemDecision = (item: HotlistEntry): {
+    statusLabel: 'WATCH' | 'CAUTION' | 'BLOCKED';
+    canBuy: boolean;
+  } => {
+    if (item.edgeValid === false || item.recommendedAction === 'AVOID') {
+      return { statusLabel: 'BLOCKED', canBuy: false };
+    }
+
+    if (item.recommendedAction === 'WATCH') {
+      return { statusLabel: 'WATCH', canBuy: false };
+    }
+
+    if (item.recommendedAction === 'ENTER' && item.edgeValid === true) {
+      return { statusLabel: 'CAUTION', canBuy: true };
+    }
+
+    return { statusLabel: 'CAUTION', canBuy: false };
+  };
+
   return Markup.inlineKeyboard([
-    ...hotlist.slice(0, 8).map((item) => [
-      Markup.button.callback(
-        `${item.rank}. ${item.pair} (${item.score.toFixed(0)})`,
-        buildCallback({ namespace: 'SIG', action: 'DETAIL', value: backMenu, pair: item.pair }),
-      ),
-      Markup.button.callback(
-        `Buy ${item.pair}`,
-        buildCallback({ namespace: 'BUY', action: 'PICK', value: backMenu, pair: item.pair }),
-      ),
-    ]),
+    ...hotlist.slice(0, 8).map((item) => {
+      const decision = resolveItemDecision(item);
+      const detailCallback = buildCallback({
+        namespace: 'SIG',
+        action: 'DETAIL',
+        value: backMenu,
+        pair: item.pair,
+      });
+
+      return [
+        Markup.button.callback(
+          `${item.rank}. ${item.pair} (${item.score.toFixed(0)})`,
+          detailCallback,
+        ),
+        decision.canBuy
+          ? Markup.button.callback(
+              `Buy ${item.pair}`,
+              buildCallback({
+                namespace: 'BUY',
+                action: 'PICK',
+                value: backMenu,
+                pair: item.pair,
+              }),
+            )
+          : Markup.button.callback(decision.statusLabel, detailCallback),
+      ];
+    }),
     [backButton(backMenu)],
   ]);
 }

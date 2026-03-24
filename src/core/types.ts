@@ -177,6 +177,8 @@ export interface SignalCandidate {
 
 export interface HotlistEntry extends SignalCandidate {
   rank: number;
+  edgeValid?: boolean;
+  recommendedAction?: 'WATCH' | 'PREPARE_ENTRY' | 'CONFIRM_ENTRY' | 'AVOID' | 'ENTER';
 }
 
 export interface MicrostructureFeatures {

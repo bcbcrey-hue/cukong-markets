@@ -57,6 +57,8 @@ export class HotlistService {
         change1m: item.change1m,
         change5m: item.change5m,
         contributions: item.featureBreakdown,
+        edgeValid: item.edgeValid,
+        recommendedAction: item.recommendedAction,
         timestamp: item.timestamp,
       };
     }

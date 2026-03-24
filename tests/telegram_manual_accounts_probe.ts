@@ -3,6 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { HotlistEntry } from '../src/core/types';
 
 type Handler = (ctx: any) => Promise<void> | void;
 
@@ -106,8 +107,16 @@ class MemoryAccounts {
   }
 }
 
-function createDeps(accounts: MemoryAccounts) {
+function createDeps(
+  accounts: MemoryAccounts,
+  options?: {
+    hotlist?: HotlistEntry[];
+    buyCalls?: { count: number };
+  },
+) {
   const noopAsync = async () => undefined;
+  const hotlistRows = options?.hotlist ?? [];
+  const buyCalls = options?.buyCalls;
   const report = {
     statusText: () => '',
     marketWatchText: () => '',
@@ -140,7 +149,10 @@ function createDeps(accounts: MemoryAccounts) {
       setStatus: noopAsync,
       setTradingMode: noopAsync,
     },
-    hotlist: { list: () => [], get: () => undefined },
+    hotlist: {
+      list: () => [...hotlistRows],
+      get: (pair: string) => hotlistRows.find((item) => item.pair === pair),
+    },
     positions: { list: () => [], listOpen: () => [], getById: () => undefined },
     orders: { list: () => [] },
     accounts,
@@ -169,7 +181,12 @@ function createDeps(accounts: MemoryAccounts) {
       manualSell: async () => 'ok',
       cancelAllOrders: async () => 'ok',
       sellAllPositions: async () => 'ok',
-      buy: async () => 'ok',
+      buy: async () => {
+        if (buyCalls) {
+          buyCalls.count += 1;
+        }
+        return 'ok';
+      },
       triggerShadowRunFromTelegram: () => ({}),
       getShadowRunTelegramSummary: () => ({}),
     },
@@ -288,6 +305,92 @@ async function probeTelegramManualFlows() {
   );
 }
 
+async function probeTelegramBuyDecisionGating() {
+  await ensureProbeRuntimeEnv();
+  const [{ buildCallback }, { registerHandlers }] = await Promise.all([
+    import('../src/integrations/telegram/callbackRouter'),
+    import('../src/integrations/telegram/handlers'),
+  ]);
+
+  const buyCalls = { count: 0 };
+  const hotlist: HotlistEntry[] = [
+    {
+      rank: 1,
+      pair: 'btc_idr',
+      score: 90,
+      confidence: 0.91,
+      reasons: ['entry ready'],
+      warnings: [],
+      regime: 'BREAKOUT_SETUP',
+      breakoutPressure: 81,
+      volumeAcceleration: 78,
+      orderbookImbalance: 0.4,
+      spreadPct: 0.2,
+      marketPrice: 1_000_000_000,
+      bestBid: 999_500_000,
+      bestAsk: 1_000_500_000,
+      liquidityScore: 80,
+      change1m: 1.2,
+      change5m: 2.6,
+      contributions: [],
+      edgeValid: true,
+      recommendedAction: 'ENTER',
+      timestamp: Date.now(),
+    },
+    {
+      rank: 2,
+      pair: 'xrp_idr',
+      score: 70,
+      confidence: 0.7,
+      reasons: ['edge invalid'],
+      warnings: ['avoid'],
+      regime: 'BREAKOUT_SETUP',
+      breakoutPressure: 48,
+      volumeAcceleration: 44,
+      orderbookImbalance: 0.15,
+      spreadPct: 0.9,
+      marketPrice: 10_000,
+      bestBid: 9_900,
+      bestAsk: 10_100,
+      liquidityScore: 35,
+      change1m: 0.1,
+      change5m: 0.2,
+      contributions: [],
+      edgeValid: false,
+      recommendedAction: 'AVOID',
+      timestamp: Date.now(),
+    },
+  ];
+
+  const bot = new FakeBot();
+  const accounts = new MemoryAccounts();
+  registerHandlers(bot as never, createDeps(accounts, { hotlist, buyCalls }) as never);
+  assert.ok(bot.actionHandler, 'Action handler harus terpasang untuk buy gating');
+  assert.ok(bot.textHandler, 'Text handler harus terpasang untuk buy gating');
+
+  const replies: string[] = [];
+
+  await bot.actionHandler!(
+    createActionContext(
+      buildCallback({ namespace: 'BUY', action: 'PICK', value: 'TRADE', pair: 'xrp_idr' }),
+      replies,
+    ),
+  );
+  assert.ok(
+    replies.at(-1)?.includes('Buy ditolak: status BLOCKED'),
+    'BUY callback untuk pair blocked harus ditolak dengan status jelas',
+  );
+
+  const blockedReplyCount = replies.length;
+  await bot.textHandler!(createTextContext('250000', replies));
+  assert.equal(
+    replies.length,
+    blockedReplyCount,
+    'Pair blocked tidak boleh melanjutkan ke flow nominal',
+  );
+  assert.equal(buyCalls.count, 0, 'BUY blocked tidak boleh memanggil execution.buy');
+}
+
 async function probeRuntimeContract() {
   const dataDir = await ensureProbeRuntimeEnv();
 
@@ -329,6 +432,7 @@ async function probeRuntimeContract() {
 
 async function main() {
   await probeTelegramManualFlows();
+  await probeTelegramBuyDecisionGating();
   await probeRuntimeContract();
   console.log('PASS telegram_manual_accounts_probe');
 }

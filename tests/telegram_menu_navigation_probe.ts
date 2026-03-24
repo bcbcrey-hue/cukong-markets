@@ -36,6 +36,17 @@ function collectInlineCallbacks(markup: unknown): string[] {
   return keyboard.flatMap((row) => row.map((button) => button.callback_data).filter(Boolean) as string[]);
 }
 
+function collectInlineTexts(markup: unknown): string[] {
+  const keyboard = (markup as { reply_markup?: { inline_keyboard?: Array<Array<{ text?: string }>> } })
+    .reply_markup?.inline_keyboard;
+
+  if (!keyboard) {
+    return [];
+  }
+
+  return keyboard.flatMap((row) => row.map((button) => button.text ?? ''));
+}
+
 function collectReplyKeyboardLabels(markup: unknown): string[] {
   const keyboard = (markup as { reply_markup?: { keyboard?: Array<Array<string | { text?: string }>> } })
     .reply_markup?.keyboard;
@@ -114,6 +125,77 @@ async function main() {
       change1m: 1,
       change5m: 2,
       contributions: [],
+      edgeValid: true,
+      recommendedAction: 'ENTER' as const,
+      timestamp: Date.now(),
+    },
+    {
+      rank: 2,
+      pair: 'eth_idr',
+      score: 82,
+      confidence: 0.82,
+      reasons: ['wait confirmation'],
+      warnings: ['timing not ideal'],
+      regime: 'BREAKOUT_SETUP' as const,
+      breakoutPressure: 70,
+      volumeAcceleration: 65,
+      orderbookImbalance: 0.33,
+      spreadPct: 0.22,
+      marketPrice: 55_000_000,
+      bestBid: 54_950_000,
+      bestAsk: 55_050_000,
+      liquidityScore: 77,
+      change1m: 0.6,
+      change5m: 1.5,
+      contributions: [],
+      edgeValid: true,
+      recommendedAction: 'CONFIRM_ENTRY' as const,
+      timestamp: Date.now(),
+    },
+    {
+      rank: 3,
+      pair: 'sol_idr',
+      score: 74,
+      confidence: 0.73,
+      reasons: ['observe trend'],
+      warnings: ['waiting setup'],
+      regime: 'BREAKOUT_SETUP' as const,
+      breakoutPressure: 50,
+      volumeAcceleration: 48,
+      orderbookImbalance: 0.2,
+      spreadPct: 0.35,
+      marketPrice: 2_000_000,
+      bestBid: 1_999_000,
+      bestAsk: 2_001_000,
+      liquidityScore: 60,
+      change1m: 0.3,
+      change5m: 0.9,
+      contributions: [],
+      edgeValid: true,
+      recommendedAction: 'WATCH' as const,
+      timestamp: Date.now(),
+    },
+    {
+      rank: 4,
+      pair: 'xrp_idr',
+      score: 70,
+      confidence: 0.7,
+      reasons: ['spread too wide'],
+      warnings: ['avoid entry'],
+      regime: 'BREAKOUT_SETUP' as const,
+      breakoutPressure: 45,
+      volumeAcceleration: 40,
+      orderbookImbalance: 0.12,
+      spreadPct: 0.85,
+      marketPrice: 10_000,
+      bestBid: 9_950,
+      bestAsk: 10_050,
+      liquidityScore: 40,
+      change1m: 0.1,
+      change5m: 0.4,
+      contributions: [],
+      edgeValid: false,
+      recommendedAction: 'AVOID' as const,
       timestamp: Date.now(),
     },
   ];
@@ -177,6 +259,12 @@ async function main() {
 
   const positionsMenuCallbacks = collectInlineCallbacks(positionsMenuKeyboard(migrated)).join('|');
   const strategyCallbacks = collectInlineCallbacks(strategySettingsKeyboard(migrated)).join('|');
+  const hotlistCallbacks = collectInlineCallbacks(hotlistKeyboard(sampleHotlist, 'MON'));
+  const hotlistTexts = collectInlineTexts(hotlistKeyboard(sampleHotlist, 'MON')).join('|');
+  const buyPickCount = hotlistCallbacks
+    .map((value) => parseCallback(value))
+    .filter((callback) => callback?.namespace === 'BUY' && callback.action === 'PICK').length;
+  assert.equal(buyPickCount, 1, 'Hotlist keyboard must expose Buy callback only for ENTER + edgeValid=true');
 
   assert.match(
     positionsMenuCallbacks,
@@ -192,6 +280,18 @@ async function main() {
     strategyCallbacks,
     /BUY_SLIPPAGE/,
     'Buy Slippage button must be removed from Strategy Settings submenu',
+  );
+  assert.ok(
+    hotlistTexts.includes('WATCH'),
+    'Hotlist keyboard must expose WATCH status label',
+  );
+  assert.ok(
+    hotlistTexts.includes('CAUTION'),
+    'Hotlist keyboard must expose CAUTION status label',
+  );
+  assert.ok(
+    hotlistTexts.includes('BLOCKED'),
+    'Hotlist keyboard must expose BLOCKED status label',
   );
 
   console.log('PASS telegram_menu_navigation_probe');

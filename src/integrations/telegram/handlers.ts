@@ -233,6 +233,25 @@ function resolveHotlistBackMenu(value?: string): TelegramMenuId {
   return isTelegramMenuId(value) ? value : 'MON';
 }
 
+function resolveHotlistDecision(item: HotlistEntry): {
+  statusLabel: 'WATCH' | 'CAUTION' | 'BLOCKED';
+  canBuy: boolean;
+} {
+  if (item.edgeValid === false || item.recommendedAction === 'AVOID') {
+    return { statusLabel: 'BLOCKED', canBuy: false };
+  }
+
+  if (item.recommendedAction === 'WATCH') {
+    return { statusLabel: 'WATCH', canBuy: false };
+  }
+
+  if (item.recommendedAction === 'ENTER' && item.edgeValid === true) {
+    return { statusLabel: 'CAUTION', canBuy: true };
+  }
+
+  return { statusLabel: 'CAUTION', canBuy: false };
+}
+
 function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
   switch (parsed.namespace) {
     case 'NAV':
@@ -911,10 +930,41 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'BUY' && parsed.action === 'PICK' && parsed.pair) {
+      const signal = deps.hotlist.get(parsed.pair);
+      const backMenu = isTelegramMenuId(parsed.value) ? parsed.value : 'TRADE';
+      if (!signal) {
+        if (userFlow) {
+          userFlow.pendingBuyPair = undefined;
+          userFlow.pendingBuyBackMenu = undefined;
+        }
+        await replyText(
+          ctx,
+          'Pair tidak ditemukan di hotlist terbaru. Pilih ulang dari daftar.',
+          hotlistKeyboard(deps.hotlist.list(), backMenu),
+        );
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      const decision = resolveHotlistDecision(signal);
+      if (!decision.canBuy) {
+        if (userFlow) {
+          userFlow.pendingBuyPair = undefined;
+          userFlow.pendingBuyBackMenu = undefined;
+        }
+        await replyText(
+          ctx,
+          `Buy ditolak: status ${decision.statusLabel} untuk ${parsed.pair}. Tunggu sampai sinyal ENTER + edge valid.`,
+          hotlistKeyboard(deps.hotlist.list(), backMenu),
+        );
+        await ctx.answerCbQuery();
+        return;
+      }
+
       if (userFlow) {
         userFlow.awaitingUpload = false;
         userFlow.pendingBuyPair = parsed.pair;
-        userFlow.pendingBuyBackMenu = isTelegramMenuId(parsed.value) ? parsed.value : 'TRADE';
+        userFlow.pendingBuyBackMenu = backMenu;
         userFlow.pendingConfig = undefined;
         userFlow.pendingSlippageConfirmation = undefined;
       }
@@ -1268,13 +1318,26 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
-    const signal = getTopSignal(deps.hotlist, userFlow.pendingBuyPair);
+    const signal = deps.hotlist.get(userFlow.pendingBuyPair);
     const account = deps.accounts.getDefault();
 
     if (!signal || !account) {
       userFlow.pendingBuyPair = undefined;
       userFlow.pendingBuyBackMenu = undefined;
       await replyText(ctx, 'Signal atau default account tidak tersedia.');
+      return;
+    }
+
+    const decision = resolveHotlistDecision(signal);
+    if (!decision.canBuy) {
+      const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
+      userFlow.pendingBuyPair = undefined;
+      userFlow.pendingBuyBackMenu = undefined;
+      await replyText(
+        ctx,
+        `Buy dibatalkan: status ${decision.statusLabel} untuk ${signal.pair}. Pair belum layak entry.`,
+        hotlistKeyboard(deps.hotlist.list(), backMenu),
+      );
       return;
     }
 
