@@ -22,6 +22,10 @@ function asPct(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+function asBps(value: number): string {
+  return `${value.toFixed(1)}bps`;
+}
+
 function asMaybeNum(value: number | null | undefined, digits = 4): string {
   return value === null || value === undefined ? '-' : asNum(value, digits);
 }
@@ -45,6 +49,32 @@ function truncate(text: string, max = 180): string {
   }
 
   return text.length <= max ? text : `${text.slice(0, max - 3)}...`;
+}
+
+function hasInformativeNumber(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function formatAgeMs(timestamp: number | null | undefined): string {
+  if (!hasInformativeNumber(timestamp)) {
+    return '-';
+  }
+
+  const ageMs = Date.now() - timestamp;
+  if (ageMs < 0) {
+    return 'clock_skew';
+  }
+  if (ageMs < 1_000) {
+    return `${ageMs}ms`;
+  }
+  if (ageMs < 60_000) {
+    return `${Math.floor(ageMs / 1_000)}s`;
+  }
+  if (ageMs < 3_600_000) {
+    return `${Math.floor(ageMs / 60_000)}m`;
+  }
+
+  return `${Math.floor(ageMs / 3_600_000)}h`;
 }
 
 export class ReportService {
@@ -134,23 +164,77 @@ export class ReportService {
       return '👁️ Market watch belum berisi pair aktif.';
     }
 
-    const lines = signals.slice(0, 8).map((item, index) => {
-      return [
+    const lines = signals.slice(0, 8).map((item, index) =>
+      [
         `${index + 1}. ${item.pair}`,
-        `price=${asNum(item.marketPrice, 8)}`,
-        `spread=${asPct(item.spreadPct)}`,
+        `p=${asNum(item.marketPrice, 8)}`,
+        `s=${asPct(item.spreadPct)}`,
         `liq=${asNum(item.liquidityScore, 1)}`,
-        `chg1m=${asPct(item.change1m)}`,
-        `chg5m=${asPct(item.change5m)}`,
-      ].join(' | ');
-    });
+        `Δ1m=${asPct(item.change1m)}`,
+        `Δ5m=${asPct(item.change5m)}`,
+      ].join(' | '),
+    );
 
     return ['👁️ MARKET WATCH', ...lines].join('\n');
+  }
+
+  private orderbookDebugLines(signal: {
+    bestBid: number;
+    bestAsk: number;
+    spreadBps?: number;
+    bidDepthTop10?: number;
+    askDepthTop10?: number;
+    depthScore?: number;
+    orderbookTimestamp?: number;
+    timestamp: number;
+  }): string[] {
+    const lines: string[] = [];
+    const bidAskParts: string[] = [];
+
+    if (hasInformativeNumber(signal.bestBid)) {
+      bidAskParts.push(`bestBid=${asNum(signal.bestBid, 8)}`);
+    }
+    if (hasInformativeNumber(signal.bestAsk)) {
+      bidAskParts.push(`bestAsk=${asNum(signal.bestAsk, 8)}`);
+    }
+    if (bidAskParts.length > 0) {
+      lines.push(`Orderbook: ${bidAskParts.join(' | ')}`);
+    }
+
+    const depthParts: string[] = [];
+    if (hasInformativeNumber(signal.spreadBps)) {
+      depthParts.push(`spreadBps=${asBps(signal.spreadBps)}`);
+    }
+    if (hasInformativeNumber(signal.bidDepthTop10)) {
+      depthParts.push(`bidDepthTop10=${asNum(signal.bidDepthTop10, 4)}`);
+    }
+    if (hasInformativeNumber(signal.askDepthTop10)) {
+      depthParts.push(`askDepthTop10=${asNum(signal.askDepthTop10, 4)}`);
+    }
+    if (hasInformativeNumber(signal.depthScore)) {
+      depthParts.push(`depthScore=${asNum(signal.depthScore, 1)}`);
+    }
+    if (depthParts.length > 0) {
+      lines.push(`Depth: ${depthParts.join(' | ')}`);
+    }
+
+    const debugTimestamp = signal.orderbookTimestamp ?? signal.timestamp;
+    if (hasInformativeNumber(debugTimestamp)) {
+      lines.push(
+        `Orderbook ts: ${new Date(debugTimestamp).toISOString()} | age=${formatAgeMs(debugTimestamp)}`,
+      );
+    }
+
+    return lines.length > 0 ? lines : ['Orderbook debug: tidak tersedia di runtime path.'];
   }
 
   signalBreakdownText(
     signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
   ): string {
+    const asReasonLine = (items: string[]): string => `Reasons: ${truncate(items.join('; '), 240)}`;
+    const asWarningLine = (items: string[]): string =>
+      items.length > 0 ? `Warnings: ${truncate(items.join('; '), 220)}` : 'Warnings: -';
+
     if (this.isHotlistEntry(signal)) {
       const decision = evaluateHotlistUiDecision(signal);
       return [
@@ -166,8 +250,9 @@ export class ReportService {
         `Gate reason: ${truncate(decision.reason, 180)}`,
         `Price: ${asNum(signal.marketPrice, 8)}`,
         `Spread: ${asPct(signal.spreadPct)}`,
-        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
-        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+        ...this.orderbookDebugLines(signal),
+        asReasonLine(signal.reasons),
+        asWarningLine(signal.warnings),
         `History: ${truncate(signal.historicalMatchSummary, 180)}`,
       ].join('\n');
     }
@@ -181,8 +266,9 @@ export class ReportService {
         `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
         `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
         `Action: ${signal.recommendedAction}`,
-        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
-        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+        ...this.orderbookDebugLines(signal),
+        asReasonLine(signal.reasons),
+        asWarningLine(signal.warnings),
         `History: ${truncate(signal.historicalMatchSummary, 180)}`,
       ].join('\n');
     }
@@ -194,8 +280,9 @@ export class ReportService {
       `Regime: ${signal.regime}`,
       `Price: ${asNum(signal.marketPrice, 8)}`,
       `Spread: ${asPct(signal.spreadPct)}`,
-      `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
-      `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+      ...this.orderbookDebugLines(signal),
+      asReasonLine(signal.reasons),
+      asWarningLine(signal.warnings),
     ].join('\n');
   }
 

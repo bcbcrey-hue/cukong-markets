@@ -85,6 +85,7 @@ interface UserFlowState {
 }
 
 const userFlows = new Map<number, UserFlowState>();
+const TELEGRAM_SAFE_MESSAGE_LIMIT = 3500;
 
 function getUserFlow(userId: number): UserFlowState {
   const current = userFlows.get(userId) ?? { awaitingUpload: false };
@@ -289,12 +290,53 @@ async function replyText(
   text: string,
   extra?: Parameters<Context['reply']>[1],
 ): Promise<void> {
-  if (extra) {
-    await ctx.reply(text, extra);
-    return;
+  const chunks = splitTelegramMessage(text, TELEGRAM_SAFE_MESSAGE_LIMIT);
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i]!;
+    const attachExtra = i === chunks.length - 1 ? extra : undefined;
+    if (attachExtra) {
+      await ctx.reply(chunk, attachExtra);
+    } else {
+      await ctx.reply(chunk);
+    }
+  }
+}
+
+function splitTelegramMessage(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) {
+    return [text];
   }
 
-  await ctx.reply(text);
+  const lines = text.split('\n');
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const line of lines) {
+    if (line.length > maxLength) {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+      for (let idx = 0; idx < line.length; idx += maxLength) {
+        chunks.push(line.slice(idx, idx + maxLength));
+      }
+      continue;
+    }
+
+    const next = current ? `${current}\n${line}` : line;
+    if (next.length > maxLength) {
+      chunks.push(current);
+      current = line;
+      continue;
+    }
+    current = next;
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.length > 0 ? chunks : [text.slice(0, maxLength)];
 }
 
 async function replyMainMenu(ctx: Context, text: string): Promise<void> {
