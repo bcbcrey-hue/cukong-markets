@@ -901,7 +901,12 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       const backMenu = resolveHotlistBackMenu(parsed.value);
 
       if (!signal) {
-        await replyText(ctx, 'Signal tidak ditemukan.', monitoringKeyboard);
+        const list = deps.hotlist.list();
+        await replyText(
+          ctx,
+          'Signal tidak ditemukan.',
+          list.length > 0 ? hotlistKeyboard(list, backMenu) : monitoringKeyboard,
+        );
       } else {
         await replyText(
           ctx,
