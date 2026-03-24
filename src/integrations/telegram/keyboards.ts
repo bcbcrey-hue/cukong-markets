@@ -132,6 +132,33 @@ function bindPositionValue(backMenu: TelegramMenuId, positionId: string): string
   return `${backMenu}:${positionId}`;
 }
 
+
+function canBuyFromHotlist(item: HotlistEntry): boolean {
+  return item.edgeValid && ['ENTER', 'CONFIRM_ENTRY'].includes(item.recommendedAction);
+}
+
+function hotlistStatusLabel(item: HotlistEntry): 'WATCH' | 'CAUTION' | 'BLOCKED' {
+  if (!item.edgeValid || item.recommendedAction === 'AVOID') {
+    return 'BLOCKED';
+  }
+
+  if (item.recommendedAction === 'WATCH') {
+    return 'WATCH';
+  }
+
+  return 'CAUTION';
+}
+
+export function resolveHotlistGate(item: HotlistEntry): {
+  canBuy: boolean;
+  label: 'WATCH' | 'CAUTION' | 'BLOCKED';
+} {
+  return {
+    canBuy: canBuyFromHotlist(item),
+    label: hotlistStatusLabel(item),
+  };
+}
+
 export const mainMenuKeyboard = Markup.keyboard([
   [TELEGRAM_MAIN_MENU.EXECUTE, TELEGRAM_MAIN_MENU.EMERGENCY],
   [TELEGRAM_MAIN_MENU.MONITORING, TELEGRAM_MAIN_MENU.TRADE],
@@ -265,16 +292,25 @@ export function hotlistKeyboard(
   backMenu: TelegramMenuId = 'MON',
 ) {
   return Markup.inlineKeyboard([
-    ...hotlist.slice(0, 8).map((item) => [
-      Markup.button.callback(
+    ...hotlist.slice(0, 8).map((item) => {
+      const gate = resolveHotlistGate(item);
+      const detailButton = Markup.button.callback(
         `${item.rank}. ${item.pair} (${item.score.toFixed(0)})`,
         buildCallback({ namespace: 'SIG', action: 'DETAIL', value: backMenu, pair: item.pair }),
-      ),
-      Markup.button.callback(
-        `Buy ${item.pair}`,
-        buildCallback({ namespace: 'BUY', action: 'PICK', value: backMenu, pair: item.pair }),
-      ),
-    ]),
+      );
+
+      const actionButton = gate.canBuy
+        ? Markup.button.callback(
+            `Buy ${item.pair}`,
+            buildCallback({ namespace: 'BUY', action: 'PICK', value: backMenu, pair: item.pair }),
+          )
+        : Markup.button.callback(
+            `Status ${gate.label}`,
+            buildCallback({ namespace: 'SIG', action: 'DETAIL', value: backMenu, pair: item.pair }),
+          );
+
+      return [detailButton, actionButton];
+    }),
     [backButton(backMenu)],
   ]);
 }

@@ -168,6 +168,10 @@ export interface SignalCandidate {
   marketPrice: number;
   bestBid: number;
   bestAsk: number;
+  spreadBps: number;
+  bidDepthTop10: number;
+  askDepthTop10: number;
+  depthScore: number;
   liquidityScore: number;
   change1m: number;
   change5m: number;
@@ -177,6 +181,12 @@ export interface SignalCandidate {
 
 export interface HotlistEntry extends SignalCandidate {
   rank: number;
+  recommendedAction: OpportunityAssessment['recommendedAction'];
+  edgeValid: boolean;
+  entryTiming: EntryTimingAssessment;
+  pumpProbability: number;
+  trapProbability: number;
+  historicalMatchSummary: string;
 }
 
 export interface MicrostructureFeatures {
@@ -267,6 +277,10 @@ export interface OpportunityAssessment {
   referencePrice: number;
   bestBid: number;
   bestAsk: number;
+  spreadBps: number;
+  bidDepthTop10: number;
+  askDepthTop10: number;
+  depthScore: number;
   spreadPct: number;
   liquidityScore: number;
   timestamp: number;
@@ -488,6 +502,7 @@ export interface RuntimeState {
   pairCooldowns: Record<string, number>;
   pairs: Record<string, PairRuntimeState>;
   lastHotlist: HotlistEntry[];
+  lastMarketSnapshots: MarketSnapshot[];
   lastSignals: SignalCandidate[];
   lastOpportunities: OpportunityAssessment[];
   tradeCount: number;

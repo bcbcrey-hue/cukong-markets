@@ -11,6 +11,7 @@ import type {
   StoredAccount,
   TradeOutcomeSummary,
   TradeRecord,
+  MarketSnapshot,
 } from '../core/types';
 
 function asNum(value: number, digits = 4): string {
@@ -19,6 +20,10 @@ function asNum(value: number, digits = 4): string {
 
 function asPct(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function asBps(value: number): string {
+  return `${value.toFixed(1)}bps`;
 }
 
 function asMaybeNum(value: number | null | undefined, digits = 4): string {
@@ -87,7 +92,7 @@ export class ReportService {
     return lines.join('\n');
   }
 
-  hotlistText(hotlist: Array<HotlistEntry | SignalCandidate>): string {
+  hotlistText(hotlist: HotlistEntry[]): string {
     if (!hotlist.length) {
       return '🔥 Hotlist kosong.';
     }
@@ -107,6 +112,19 @@ export class ReportService {
         `confidence=${asNum(item.confidence, 2)}`,
         `regime=${item.regime}`,
         `spread=${asPct(item.spreadPct)}`,
+        `spreadBps=${asBps(item.spreadBps)}`,
+        `bestBid=${asNum(item.bestBid, 8)}`,
+        `bestAsk=${asNum(item.bestAsk, 8)}`,
+        `bidTop10=${asNum(item.bidDepthTop10, 2)}`,
+        `askTop10=${asNum(item.askDepthTop10, 2)}`,
+        `depth=${asNum(item.depthScore, 1)}`,
+        `ageMs=${Math.max(0, Date.now() - item.timestamp)}`,
+        `action=${item.recommendedAction}`,
+        `edge=${item.edgeValid}`,
+        `timing=${item.entryTiming.state}`,
+        `pump=${asPct(item.pumpProbability * 100)}`,
+        `trap=${asPct(item.trapProbability * 100)}`,
+        `history=${truncate(item.historicalMatchSummary, 80)}`,
         `reasons=${truncate(reasons, 120)}${warnings}`,
       ].join(' | ');
     });
@@ -114,19 +132,33 @@ export class ReportService {
     return ['🔥 HOTLIST', ...lines].join('\n');
   }
 
-  marketWatchText(hotlist: Array<HotlistEntry | SignalCandidate>): string {
-    if (!hotlist.length) {
+  marketWatchText(snapshots: MarketSnapshot[]): string {
+    if (!snapshots.length) {
       return '👁️ Market watch belum berisi pair aktif.';
     }
 
-    const lines = hotlist.slice(0, 8).map((item, index) => {
+    const lines = snapshots.slice(0, 8).map((snapshot, index) => {
+      const bestBid = snapshot.orderbook?.bestBid ?? snapshot.ticker.bid;
+      const bestAsk = snapshot.orderbook?.bestAsk ?? snapshot.ticker.ask;
+      const spreadBps =
+        bestBid > 0 && bestAsk > 0 ? ((bestAsk - bestBid) / ((bestBid + bestAsk) / 2)) * 10_000 : 0;
+      const bidDepthTop10 = (snapshot.orderbook?.bids ?? [])
+        .slice(0, 10)
+        .reduce((sum, level) => sum + level.volume, 0);
+      const askDepthTop10 = (snapshot.orderbook?.asks ?? [])
+        .slice(0, 10)
+        .reduce((sum, level) => sum + level.volume, 0);
+      const depthScore = Math.min(100, Math.log10(Math.max(1, bidDepthTop10 + askDepthTop10)) * 20);
       return [
-        `${index + 1}. ${item.pair}`,
-        `price=${asNum(item.marketPrice, 8)}`,
-        `spread=${asPct(item.spreadPct)}`,
-        `liq=${asNum(item.liquidityScore, 1)}`,
-        `chg1m=${asPct(item.change1m)}`,
-        `chg5m=${asPct(item.change5m)}`,
+        `${index + 1}. ${snapshot.pair}`,
+        `price=${asNum(snapshot.ticker.lastPrice, 8)}`,
+        `bestBid=${asNum(bestBid, 8)}`,
+        `bestAsk=${asNum(bestAsk, 8)}`,
+        `spreadBps=${asBps(spreadBps)}`,
+        `bidTop10=${asNum(bidDepthTop10, 2)}`,
+        `askTop10=${asNum(askDepthTop10, 2)}`,
+        `depth=${asNum(depthScore, 1)}`,
+        `ageMs=${Math.max(0, Date.now() - snapshot.timestamp)}`,
       ].join(' | ');
     });
 
@@ -157,7 +189,11 @@ export class ReportService {
       `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
       `Regime: ${signal.regime}`,
       `Price: ${asNum(signal.marketPrice, 8)}`,
-      `Spread: ${asPct(signal.spreadPct)}`,
+      `Best bid/ask: ${asNum(signal.bestBid, 8)} / ${asNum(signal.bestAsk, 8)}`,
+      `Spread: ${asPct(signal.spreadPct)} (${asBps(signal.spreadBps)})`,
+      `Depth top10 bid/ask: ${asNum(signal.bidDepthTop10, 2)} / ${asNum(signal.askDepthTop10, 2)}`,
+      `Depth score: ${asNum(signal.depthScore, 1)}`,
+      `Age: ${Math.max(0, Date.now() - signal.timestamp)} ms`,
       `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
       `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
     ].join('\n');

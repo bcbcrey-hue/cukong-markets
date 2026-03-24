@@ -299,6 +299,7 @@ export async function createApp(): Promise<AppRuntime> {
 
     const hotlist = hotlistService.update(opportunities);
 
+    await state.setMarketSnapshots(snapshots);
     await state.setSignals(scored);
     await state.setOpportunities(opportunities);
     await state.setHotlist(hotlist);

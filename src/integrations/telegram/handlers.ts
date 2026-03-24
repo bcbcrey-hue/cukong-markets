@@ -3,7 +3,6 @@ import type {
   ExecutionMode,
   HotlistEntry,
   PositionRecord,
-  SignalCandidate,
   TradingMode,
 } from '../../core/types';
 import { AccountRegistry } from '../../domain/accounts/accountRegistry';
@@ -31,6 +30,7 @@ import {
   emergencyKeyboard,
   executeTradeKeyboard,
   hotlistKeyboard,
+  resolveHotlistGate,
   isTelegramMenuId,
   mainMenuKeyboard,
   monitoringKeyboard,
@@ -110,7 +110,7 @@ function clearAccountManualFlow(flow: UserFlowState): void {
 function getTopSignal(
   hotlist: HotlistService,
   pair?: string,
-): SignalCandidate | HotlistEntry | undefined {
+): HotlistEntry | undefined {
   const list = hotlist.list();
   if (!pair) {
     return list[0];
@@ -494,7 +494,11 @@ async function openMenu(
       await replyStatus(ctx, deps);
       return;
     case 'MW':
-      await replyText(ctx, deps.report.marketWatchText(deps.hotlist.list()), monitoringKeyboard);
+      await replyText(
+        ctx,
+        deps.report.marketWatchText(deps.state.get().lastMarketSnapshots),
+        monitoringKeyboard,
+      );
       return;
     case 'HOT': {
       const list = deps.hotlist.list();
@@ -911,6 +915,25 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'BUY' && parsed.action === 'PICK' && parsed.pair) {
+      const picked = deps.hotlist.get(parsed.pair);
+
+      if (!picked) {
+        await replyText(ctx, 'Pair tidak ada di hotlist aktif.', hotlistKeyboard(deps.hotlist.list(), 'TRADE'));
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      const gate = resolveHotlistGate(picked);
+      if (!gate.canBuy) {
+        await replyText(
+          ctx,
+          `Buy diblokir untuk ${parsed.pair}. Status: ${gate.label}.`,
+          hotlistKeyboard(deps.hotlist.list(), 'TRADE'),
+        );
+        await ctx.answerCbQuery();
+        return;
+      }
+
       if (userFlow) {
         userFlow.awaitingUpload = false;
         userFlow.pendingBuyPair = parsed.pair;
@@ -1275,6 +1298,18 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       userFlow.pendingBuyPair = undefined;
       userFlow.pendingBuyBackMenu = undefined;
       await replyText(ctx, 'Signal atau default account tidak tersedia.');
+      return;
+    }
+
+    const gate = resolveHotlistGate(signal);
+    if (!gate.canBuy) {
+      userFlow.pendingBuyPair = undefined;
+      userFlow.pendingBuyBackMenu = undefined;
+      await replyText(
+        ctx,
+        `Buy diblokir untuk ${signal.pair}. Status: ${gate.label}.`,
+        hotlistKeyboard(deps.hotlist.list(), 'TRADE'),
+      );
       return;
     }
 

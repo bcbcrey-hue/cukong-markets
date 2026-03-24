@@ -1,5 +1,6 @@
 import type {
   HotlistEntry,
+  MarketSnapshot,
   OpportunityAssessment,
   PairRuntimeState,
   RuntimeState,
@@ -146,6 +147,12 @@ export class StateService {
   async setHotlist(hotlist: HotlistEntry[]): Promise<RuntimeState> {
     return this.patch({
       lastHotlist: hotlist,
+    });
+  }
+
+  async setMarketSnapshots(snapshots: MarketSnapshot[]): Promise<RuntimeState> {
+    return this.patch({
+      lastMarketSnapshots: snapshots,
     });
   }
 

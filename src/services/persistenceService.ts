@@ -40,6 +40,7 @@ export function createDefaultRuntimeState(): RuntimeState {
     pairCooldowns: {},
     pairs: {},
     lastHotlist: [],
+    lastMarketSnapshots: [],
     lastSignals: [],
     lastOpportunities: [],
     tradeCount: 0,
