@@ -183,6 +183,30 @@ export class ReportService {
       ].join('\n');
     }
 
+    if ('rank' in signal) {
+      return [
+        `Pair: ${signal.pair}`,
+        `Rank: ${signal.rank}`,
+        `Score: ${asNum(signal.score, 2)}`,
+        `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
+        `Regime: ${signal.regime}`,
+        `Action: ${signal.recommendedAction}`,
+        `Edge valid: ${signal.edgeValid}`,
+        `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
+        `Pump probability: ${(signal.pumpProbability * 100).toFixed(1)}%`,
+        `Trap probability: ${(signal.trapProbability * 100).toFixed(1)}%`,
+        `Historical match: ${truncate(signal.historicalMatchSummary, 200)}`,
+        `Price: ${asNum(signal.marketPrice, 8)}`,
+        `Best bid/ask: ${asNum(signal.bestBid, 8)} / ${asNum(signal.bestAsk, 8)}`,
+        `Spread: ${asPct(signal.spreadPct)} (${asBps(signal.spreadBps)})`,
+        `Depth top10 bid/ask: ${asNum(signal.bidDepthTop10, 2)} / ${asNum(signal.askDepthTop10, 2)}`,
+        `Depth score: ${asNum(signal.depthScore, 1)}`,
+        `Age: ${Math.max(0, Date.now() - signal.timestamp)} ms`,
+        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
+        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+      ].join('\n');
+    }
+
     return [
       `Pair: ${signal.pair}`,
       `Score: ${asNum(signal.score, 2)}`,

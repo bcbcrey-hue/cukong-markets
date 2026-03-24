@@ -915,10 +915,15 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'BUY' && parsed.action === 'PICK' && parsed.pair) {
+      const backMenu = resolveHotlistBackMenu(parsed.value);
       const picked = deps.hotlist.get(parsed.pair);
 
       if (!picked) {
-        await replyText(ctx, 'Pair tidak ada di hotlist aktif.', hotlistKeyboard(deps.hotlist.list(), 'TRADE'));
+        await replyText(
+          ctx,
+          'Pair tidak ada di hotlist aktif.',
+          hotlistKeyboard(deps.hotlist.list(), backMenu),
+        );
         await ctx.answerCbQuery();
         return;
       }
@@ -928,7 +933,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
         await replyText(
           ctx,
           `Buy diblokir untuk ${parsed.pair}. Status: ${gate.label}.`,
-          hotlistKeyboard(deps.hotlist.list(), 'TRADE'),
+          hotlistKeyboard(deps.hotlist.list(), backMenu),
         );
         await ctx.answerCbQuery();
         return;
@@ -937,7 +942,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       if (userFlow) {
         userFlow.awaitingUpload = false;
         userFlow.pendingBuyPair = parsed.pair;
-        userFlow.pendingBuyBackMenu = isTelegramMenuId(parsed.value) ? parsed.value : 'TRADE';
+        userFlow.pendingBuyBackMenu = backMenu;
         userFlow.pendingConfig = undefined;
         userFlow.pendingSlippageConfirmation = undefined;
       }
@@ -1303,12 +1308,13 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
 
     const gate = resolveHotlistGate(signal);
     if (!gate.canBuy) {
+      const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
       userFlow.pendingBuyPair = undefined;
       userFlow.pendingBuyBackMenu = undefined;
       await replyText(
         ctx,
         `Buy diblokir untuk ${signal.pair}. Status: ${gate.label}.`,
-        hotlistKeyboard(deps.hotlist.list(), 'TRADE'),
+        hotlistKeyboard(deps.hotlist.list(), backMenu),
       );
       return;
     }
