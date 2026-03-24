@@ -22,6 +22,9 @@ import {
   settingsKeyboard,
   strategySettingsKeyboard,
 } from '../src/integrations/telegram/keyboards';
+import { HotlistService } from '../src/domain/market/hotlistService';
+import { ReportService } from '../src/services/reportService';
+import type { OpportunityAssessment } from '../src/core/types';
 import { PersistenceService } from '../src/services/persistenceService';
 import { SettingsService } from '../src/domain/settings/settingsService';
 
@@ -115,6 +118,17 @@ async function main() {
       change5m: 2,
       contributions: [],
       timestamp: Date.now(),
+      recommendedAction: 'ENTER' as const,
+      edgeValid: true,
+      entryTiming: {
+        state: 'READY' as const,
+        quality: 82,
+        reason: 'ready',
+        leadScore: 77,
+      },
+      pumpProbability: 0.8,
+      trapProbability: 0.1,
+      historicalMatchSummary: 'pattern match strong',
     },
   ];
 
@@ -193,6 +207,68 @@ async function main() {
     /BUY_SLIPPAGE/,
     'Buy Slippage button must be removed from Strategy Settings submenu',
   );
+
+  const hotlistService = new HotlistService();
+  const report = new ReportService();
+  const sampleOpportunity: OpportunityAssessment = {
+    pair: 'btc_idr',
+    rawScore: 88,
+    finalScore: 93,
+    confidence: 0.9,
+    pumpProbability: 0.84,
+    continuationProbability: 0.76,
+    trapProbability: 0.12,
+    spoofRisk: 0.15,
+    edgeValid: true,
+    marketRegime: 'BREAKOUT_SETUP',
+    breakoutPressure: 80,
+    volumeAcceleration: 75,
+    orderbookImbalance: 0.4,
+    change1m: 1,
+    change5m: 2,
+    entryTiming: {
+      state: 'READY',
+      quality: 82,
+      reason: 'ready',
+      leadScore: 77,
+    },
+    reasons: ['test'],
+    warnings: [],
+    featureBreakdown: [],
+    historicalContext: {
+      pair: 'btc_idr',
+      snapshotCount: 10,
+      anomalyCount: 0,
+      recentWinRate: 0.66,
+      recentFalseBreakRate: 0.2,
+      regime: 'BREAKOUT_SETUP',
+      patternMatches: [],
+      contextNotes: [],
+      timestamp: Date.now(),
+    },
+    recommendedAction: 'ENTER',
+    riskContext: ['ok'],
+    historicalMatchSummary: 'pattern match strong',
+    referencePrice: 1_000_000_000,
+    bestBid: 999_000_000,
+    bestAsk: 1_001_000_000,
+    spreadPct: 0.2,
+    liquidityScore: 85,
+    timestamp: Date.now(),
+  };
+
+  const runtimeHotlist = hotlistService.update([sampleOpportunity]);
+  assert.equal(runtimeHotlist.length, 1, 'Hotlist runtime should contain mapped entry');
+  assert.equal('finalScore' in runtimeHotlist[0], false, 'Hotlist runtime entry must not leak finalScore');
+
+  const detail = report.signalBreakdownText(runtimeHotlist[0]);
+  assert.match(detail, /Action: ENTER/, 'Hotlist detail must show action from HotlistEntry');
+  assert.match(detail, /Edge valid: YA/, 'Hotlist detail must show edgeValid from HotlistEntry');
+  assert.match(detail, /Timing: READY \(ready\)/, 'Hotlist detail must show entry timing from HotlistEntry');
+  assert.match(detail, /Pump probability: 84\.0%/, 'Hotlist detail must show pump probability from HotlistEntry');
+  assert.match(detail, /Trap probability: 12\.0%/, 'Hotlist detail must show trap probability from HotlistEntry');
+  assert.match(detail, /History: pattern match strong/, 'Hotlist detail must show history summary from HotlistEntry');
+  assert.doesNotMatch(detail, /Final score:/, 'Hotlist detail must not use opportunity finalScore formatter branch');
 
   console.log('PASS telegram_menu_navigation_probe');
 }
