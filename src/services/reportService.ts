@@ -47,6 +47,18 @@ function truncate(text: string, max = 180): string {
 }
 
 export class ReportService {
+  private isHotlistEntry(
+    signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
+  ): signal is HotlistEntry {
+    return 'rank' in signal && 'recommendedAction' in signal;
+  }
+
+  private isOpportunityAssessment(
+    signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
+  ): signal is OpportunityAssessment {
+    return 'finalScore' in signal;
+  }
+
   shadowRunStatusText(summary: ShadowRunTelegramSummary): string {
     const lines = [
       '🌘 SHADOW RUN (NON-DESTRUKTIF)',
@@ -136,22 +148,7 @@ export class ReportService {
   signalBreakdownText(
     signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
   ): string {
-    if ('finalScore' in signal) {
-      return [
-        `Pair: ${signal.pair}`,
-        `Final score: ${asNum(signal.finalScore, 2)}`,
-        `Pump probability: ${(signal.pumpProbability * 100).toFixed(1)}%`,
-        `Trap probability: ${(signal.trapProbability * 100).toFixed(1)}%`,
-        `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
-        `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
-        `Action: ${signal.recommendedAction}`,
-        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
-        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
-        `History: ${truncate(signal.historicalMatchSummary, 180)}`,
-      ].join('\n');
-    }
-
-    if ('recommendedAction' in signal) {
+    if (this.isHotlistEntry(signal)) {
       return [
         `Pair: ${signal.pair}`,
         `Score: ${asNum(signal.score, 2)}`,
@@ -163,6 +160,21 @@ export class ReportService {
         `Edge valid: ${signal.edgeValid ? 'YA' : 'TIDAK'}`,
         `Price: ${asNum(signal.marketPrice, 8)}`,
         `Spread: ${asPct(signal.spreadPct)}`,
+        `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
+        `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
+        `History: ${truncate(signal.historicalMatchSummary, 180)}`,
+      ].join('\n');
+    }
+
+    if (this.isOpportunityAssessment(signal)) {
+      return [
+        `Pair: ${signal.pair}`,
+        `Final score: ${asNum(signal.finalScore, 2)}`,
+        `Pump probability: ${(signal.pumpProbability * 100).toFixed(1)}%`,
+        `Trap probability: ${(signal.trapProbability * 100).toFixed(1)}%`,
+        `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
+        `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
+        `Action: ${signal.recommendedAction}`,
         `Reasons: ${truncate(signal.reasons.join('; '), 240)}`,
         `Warnings: ${truncate(signal.warnings.join('; ') || '-', 220)}`,
         `History: ${truncate(signal.historicalMatchSummary, 180)}`,
