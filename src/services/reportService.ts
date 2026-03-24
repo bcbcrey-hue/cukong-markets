@@ -77,6 +77,34 @@ function formatAgeMs(timestamp: number | null | undefined): string {
   return `${Math.floor(ageMs / 3_600_000)}h`;
 }
 
+function compactOrderbookDebug(item: {
+  spreadBps?: number;
+  depthScore?: number;
+  orderbookTimestamp?: number;
+  timestamp: number;
+}): string {
+  const parts: string[] = [];
+
+  if (hasInformativeNumber(item.spreadBps)) {
+    parts.push(`spreadBps=${asBps(item.spreadBps)}`);
+  }
+
+  if (hasInformativeNumber(item.depthScore)) {
+    parts.push(`depthScore=${asNum(item.depthScore, 1)}`);
+  }
+
+  if (parts.length === 0) {
+    return '';
+  }
+
+  const debugTimestamp = item.orderbookTimestamp ?? item.timestamp;
+  if (hasInformativeNumber(debugTimestamp)) {
+    parts.push(`age=${formatAgeMs(debugTimestamp)}`);
+  }
+
+  return `debug=${parts.join(',')}`;
+}
+
 export class ReportService {
   private isHotlistEntry(
     signal: HotlistEntry | SignalCandidate | OpportunityAssessment,
@@ -144,8 +172,7 @@ export class ReportService {
       const warnings = Array.isArray(item.warnings) && item.warnings.length
         ? ` | warnings=${truncate(item.warnings.join('; '), 100)}`
         : '';
-
-      return [
+      const segments = [
         `${index + 1}. ${item.pair}`,
         `score=${asNum(item.score, 1)}`,
         `status=${decision.status}`,
@@ -153,7 +180,14 @@ export class ReportService {
         `regime=${item.regime}`,
         `spread=${asPct(item.spreadPct)}`,
         `reasons=${truncate(reasons, 120)}${warnings}`,
-      ].join(' | ');
+      ];
+
+      const debug = compactOrderbookDebug(item);
+      if (debug) {
+        segments.splice(6, 0, debug);
+      }
+
+      return segments.join(' | ');
     });
 
     return ['🔥 HOTLIST', ...lines].join('\n');
