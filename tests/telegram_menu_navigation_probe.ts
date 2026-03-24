@@ -366,6 +366,8 @@ async function main() {
   assert.equal('finalScore' in runtimeHotlist[0], false, 'Hotlist runtime entry must not leak finalScore');
 
   const detail = report.signalBreakdownText(runtimeHotlist[0]);
+  const hotlistCompact = report.hotlistText(runtimeHotlist);
+  const sampleHotlistCompact = report.hotlistText(sampleHotlist);
   const marketWatch = report.marketWatchText(runtimeHotlist);
   assert.match(marketWatch, /👁️ MARKET WATCH/, 'Market watch header should be present');
   assert.match(marketWatch, /p=1000000000\.00000000/, 'Market watch should keep compact price field');
@@ -386,6 +388,9 @@ async function main() {
   assert.match(detail, /depthScore=85\.2/, 'Hotlist detail should surface depthScore runtime debug');
   assert.match(detail, /Orderbook ts:/, 'Hotlist detail should surface orderbook timestamp + age');
   assert.doesNotMatch(detail, /Final score:/, 'Hotlist detail must not use opportunity finalScore formatter branch');
+  assert.match(hotlistCompact, /debug=spreadBps=20\.2bps,depthScore=85\.2,age=/, 'Hotlist compact should include selected orderbook debug fields');
+  assert.match(sampleHotlistCompact, /debug=spreadBps=40\.1bps,depthScore=70\.1,age=/, 'Hotlist compact should include debug fields for other entries');
+  assert.doesNotMatch(hotlistCompact, /bestBid=/, 'Hotlist compact should stay concise and avoid verbose bid/ask debug');
 
   const sparseDetail = report.signalBreakdownText({
     ...runtimeHotlist[0],
@@ -397,6 +402,16 @@ async function main() {
   });
   assert.doesNotMatch(sparseDetail, /spreadBps=0\.0bps/, 'Zero spreadBps should not be spammed');
   assert.doesNotMatch(sparseDetail, /depthScore=0\.0/, 'Zero depth score should not be spammed');
+
+  const sparseHotlistCompact = report.hotlistText([
+    {
+      ...runtimeHotlist[0],
+      spreadBps: 0,
+      depthScore: 0,
+      orderbookTimestamp: undefined,
+    },
+  ]);
+  assert.doesNotMatch(sparseHotlistCompact, /debug=/, 'Hotlist compact should skip non-informative zero debug values');
 
   console.log('PASS telegram_menu_navigation_probe');
 }
