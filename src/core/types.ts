@@ -177,6 +177,12 @@ export interface SignalCandidate {
 
 export interface HotlistEntry extends SignalCandidate {
   rank: number;
+  recommendedAction: OpportunityAssessment['recommendedAction'];
+  edgeValid: boolean;
+  entryTiming: EntryTimingAssessment;
+  pumpProbability: number;
+  trapProbability: number;
+  historicalMatchSummary: string;
 }
 
 export interface MicrostructureFeatures {
