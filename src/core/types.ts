@@ -168,6 +168,11 @@ export interface SignalCandidate {
   marketPrice: number;
   bestBid: number;
   bestAsk: number;
+  spreadBps?: number;
+  bidDepthTop10?: number;
+  askDepthTop10?: number;
+  depthScore?: number;
+  orderbookTimestamp?: number;
   liquidityScore: number;
   change1m: number;
   change5m: number;
@@ -273,6 +278,11 @@ export interface OpportunityAssessment {
   referencePrice: number;
   bestBid: number;
   bestAsk: number;
+  spreadBps?: number;
+  bidDepthTop10?: number;
+  askDepthTop10?: number;
+  depthScore?: number;
+  orderbookTimestamp?: number;
   spreadPct: number;
   liquidityScore: number;
   timestamp: number;

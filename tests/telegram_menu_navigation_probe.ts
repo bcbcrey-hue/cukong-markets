@@ -124,6 +124,11 @@ async function main() {
       marketPrice: 1_000_000_000,
       bestBid: 999_000_000,
       bestAsk: 1_001_000_000,
+      spreadBps: 20.2,
+      bidDepthTop10: 120.4567,
+      askDepthTop10: 110.3456,
+      depthScore: 85.2,
+      orderbookTimestamp: Date.now() - 3_000,
       liquidityScore: 85,
       change1m: 1,
       change5m: 2,
@@ -156,6 +161,11 @@ async function main() {
       marketPrice: 50_000_000,
       bestBid: 49_900_000,
       bestAsk: 50_100_000,
+      spreadBps: 40.1,
+      bidDepthTop10: 60.45,
+      askDepthTop10: 59.87,
+      depthScore: 70.1,
+      orderbookTimestamp: Date.now() - 5_000,
       liquidityScore: 70,
       change1m: 0.2,
       change5m: 0.5,
@@ -188,6 +198,11 @@ async function main() {
       marketPrice: 15_000,
       bestBid: 14_850,
       bestAsk: 15_150,
+      spreadBps: 199.9,
+      bidDepthTop10: 10.2,
+      askDepthTop10: 12.7,
+      depthScore: 41.4,
+      orderbookTimestamp: Date.now() - 9_000,
       liquidityScore: 40,
       change1m: -0.8,
       change5m: -1.9,
@@ -336,6 +351,11 @@ async function main() {
     referencePrice: 1_000_000_000,
     bestBid: 999_000_000,
     bestAsk: 1_001_000_000,
+    spreadBps: 20.2,
+    bidDepthTop10: 120.4567,
+    askDepthTop10: 110.3456,
+    depthScore: 85.2,
+    orderbookTimestamp: Date.now() - 3_000,
     spreadPct: 0.2,
     liquidityScore: 85,
     timestamp: Date.now(),
@@ -346,6 +366,11 @@ async function main() {
   assert.equal('finalScore' in runtimeHotlist[0], false, 'Hotlist runtime entry must not leak finalScore');
 
   const detail = report.signalBreakdownText(runtimeHotlist[0]);
+  const marketWatch = report.marketWatchText(runtimeHotlist);
+  assert.match(marketWatch, /👁️ MARKET WATCH/, 'Market watch header should be present');
+  assert.match(marketWatch, /p=1000000000\.00000000/, 'Market watch should keep compact price field');
+  assert.match(marketWatch, /Δ1m=1\.00%/, 'Market watch should keep short delta field');
+  assert.doesNotMatch(marketWatch, /price=/, 'Market watch should use compact format');
   assert.match(detail, /Action: ENTER/, 'Hotlist detail must show action from HotlistEntry');
   assert.match(detail, /Edge valid: YA/, 'Hotlist detail must show edgeValid from HotlistEntry');
   assert.match(detail, /Status: READY/, 'Hotlist detail must show UI status derived from action and edge gate');
@@ -353,7 +378,25 @@ async function main() {
   assert.match(detail, /Pump probability: 84\.0%/, 'Hotlist detail must show pump probability from HotlistEntry');
   assert.match(detail, /Trap probability: 12\.0%/, 'Hotlist detail must show trap probability from HotlistEntry');
   assert.match(detail, /History: pattern match strong/, 'Hotlist detail must show history summary from HotlistEntry');
+  assert.match(detail, /bestBid=999000000\.00000000/, 'Hotlist detail should surface bestBid runtime debug');
+  assert.match(detail, /bestAsk=1001000000\.00000000/, 'Hotlist detail should surface bestAsk runtime debug');
+  assert.match(detail, /spreadBps=20\.2bps/, 'Hotlist detail should surface spreadBps runtime debug');
+  assert.match(detail, /bidDepthTop10=120\.4567/, 'Hotlist detail should surface bid depth runtime debug');
+  assert.match(detail, /askDepthTop10=110\.3456/, 'Hotlist detail should surface ask depth runtime debug');
+  assert.match(detail, /depthScore=85\.2/, 'Hotlist detail should surface depthScore runtime debug');
+  assert.match(detail, /Orderbook ts:/, 'Hotlist detail should surface orderbook timestamp + age');
   assert.doesNotMatch(detail, /Final score:/, 'Hotlist detail must not use opportunity finalScore formatter branch');
+
+  const sparseDetail = report.signalBreakdownText({
+    ...runtimeHotlist[0],
+    spreadBps: 0,
+    bidDepthTop10: 0,
+    askDepthTop10: 0,
+    depthScore: 0,
+    orderbookTimestamp: undefined,
+  });
+  assert.doesNotMatch(sparseDetail, /spreadBps=0\.0bps/, 'Zero spreadBps should not be spammed');
+  assert.doesNotMatch(sparseDetail, /depthScore=0\.0/, 'Zero depth score should not be spammed');
 
   console.log('PASS telegram_menu_navigation_probe');
 }

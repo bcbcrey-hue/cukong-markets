@@ -59,6 +59,16 @@ Dokumen ini hanya mencatat perubahan yang benar-benar masuk ke source aktual.
 - `npm run test:probes`
 - pada kondisi final, `npm run test:probes` sudah mencakup probe safety tambahan untuk `buy_entry_price_guard`, `live_submission_uncertain`, dan `cancel_submission_uncertain`
 
+### Sinkronisasi catatan testing Telegram (2026-03-24 UTC)
+
+- ✅ `npm run lint`
+- ✅ `npm run build`
+- ✅ `npm run typecheck:probes`
+- ⚠️ `npx tsx tests/telegram_menu_navigation_probe.ts` (gagal awal karena `DATA_DIR` belum diset pada environment lokal probe)
+- ✅ `DATA_DIR=/tmp/cukong-probe-nav npx tsx tests/telegram_menu_navigation_probe.ts`
+- ✅ `npx tsx tests/telegram_message_chunking_probe.ts`
+- ✅ `npm run verify`
+
 ## Finalisasi verifikasi (2026-03-22 UTC)
 
 - Bukti run literal terbaru disimpan di `test_reports/npm_ci_final.txt`, `test_reports/typecheck_probes_final.txt`, `test_reports/probe_list_final.txt`, `test_reports/probe_audit_final.txt`, `test_reports/test_probes_final.txt`, dan `test_reports/verify_final.txt`.
