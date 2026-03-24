@@ -13,6 +13,7 @@ const officialProbes = [
   'tests/nginx_renderer_probe.ts',
   'tests/http_servers_probe.ts',
   'tests/telegram_menu_navigation_probe.ts',
+  'tests/telegram_message_chunking_probe.ts',
   'tests/telegram_slippage_confirmation_probe.ts',
   'tests/telegram_manual_accounts_probe.ts',
   'tests/runtime_backend_regression.ts',
