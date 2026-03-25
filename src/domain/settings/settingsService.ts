@@ -1,6 +1,7 @@
 import type {
   BacktestSettings,
   BotSettings,
+  DiscoverySettings,
   ExecutionMode,
   RiskSettings,
   ScannerSettings,
@@ -38,6 +39,10 @@ export class SettingsService {
       scanner: {
         ...defaults.scanner,
         ...input.scanner,
+      },
+      discovery: {
+        ...defaults.discovery,
+        ...input.discovery,
       },
       workers: {
         ...defaults.workers,
@@ -162,6 +167,18 @@ export class SettingsService {
     return this.patch({
       scanner: {
         ...this.settings.scanner,
+        ...partial,
+      },
+    });
+  }
+
+
+  async patchDiscovery(
+    partial: Partial<DiscoverySettings>,
+  ): Promise<BotSettings> {
+    return this.patch({
+      discovery: {
+        ...this.settings.discovery,
         ...partial,
       },
     });

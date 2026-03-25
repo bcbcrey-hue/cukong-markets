@@ -74,6 +74,15 @@ export interface EnvConfig {
   hotlistLimit: number;
   maxPairsTracked: number;
 
+  discoveryAnomalySlots: number;
+  discoveryRotationSlots: number;
+  discoveryStealthSlots: number;
+  discoveryLiquidLeaderSlots: number;
+  discoveryMinVolumeIdr: number;
+  discoveryMaxSpreadPct: number;
+  discoveryMinDepthScore: number;
+  discoveryMajorPairMaxShare: number;
+
   defaultTradingMode: TradingMode;
   defaultQuoteAsset: string;
 
@@ -213,6 +222,14 @@ function readNumber(name: string, fallback: number): number {
   }
 
   return parsed;
+}
+
+function readNumberInRange(name: string, fallback: number, min: number, max: number): number {
+  const value = readNumber(name, fallback);
+  if (value < min || value > max) {
+    throw new Error(`Invalid number in environment variable ${name}: ${value}. Expected ${min}..${max}`);
+  }
+  return value;
 }
 
 function readBoolean(name: string, fallback: boolean): boolean {
@@ -406,6 +423,15 @@ export const env: EnvConfig = {
   marketWatchIntervalMs: readNumber('MARKET_WATCH_INTERVAL_MS', 10_000),
   hotlistLimit: readNumber('HOTLIST_LIMIT', 15),
   maxPairsTracked: readNumber('MAX_PAIRS_TRACKED', 250),
+
+  discoveryAnomalySlots: readNumberInRange('DISCOVERY_ANOMALY_SLOTS', 3, 0, 100),
+  discoveryRotationSlots: readNumberInRange('DISCOVERY_ROTATION_SLOTS', 4, 0, 100),
+  discoveryStealthSlots: readNumberInRange('DISCOVERY_STEALTH_SLOTS', 2, 0, 100),
+  discoveryLiquidLeaderSlots: readNumberInRange('DISCOVERY_LIQUID_LEADER_SLOTS', 3, 0, 100),
+  discoveryMinVolumeIdr: readNumberInRange('DISCOVERY_MIN_VOLUME_IDR', 150_000_000, 0, Number.MAX_SAFE_INTEGER),
+  discoveryMaxSpreadPct: readNumberInRange('DISCOVERY_MAX_SPREAD_PCT', 1.2, 0, 100),
+  discoveryMinDepthScore: readNumberInRange('DISCOVERY_MIN_DEPTH_SCORE', 15, 0, 100),
+  discoveryMajorPairMaxShare: readNumberInRange('DISCOVERY_MAJOR_PAIR_MAX_SHARE', 0.55, 0, 1),
 
   defaultTradingMode: readStringEnum(
     'DEFAULT_TRADING_MODE',

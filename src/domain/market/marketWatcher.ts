@@ -149,10 +149,8 @@ export class MarketWatcher {
 
   async batchSnapshot(limit = 10): Promise<MarketSnapshot[]> {
     const tickers = await this.indodax.getTickers();
-    const metrics = this.universe.updateFromTickers(tickers);
-    const targets = metrics
-      .sort((a, b) => b.volumeIdr - a.volumeIdr)
-      .slice(0, limit);
+    this.universe.updateFromTickers(tickers);
+    const targets = this.universe.listSnapshots(limit);
 
     const snapshots: MarketSnapshot[] = [];
 
