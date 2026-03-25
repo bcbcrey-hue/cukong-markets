@@ -28,6 +28,8 @@ npm run runtime:contract
 
 Output JSON dari command ini dicetak ke stdout dan otomatis ditulis ke `test_reports/runtime_contract_batch3_current.json` sebagai artefak resmi kontrak target yang harus dipenuhi saat validasi di VPS.
 
+Di CI (`.github/workflows/ci.yml`), command yang sama dijalankan dan artifact tersebut di-upload agar bukti kontrak runtime tidak hanya bergantung pada eksekusi lokal.
+
 ## Evidence gate yang WAJIB saat validasi VPS (batch berikutnya)
 
 > Penting: checklist di bawah untuk validasi VPS nyata, bukan bukti dari level repo saja.
@@ -94,4 +96,3 @@ Yang **belum bisa dibuktikan dari repo saja**:
 - Telegram live connect sukses di VPS
 - bind/listen process aktual di host VPS target
 - hasil probe endpoint pada instance deploy nyata
-

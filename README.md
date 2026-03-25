@@ -26,11 +26,29 @@ npm run verify
 
 `npm run verify` menjalankan lint + typecheck probe (`src/**/*.ts` + `tests/**/*.ts`) + build artifact + seluruh **official runtime probes**.
 
+Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` + `pull_request`, dengan urutan check:
+
+- `npm ci`
+- `npm run lint`
+- `npm run typecheck:probes`
+- `npm run build`
+- `npm run probe:list`
+- `npm run probe:audit`
+- `npm run test:probes`
+- `npm run verify`
+- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch3_current.json`)
+
 Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
 
 ```bash
 npm run probe:list
 ```
+
+Probe official untuk kontrak ketahanan startup/state/scheduler:
+
+- `tests/startup_corrupted_state_probe.ts` (validasi recovery startup ketika `runtime-state.json` korup + bukti file quarantine)
+- `tests/state_atomicity_probe.ts` (validasi `StateService.patch()` tidak commit state in-memory bila write persistence gagal)
+- `tests/scheduler_overlap_guard_probe.ts` (forced concurrent run untuk bukti overlap guard scheduler)
 
 `tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
 
@@ -118,6 +136,12 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
 - **BELUM TERBUKTI sebagai live trading production end-to-end.**
 
 Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
+
+## Batas pengujian yang belum tercakup penuh
+
+- Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
+- End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
+- Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.
 
 ## Catatan penting
 
