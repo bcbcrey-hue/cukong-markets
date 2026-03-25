@@ -1,90 +1,25 @@
-import { env } from '../../config/env';
 import { logger } from '../../core/logger';
-import type {
-  MarketSnapshot,
-  OrderbookSnapshot,
-  PairTickerSnapshot,
-  TradePrint,
-} from '../../core/types';
+import type { DiscoverySettings, MarketSnapshot, PairTickerSnapshot, TradePrint } from '../../core/types';
 import type { IndodaxClient } from '../../integrations/indodax/client';
-import type { IndodaxOrderbook } from '../../integrations/indodax/publicApi';
 import type { PairUniverse } from './pairUniverse';
+import { DiscoveryEngine } from './discoveryEngine';
 
 interface TickerPoint {
   price: number;
   volumeQuote: number;
-  capturedAt: number;
-}
-
-function sumTopN(side: Array<[number, number]>, n = 5): number {
-  return side.slice(0, n).reduce((sum, [, size]) => sum + size, 0);
-}
-
-function calcImbalance(book: IndodaxOrderbook): number {
-  const bid = sumTopN(book.buy, 5);
-  const ask = sumTopN(book.sell, 5);
-  const total = bid + ask;
-  if (total <= 0) {
-    return 0;
-  }
-  return (bid - ask) / total;
 }
 
 export class MarketWatcher {
-  private history = new Map<string, TickerPoint[]>();
   private inferredTrades = new Map<string, TradePrint[]>();
+  private lastTickerByPair = new Map<string, TickerPoint>();
+  private readonly discoveryEngine: DiscoveryEngine;
 
   constructor(
     private readonly indodax: IndodaxClient,
     private readonly universe: PairUniverse,
-  ) {}
-
-  private updateHistory(snapshot: PairTickerSnapshot): TickerPoint | undefined {
-    const current = this.history.get(snapshot.pair) ?? [];
-    const previous = current.at(-1);
-
-    current.push({
-      price: snapshot.lastPrice,
-      volumeQuote: snapshot.volume24hQuote,
-      capturedAt: snapshot.timestamp,
-    });
-
-    while (current.length > env.scannerHistoryLimit) {
-      current.shift();
-    }
-
-    this.history.set(snapshot.pair, current);
-    return previous;
-  }
-
-  private percentChange(current: number, previous?: number): number {
-    if (!previous || previous <= 0) {
-      return 0;
-    }
-
-    return ((current - previous) / previous) * 100;
-  }
-
-  private computeLiquidityScore(bestBid: number, bestAsk: number, book: IndodaxOrderbook): number {
-    const spread = bestAsk > 0 ? ((bestAsk - bestBid) / bestAsk) * 100 : 0;
-    const depth = sumTopN(book.buy, 5) + sumTopN(book.sell, 5);
-
-    const spreadScore = Math.max(0, 100 - spread * 100);
-    const depthScore = Math.min(100, depth);
-
-    return (spreadScore * 0.6) + (depthScore * 0.4);
-  }
-
-  private getPriceBefore(pair: string, thresholdMs: number): number | undefined {
-    const points = this.history.get(pair) ?? [];
-
-    for (let index = points.length - 1; index >= 0; index -= 1) {
-      if ((points[index]?.capturedAt ?? 0) <= thresholdMs) {
-        return points[index]?.price;
-      }
-    }
-
-    return points[0]?.price;
+    private readonly getDiscoverySettings: () => DiscoverySettings,
+  ) {
+    this.discoveryEngine = new DiscoveryEngine(this.universe);
   }
 
   private inferTradePrints(
@@ -122,91 +57,59 @@ export class MarketWatcher {
     return next;
   }
 
-  private buildOrderbookSnapshot(
-    pair: string,
-    orderbook: IndodaxOrderbook,
-    timestamp: number,
-  ): OrderbookSnapshot {
-    const bids = orderbook.buy.map(([price, volume]) => ({ price, volume }));
-    const asks = orderbook.sell.map(([price, volume]) => ({ price, volume }));
-    const bestBid = bids[0]?.price ?? 0;
-    const bestAsk = asks[0]?.price ?? 0;
-    const spread = Math.max(0, bestAsk - bestBid);
-    const midPrice = bestBid > 0 && bestAsk > 0 ? (bestBid + bestAsk) / 2 : 0;
-
-    return {
-      pair,
-      bids,
-      asks,
-      bestBid,
-      bestAsk,
-      spread,
-      spreadPct: bestAsk > 0 ? (spread / bestAsk) * 100 : 0,
-      midPrice,
-      timestamp,
-    };
-  }
-
   async batchSnapshot(limit = 10): Promise<MarketSnapshot[]> {
     const tickers = await this.indodax.getTickers();
     this.universe.updateFromTickers(tickers);
-    const targets = this.universe
-      .listSnapshots()
-      .sort((a, b) => b.volumeIdr - a.volumeIdr)
-      .slice(0, Math.max(0, limit));
+
+    const discovery = await this.discoveryEngine.discover(
+      Math.max(0, limit),
+      async (pair) => this.indodax.getDepth(pair),
+      this.getDiscoverySettings(),
+    );
 
     const snapshots: MarketSnapshot[] = [];
 
-    for (const item of targets) {
+    for (const selected of discovery.selected) {
       try {
-        const orderbook = await this.indodax.getDepth(item.pair);
         const timestamp = Date.now();
+        const raw = selected.snapshot;
         const ticker: PairTickerSnapshot = {
-          pair: item.pair,
-          lastPrice: item.lastPrice,
-          bid: item.bestBid,
-          ask: item.bestAsk,
-          high24h: item.high24h,
-          low24h: item.low24h,
-          volume24hBase: item.volumeBtc,
-          volume24hQuote: item.volumeIdr,
-          change24hPct: 0,
+          pair: raw.pair,
+          lastPrice: raw.lastPrice,
+          bid: raw.bestBid,
+          ask: raw.bestAsk,
+          high24h: raw.high24h,
+          low24h: raw.low24h,
+          volume24hBase: raw.volumeBtc,
+          volume24hQuote: raw.volumeIdr,
+          change24hPct: raw.low24h > 0 ? ((raw.lastPrice - raw.low24h) / raw.low24h) * 100 : 0,
           timestamp,
         };
-        const previous = this.updateHistory(ticker);
-        const recentTrades = this.inferTradePrints(ticker, previous);
-        const snapshotOrderbook = this.buildOrderbookSnapshot(item.pair, orderbook, timestamp);
 
-        const prev1m = this.getPriceBefore(item.pair, timestamp - 60_000);
-        const prev5m = this.getPriceBefore(item.pair, timestamp - 300_000);
-
-        ticker.change24hPct = this.percentChange(
-          ticker.lastPrice,
-          ticker.low24h || ticker.lastPrice,
-        );
+        const previous = this.lastTickerByPair.get(ticker.pair);
+        this.lastTickerByPair.set(ticker.pair, {
+          price: ticker.lastPrice,
+          volumeQuote: ticker.volume24hQuote,
+        });
 
         snapshots.push({
-          pair: item.pair,
-          ticker: {
-            ...ticker,
-            change24hPct: this.percentChange(
-              ticker.lastPrice,
-              ticker.low24h || ticker.lastPrice,
-            ),
-          },
-          orderbook: snapshotOrderbook,
-          recentTrades,
+          pair: selected.pair,
+          ticker,
+          orderbook: discovery.orderbookByPair.get(selected.pair) ?? null,
+          recentTrades: this.inferTradePrints(ticker, previous),
           timestamp,
         });
       } catch (error) {
-        logger.warn({ pair: item.pair, error }, 'failed to build market snapshot');
+        logger.warn({ pair: selected.pair, error }, 'failed to build market snapshot');
       }
     }
 
     return snapshots;
   }
 
-  exportHistory(): Record<string, Array<{ price: number; volumeQuote: number; capturedAt: number }>> {
-    return Object.fromEntries(this.history.entries());
+  exportHistory(): Record<string, Array<{ price: number; volumeQuote: number }>> {
+    return Object.fromEntries(
+      [...this.lastTickerByPair.entries()].map(([pair, point]) => [pair, [point]]),
+    );
   }
 }
