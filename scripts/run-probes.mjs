@@ -32,6 +32,7 @@ const officialProbes = [
   'tests/discovery_health_observability_probe.ts',
   'tests/ticker_quote_flow_features_probe.ts',
   'tests/runtime_backend_regression.ts',
+  'tests/last_signals_contract_probe.ts',
   'tests/live_execution_hardening_probe.ts',
   'tests/execution_summary_failed_probe.ts',
   'tests/buy_entry_price_guard_probe.ts',
