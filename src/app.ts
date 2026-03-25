@@ -317,7 +317,7 @@ export async function createApp(): Promise<AppRuntime> {
 
     await state.setMarketOverview(marketOverview);
     await state.setPumpCandidates(pumpCandidates);
-    await state.setSignals(pumpCandidates);
+    await state.setSignals(scored);
     await state.setOpportunities(opportunities);
     await state.setHotlist(hotlist);
     await persistence.saveHotlistSnapshot(hotlist);

@@ -288,6 +288,11 @@ Komponen lain bisa salah mengira `lastSignals` adalah seluruh universe signal te
 **Kesimpulan audit:**
 Ada mismatch semantics antara nama data dan isi data.
 
+**Update verifikasi source (2026-03-25):**
+- Write-path runtime di `createApp()` sekarang menyimpan `lastSignals` dari full `scored`, bukan dari `pumpCandidates`.
+- Kontrak state tetap eksplisit: `lastSignals` = full hasil scoring terakhir, `lastPumpCandidates` = subset kandidat.
+- Guard probe `tests/last_signals_contract_probe.ts` ditambahkan untuk memverifikasi alur `scored -> state.lastSignals` dan `pumpCandidates -> state.lastPumpCandidates` sekaligus memastikan consumer shadow-run tetap sinkron.
+
 ---
 
 ## P1 — temuan berat tapi bukan pembunuh langsung
