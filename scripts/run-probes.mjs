@@ -44,6 +44,7 @@ const officialProbes = [
   'tests/app_lifecycle_servers_probe.ts',
   'tests/bootstrap_observability_probe.ts',
   'tests/startup_health_honesty_probe.ts',
+  'tests/startup_hotlist_rehydrate_probe.ts',
   'tests/callback_reconciliation_probe.ts',
   'tests/callback_security_probe.ts',
   'tests/worker_timeout_probe.ts',

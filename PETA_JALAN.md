@@ -270,6 +270,11 @@ Setelah restart:
 **Kesimpulan audit:**
 Ini bukan asumsi. Ini celah desain sinkronisasi startup.
 
+**Update verifikasi source (2026-03-25):**
+- `HotlistService` sekarang sudah punya method `rehydrate(entries)` untuk mengisi ulang cache hotlist dari snapshot persistence.
+- Wiring startup di `createApp()` sudah memanggil `hotlistService.rehydrate(state.get().lastHotlist)` sesudah fase `runtime.state.load`.
+- Guard probe `tests/startup_hotlist_rehydrate_probe.ts` ditambahkan agar startup gagal verifikasi jika wiring `state.load() -> hotlist rehydrate` hilang/regresi.
+
 ---
 
 ### P0.5 — `lastSignals` di state bukan full signal result, melainkan `pumpCandidates`
