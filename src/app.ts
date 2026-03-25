@@ -13,6 +13,7 @@ import { AccountStore } from './domain/accounts/accountStore';
 import { HotlistService } from './domain/market/hotlistService';
 import { MarketWatcher } from './domain/market/marketWatcher';
 import { PairUniverse } from './domain/market/pairUniverse';
+import { PumpCandidateWatch } from './domain/market/pumpCandidateWatch';
 import { SignalEngine } from './domain/signals/signalEngine';
 import { SettingsService } from './domain/settings/settingsService';
 import { ExecutionEngine } from './domain/trading/executionEngine';
@@ -117,6 +118,7 @@ export async function createApp(): Promise<AppRuntime> {
     workerPool,
   );
   const hotlistService = new HotlistService();
+  const pumpCandidateWatch = new PumpCandidateWatch();
   const riskEngine = new RiskEngine();
   const backtest = new BacktestEngine(persistence, workerPool);
 
@@ -292,14 +294,29 @@ export async function createApp(): Promise<AppRuntime> {
       await history.recordSignal(signal);
     }
 
-    const opportunities = await opportunityEngine.assessMany(snapshots, scored);
+    const marketOverview = pumpCandidateWatch.buildMarketOverview(scored);
+    const candidateLimit = Math.min(
+      scanLimit,
+      Math.max(currentSettings.scanner.hotlistLimit * 2, currentSettings.scanner.hotlistLimit),
+    );
+    const pumpCandidates = pumpCandidateWatch.buildCandidateFeed(
+      scored,
+      candidateLimit,
+      currentSettings.discovery.majorPairMaxShare,
+    );
+    const candidatePairs = new Set(pumpCandidates.map((item) => item.pair));
+    const candidateSnapshots = snapshots.filter((snapshot) => candidatePairs.has(snapshot.pair));
+
+    const opportunities = await opportunityEngine.assessMany(candidateSnapshots, pumpCandidates);
     for (const opportunity of opportunities) {
       await history.recordOpportunity(opportunity);
     }
 
     const hotlist = hotlistService.update(opportunities);
 
-    await state.setSignals(scored);
+    await state.setMarketOverview(marketOverview);
+    await state.setPumpCandidates(pumpCandidates);
+    await state.setSignals(pumpCandidates);
     await state.setOpportunities(opportunities);
     await state.setHotlist(hotlist);
     await persistence.saveHotlistSnapshot(hotlist);

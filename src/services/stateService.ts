@@ -1,5 +1,6 @@
 import type {
   HotlistEntry,
+  MarketOverview,
   OpportunityAssessment,
   PairRuntimeState,
   RuntimeState,
@@ -15,7 +16,16 @@ export class StateService {
   constructor(private readonly persistence: PersistenceService) {}
 
   async load(): Promise<RuntimeState> {
-    this.state = await this.persistence.readState();
+    const loaded = await this.persistence.readState();
+    const fallback = createDefaultRuntimeState();
+    this.state = {
+      ...fallback,
+      ...loaded,
+      pollingStats: {
+        ...fallback.pollingStats,
+        ...loaded.pollingStats,
+      },
+    };
     return this.state;
   }
 
@@ -140,6 +150,18 @@ export class StateService {
   async setSignals(signals: SignalCandidate[]): Promise<RuntimeState> {
     return this.patch({
       lastSignals: signals,
+    });
+  }
+
+  async setMarketOverview(overview: MarketOverview): Promise<RuntimeState> {
+    return this.patch({
+      lastMarketOverview: overview,
+    });
+  }
+
+  async setPumpCandidates(candidates: SignalCandidate[]): Promise<RuntimeState> {
+    return this.patch({
+      lastPumpCandidates: candidates,
     });
   }
 

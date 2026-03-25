@@ -215,6 +215,20 @@ export interface SignalCandidate {
   timestamp: number;
 }
 
+export interface MarketOverview {
+  timestamp: number;
+  breadth: {
+    totalPairs: number;
+    gainers1m: number;
+    losers1m: number;
+    gainers5m: number;
+    losers5m: number;
+  };
+  liquidLeaders: SignalCandidate[];
+  rotationLeaders: SignalCandidate[];
+  watchlist: SignalCandidate[];
+}
+
 export interface HotlistEntry extends SignalCandidate {
   rank: number;
   recommendedAction: OpportunityAssessment['recommendedAction'];
@@ -538,6 +552,8 @@ export interface RuntimeState {
   activeTradingMode: TradingMode;
   pairCooldowns: Record<string, number>;
   pairs: Record<string, PairRuntimeState>;
+  lastMarketOverview: MarketOverview | null;
+  lastPumpCandidates: SignalCandidate[];
   lastHotlist: HotlistEntry[];
   lastSignals: SignalCandidate[];
   lastOpportunities: OpportunityAssessment[];
