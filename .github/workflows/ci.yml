@@ -1,0 +1,131 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint (TypeScript noEmit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+  typecheck_probes:
+    name: Typecheck probes
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run probe typecheck
+        run: npm run typecheck:probes
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: typecheck_probes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+  verify:
+    name: Verify (official probes)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare test_reports directory
+        run: mkdir -p test_reports
+
+      - name: Probe registry list
+        run: npm run probe:list | tee test_reports/ci_probe_list.txt
+
+      - name: Probe registry audit
+        run: npm run probe:audit | tee test_reports/ci_probe_audit.txt
+
+      - name: Run official verify
+        run: npm run verify | tee test_reports/ci_verify.txt
+
+  runtime_contract:
+    name: Runtime contract evidence
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare test_reports directory
+        run: mkdir -p test_reports
+
+      - name: Generate runtime contract artifact
+        run: npm run runtime:contract | tee test_reports/ci_runtime_contract_stdout.json
+
+      - name: Upload verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-artifacts
+          if-no-files-found: error
+          path: |
+            test_reports/ci_probe_list.txt
+            test_reports/ci_probe_audit.txt
+            test_reports/ci_verify.txt
+            test_reports/ci_runtime_contract_stdout.json
+            test_reports/runtime_contract_batch3_current.json

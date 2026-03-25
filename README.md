@@ -20,11 +20,20 @@ npm run dev
 
 ## Verifikasi resmi repo
 
+Kontrak verifikasi utama repo ini:
+
 ```bash
+npm run lint
+npm run typecheck:probes
+npm run build
+npm run test:probes
 npm run verify
+npm run probe:list
+npm run probe:audit
+npm run runtime:contract
 ```
 
-`npm run verify` menjalankan lint + typecheck probe (`src/**/*.ts` + `tests/**/*.ts`) + build artifact + seluruh **official runtime probes**.
+`npm run verify` adalah jalur validasi utama (menjalankan lint + typecheck probe + build + official probes).
 
 Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
 
@@ -32,28 +41,43 @@ Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
 npm run probe:list
 ```
 
-`tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
+`tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange. Jalur ini **tidak** masuk CI normal dan hanya dijalankan manual:
 
 ```bash
 npm run verify:shadow-live
 ```
 
-Secara default, `verify:shadow-live` sekarang **strict**: command akan gagal jika ada `failedChecks` (contoh: akun exchange belum aktif / auth private gagal). Ini sengaja agar status go-live tidak false positive.
-
-Jika hanya ingin mengarsipkan evidence tanpa menggagalkan command (mode audit eksploratif), gunakan:
+Secara default, `verify:shadow-live` **strict**: command gagal jika ada `failedChecks` (contoh: akun exchange belum aktif / auth private gagal). Jika hanya ingin mode audit eksploratif tanpa fail command:
 
 ```bash
 SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live
 ```
 
-Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
+## Jalur CI multi-stage resmi
 
-- `test_reports/typecheck_probes_final.txt`
-- `test_reports/probe_list_final.txt`
-- `test_reports/probe_audit_final.txt`
-- `test_reports/test_probes_final.txt`
-- `test_reports/verify_final.txt`
-- ringkasan sinkronisasi akhir: `test_reports/final_verification_sync.json`
+Workflow GitHub Actions: `.github/workflows/ci.yml`.
+
+Urutan stage CI:
+
+1. **lint** → `npm ci` + `npm run lint`
+2. **typecheck_probes** → `npm ci` + `npm run typecheck:probes`
+3. **build** → `npm ci` + `npm run build`
+4. **verify** → `npm ci` + `npm run probe:list` + `npm run probe:audit` + `npm run verify`
+5. **runtime_contract** → `npm ci` + `npm run runtime:contract` + upload artifact
+
+Boundary penting:
+
+- CI **wajib** Node 20 (kontrak engine `>=20`).
+- CI **tidak** menjalankan `npm run verify:shadow-live` karena itu jalur manual live exchange.
+- Setiap stage berat bergantung ke stage sebelumnya agar fail lebih cepat di tahap murah.
+
+Artefak yang diunggah stage `runtime_contract`:
+
+- `test_reports/ci_probe_list.txt`
+- `test_reports/ci_probe_audit.txt`
+- `test_reports/ci_verify.txt`
+- `test_reports/ci_runtime_contract_stdout.json`
+- `test_reports/runtime_contract_batch3_current.json`
 
 ## Bukti runtime worker production/build
 
