@@ -48,6 +48,7 @@ const officialProbes = [
   'tests/startup_hotlist_rehydrate_probe.ts',
   'tests/startup_corrupted_state_probe.ts',
   'tests/state_atomicity_probe.ts',
+  'tests/state_replace_atomicity_probe.ts',
   'tests/scheduler_overlap_guard_probe.ts',
   'tests/callback_reconciliation_probe.ts',
   'tests/callback_security_probe.ts',

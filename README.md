@@ -48,6 +48,7 @@ Probe official untuk kontrak ketahanan startup/state/scheduler:
 
 - `tests/startup_corrupted_state_probe.ts` (validasi recovery startup ketika `runtime-state.json` korup + bukti file quarantine)
 - `tests/state_atomicity_probe.ts` (validasi `StateService.patch()` tidak commit state in-memory bila write persistence gagal)
+- `tests/state_replace_atomicity_probe.ts` (validasi `StateService.replace()` tidak commit state in-memory bila write persistence gagal)
 - `tests/scheduler_overlap_guard_probe.ts` (forced concurrent run untuk bukti overlap guard scheduler)
 
 `tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
