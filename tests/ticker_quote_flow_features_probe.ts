@@ -31,8 +31,16 @@ async function main(): Promise<void> {
   assert.equal(oneMinute.quoteFlow1m, 600, 'quoteFlow1m must use positive delta between snapshots');
   assert.equal(oneMinute.quoteFlow3m, 600, 'quoteFlow3m should match observed cumulative delta in early history');
   assert.equal(oneMinute.quoteFlow5m, 600, 'quoteFlow5m should match observed cumulative delta in early history');
-  assert.equal(oneMinute.quoteFlow15mAvgPerMin, 40, '15m average proxy must be normalized to per-minute baseline');
-  assert.equal(oneMinute.quoteFlowAccelerationScore, 100, 'acceleration score should clamp to 100 on strong 1m proxy flow');
+  assert.equal(
+    oneMinute.quoteFlow15mAvgPerMin,
+    600,
+    '15m average proxy must use observed history coverage, not always divide by full 15 minutes',
+  );
+  assert.equal(
+    oneMinute.quoteFlowAccelerationScore,
+    10,
+    'steady flow on early history must not be overstated as extreme acceleration',
+  );
 
   store.buildFeatures(ticker({ timestamp: baseTs + 90_000, volume24hQuote: 100 }));
   const afterReset = store.buildFeatures(ticker({ timestamp: baseTs + 120_000, volume24hQuote: 400 }));
@@ -41,6 +49,10 @@ async function main(): Promise<void> {
     afterReset.quoteFlow1m,
     600,
     'quote-flow must ignore negative reset delta and continue counting positive deltas only',
+  );
+  assert.ok(
+    afterReset.quoteFlowAccelerationScore > 10 && afterReset.quoteFlowAccelerationScore < 20,
+    'coverage-aware baseline must keep reset-phase acceleration bounded and non-extreme',
   );
 
   const coldStartStore = new TickerSnapshotStore();

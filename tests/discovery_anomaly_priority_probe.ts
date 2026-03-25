@@ -11,7 +11,7 @@ class FakeIndodaxClient {
 
   async getTickers(): Promise<Record<string, IndodaxTickerEntry>> {
     this.calls += 1;
-    if (this.calls <= 5) {
+    if (this.calls <= 8) {
       return {
         btc_idr: {
           name: 'btc_idr', high: 1_050_000_000, low: 950_000_000, vol_btc: 120, vol_idr: 60_000_000_000,
@@ -91,10 +91,21 @@ async function main(): Promise<void> {
     () => settings,
   );
 
-  for (let index = 0; index < 5; index += 1) {
-    await watcher.batchSnapshot(1);
+  const originalNow = Date.now;
+  let fakeNow = 1_700_000_000_000;
+  Date.now = () => fakeNow;
+
+  let selected: Awaited<ReturnType<MarketWatcher['batchSnapshot']>> = [];
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      await watcher.batchSnapshot(1);
+      fakeNow += 60_000;
+    }
+    selected = await watcher.batchSnapshot(1);
+  } finally {
+    Date.now = originalNow;
   }
-  const selected = await watcher.batchSnapshot(1);
+
   const pairs = selected.map((item) => item.pair);
 
   assert.equal(selected.length, 1, 'limit=1 must force direct competition between anomaly and major candidates');

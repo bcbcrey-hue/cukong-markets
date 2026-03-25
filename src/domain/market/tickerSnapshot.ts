@@ -38,6 +38,16 @@ function sumPositiveDelta(points: TickerPoint[], since: number): number {
   return total;
 }
 
+function observedCoverageMinutes(points: TickerPoint[], since: number, now: number): number {
+  if (points.length === 0) {
+    return 0;
+  }
+
+  const firstObserved = points.find((point) => point.capturedAt >= since)?.capturedAt ?? now;
+  const coverageMs = Math.max(0, now - Math.max(since, firstObserved));
+  return coverageMs / 60_000;
+}
+
 function avg(values: number[]): number {
   if (values.length === 0) {
     return 0;
@@ -95,8 +105,11 @@ export class TickerSnapshotStore {
     const quoteFlow1m = sumPositiveDelta(points, now - 60_000);
     const quoteFlow3m = sumPositiveDelta(points, now - 180_000);
     const quoteFlow5m = sumPositiveDelta(points, now - 300_000);
-    const quoteFlow15m = sumPositiveDelta(points, now - 900_000);
-    const quoteFlow15mAvgPerMin = quoteFlow15m / 15;
+    const lookback15mStart = now - 900_000;
+    const quoteFlow15m = sumPositiveDelta(points, lookback15mStart);
+    const observedCoverageMin15m = observedCoverageMinutes(points, lookback15mStart, now);
+    const quoteFlow15mAvgPerMin =
+      observedCoverageMin15m > 0 ? quoteFlow15m / observedCoverageMin15m : 0;
 
     const returns = points.slice(-20).map((item, index, arr) => {
       if (index === 0) {

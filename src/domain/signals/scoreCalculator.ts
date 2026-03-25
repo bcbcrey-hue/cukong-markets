@@ -128,7 +128,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
   const reasons: string[] = [];
   const warnings: string[] = [];
 
-  if (volumeAnomaly >= 8) reasons.push('volume anomaly meningkat');
+  if (volumeAnomaly >= 8) reasons.push('anomali quote-flow proxy meningkat');
   if (imbalance >= 7) reasons.push('bid-side orderbook dominan');
   if (breakoutReadiness >= 7) reasons.push('breakout setup mulai matang');
   if (accumulation >= 5) reasons.push('indikasi silent accumulation');
