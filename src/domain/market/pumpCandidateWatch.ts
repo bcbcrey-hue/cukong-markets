@@ -1,5 +1,5 @@
 import type { MarketOverview, SignalCandidate } from '../../core/types';
-import { classifyPair } from './pairClassifier';
+import { isMajorPair } from './majorPairContract';
 
 export class PumpCandidateWatch {
   buildMarketOverview(signals: SignalCandidate[]): MarketOverview {
@@ -37,8 +37,8 @@ export class PumpCandidateWatch {
     const clampedShare = Math.max(0, Math.min(1, majorPairMaxShare));
     const majorLimit = Math.floor(clampedShare * finalLimit);
 
-    const majors = sorted.filter((item) => classifyPair(item.pair).pairClass === 'MAJOR');
-    const nonMajors = sorted.filter((item) => classifyPair(item.pair).pairClass !== 'MAJOR');
+    const majors = sorted.filter((item) => isMajorPair(item.pair));
+    const nonMajors = sorted.filter((item) => !isMajorPair(item.pair));
 
     const selectedNonMajors = nonMajors.slice(0, finalLimit);
     const remainingSlots = Math.max(0, finalLimit - selectedNonMajors.length);

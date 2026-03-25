@@ -1,4 +1,5 @@
 import type { MarketRegime } from '../../core/types';
+import { isMajorBaseAsset, splitPair } from './majorPairContract';
 
 export type PairTier = 'A' | 'B' | 'C';
 export type PairClass = 'MAJOR' | 'MID' | 'MICRO';
@@ -12,14 +13,7 @@ export interface PairClassification {
   regimeHint: MarketRegime;
 }
 
-const MAJORS = new Set(['btc', 'eth', 'sol']);
 const MID_CAPS = new Set(['xrp', 'ada', 'doge', 'trx', 'bnb', 'pepe', 'shib']);
-
-function splitPair(pair: string): { baseAsset: string; quoteAsset: string } {
-  const normalized = pair.toLowerCase();
-  const [baseAsset, quoteAsset = 'idr'] = normalized.split('_');
-  return { baseAsset, quoteAsset };
-}
 
 export function classifyPair(pair: string): PairClassification {
   const { baseAsset, quoteAsset } = splitPair(pair);
@@ -28,7 +22,7 @@ export function classifyPair(pair: string): PairClassification {
   let pairClass: PairClass = 'MICRO';
   let regimeHint: MarketRegime = 'QUIET';
 
-  if (MAJORS.has(baseAsset)) {
+  if (isMajorBaseAsset(baseAsset)) {
     tier = 'A';
     pairClass = 'MAJOR';
     regimeHint = 'ACCUMULATION';

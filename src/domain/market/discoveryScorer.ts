@@ -2,6 +2,7 @@ import type { DiscoveryBucketType } from '../../core/types';
 import type { OrderbookFeatureSnapshot } from './orderbookSnapshot';
 import type { PairMetricSnapshot } from './pairUniverse';
 import type { TickerFeatureSnapshot } from './tickerSnapshot';
+import { isMajorPair } from './majorPairContract';
 
 export interface DiscoveryScoreInput {
   snapshot: PairMetricSnapshot;
@@ -31,9 +32,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function isMajorPair(pair: string): boolean {
-  return pair.startsWith('btc_') || pair.startsWith('eth_') || pair.startsWith('usdt_');
-}
 
 function classifyBucket(candidate: {
   majorPair: boolean;

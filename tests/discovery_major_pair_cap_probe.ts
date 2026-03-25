@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { OpportunityAssessment, SignalCandidate } from '../src/core/types';
 import { HotlistService } from '../src/domain/market/hotlistService';
 import { PumpCandidateWatch } from '../src/domain/market/pumpCandidateWatch';
+import { isMajorPair } from '../src/domain/market/majorPairContract';
 
 function signal(pair: string, score: number): SignalCandidate {
   return {
@@ -71,7 +72,7 @@ function toOpportunity(item: SignalCandidate): OpportunityAssessment {
 }
 
 function majorCount(pairs: string[]): number {
-  return pairs.filter((pair) => ['btc_idr', 'eth_idr', 'sol_idr'].includes(pair)).length;
+  return pairs.filter((pair) => isMajorPair(pair)).length;
 }
 
 async function main(): Promise<void> {
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
     signal('btc_idr', 99),
     signal('eth_idr', 98),
     signal('sol_idr', 97),
+    signal('usdt_idr', 96.5),
     signal('alpha_idr', 96),
     signal('beta_idr', 95),
     signal('gamma_idr', 94),
@@ -105,6 +107,7 @@ async function main(): Promise<void> {
     signal('btc_idr', 99),
     signal('eth_idr', 98),
     signal('sol_idr', 97),
+    signal('usdt_idr', 96.5),
     signal('alpha_idr', 96),
   ];
   const lowSupplyPairs = watch.buildCandidateFeed(lowNonMajor, 6, 0.5).map((item) => item.pair);

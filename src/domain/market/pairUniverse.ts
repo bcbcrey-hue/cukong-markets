@@ -1,5 +1,6 @@
 import type { DiscoveryCandidate } from '../../core/types';
 import type { IndodaxTickerEntry } from '../../integrations/indodax/publicApi';
+import { isMajorPair } from './majorPairContract';
 
 export interface PairMetricSnapshot {
   pair: string;
@@ -67,7 +68,7 @@ export class PairUniverse {
       volumeIdr: item.volumeIdr,
       spreadPct: item.bestAsk > 0 ? ((item.bestAsk - item.bestBid) / item.bestAsk) * 100 : 0,
       depthScore: 0,
-      majorPair: item.pair.startsWith('btc_') || item.pair.startsWith('eth_'),
+      majorPair: isMajorPair(item.pair),
       tags: [],
       snapshotAt,
     }));
