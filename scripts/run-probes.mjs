@@ -16,6 +16,8 @@ const officialProbes = [
   'tests/telegram_message_chunking_probe.ts',
   'tests/telegram_slippage_confirmation_probe.ts',
   'tests/telegram_manual_accounts_probe.ts',
+  'tests/telegram_manual_buy_flow_probe.ts',
+  'tests/telegram_manual_sell_flow_probe.ts',
   'tests/market_watcher_selection_probe.ts',
   'tests/discovery_anomaly_priority_probe.ts',
   'tests/discovery_bucket_allocation_probe.ts',
