@@ -14,6 +14,10 @@ export class RegimeClassifier {
     const avgChange1m = avg(recentSignals.map((item) => item.change1m));
     const avgChange5m = avg(recentSignals.map((item) => item.change5m));
     const tradeDensity = avg(recentSnapshots.map((item) => item.recentTrades.length));
+    const allProxyTradeFlow =
+      recentSnapshots.length > 0 &&
+      recentSnapshots.every((item) => item.recentTradesSource !== 'EXCHANGE_TRADE_FEED');
+    const proxyAdjustedTradeDensity = allProxyTradeFlow ? tradeDensity * 0.6 : tradeDensity;
 
     if (avgSpread > 1.25) {
       return 'TRAP_RISK';
@@ -23,7 +27,7 @@ export class RegimeClassifier {
       return 'EXPANSION';
     }
 
-    if (avgScore >= 65 && avgChange1m >= 0 && avgChange5m <= 2.2 && tradeDensity >= 2) {
+    if (avgScore >= 65 && avgChange1m >= 0 && avgChange5m <= 2.2 && proxyAdjustedTradeDensity >= 2) {
       return 'ACCUMULATION';
     }
 

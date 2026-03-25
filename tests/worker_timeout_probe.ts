@@ -32,7 +32,8 @@ function makeSnapshot(pair: string, price: number): MarketSnapshot {
       midPrice: price,
       timestamp: now,
     },
-    recentTrades: [{ pair, price, quantity: 1, side: 'buy', timestamp: now - 1000 }],
+    recentTrades: [{ pair, price, quantity: 1, side: 'buy', timestamp: now - 1000, source: 'INFERRED_SNAPSHOT_DELTA', quality: 'PROXY', inferenceBasis: 'volume24hQuote_delta_and_price_direction' }],
+    recentTradesSource: 'INFERRED_PROXY',
     timestamp: now,
   };
 }

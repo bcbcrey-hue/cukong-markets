@@ -34,6 +34,8 @@ export class FeaturePipeline {
       100,
     );
 
+    const usesProxyTradeFlow = snapshot.recentTradesSource === 'INFERRED_PROXY' || snapshot.recentTradesSource === 'NONE';
+
     return {
       pair: snapshot.pair,
       accumulationScore: accumulation.accumulationScore,
@@ -53,7 +55,12 @@ export class FeaturePipeline {
         ...spoof.evidence,
         ...iceberg.evidence,
         ...clusters.evidence,
+        ...(usesProxyTradeFlow
+          ? ['trade-flow microstructure berbasis proxy inferred dari delta snapshot, bukan tape riil']
+          : []),
       ],
+      tradeFlowSource: snapshot.recentTradesSource,
+      tradeFlowQuality: usesProxyTradeFlow ? 'PROXY' : 'TAPE',
     };
   }
 }

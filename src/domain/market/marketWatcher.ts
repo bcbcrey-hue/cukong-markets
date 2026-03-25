@@ -57,6 +57,9 @@ export class MarketWatcher {
             ? 'sell'
             : 'unknown',
       timestamp: ticker.timestamp,
+      source: 'INFERRED_SNAPSHOT_DELTA',
+      quality: 'PROXY',
+      inferenceBasis: 'volume24hQuote_delta_and_price_direction',
     };
 
     const next = [...existing, inferred].slice(-40);
@@ -105,6 +108,7 @@ export class MarketWatcher {
           ticker,
           orderbook: discovery.orderbookByPair.get(selected.pair) ?? null,
           recentTrades: this.inferTradePrints(ticker, previous),
+          recentTradesSource: 'INFERRED_PROXY',
           timestamp,
         });
       } catch (error) {

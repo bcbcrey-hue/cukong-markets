@@ -13,6 +13,7 @@ export function detectTradeClusters(snapshot: MarketSnapshot): TradeClusterDetec
   const threshold = snapshot.timestamp - env.tradeClusterWindowMs;
   const trades = snapshot.recentTrades.filter((trade) => trade.timestamp >= threshold);
   const evidence: string[] = [];
+  const proxyTradeFlow = snapshot.recentTradesSource !== 'EXCHANGE_TRADE_FEED';
 
   const buyQty = sum(trades.filter((trade) => trade.side === 'buy').map((trade) => trade.quantity));
   const sellQty = sum(trades.filter((trade) => trade.side === 'sell').map((trade) => trade.quantity));
@@ -20,16 +21,20 @@ export function detectTradeClusters(snapshot: MarketSnapshot): TradeClusterDetec
   const aggressionBias = totalQty > 0 ? (buyQty - sellQty) / totalQty : 0;
   const sweepDetected = trades.length >= 3 && Math.abs(aggressionBias) >= 0.6;
 
+  if (proxyTradeFlow) {
+    evidence.push('trade cluster dihitung dari proxy inferred snapshot delta (bukan tape trade riil)');
+  }
+
   if (trades.length >= 4) {
-    evidence.push('burst transaksi inferred dalam rolling window');
+    evidence.push('burst transaksi proxy dalam rolling window');
   }
 
   if (Math.abs(aggressionBias) >= 0.4) {
-    evidence.push('dominasi agresi satu sisi cukup jelas');
+    evidence.push('bias agresi satu sisi terindikasi dari proxy transaksi');
   }
 
   if (sweepDetected) {
-    evidence.push('indikasi micro-sweep dari konsentrasi arah transaksi');
+    evidence.push('indikasi proxy micro-sweep dari konsentrasi arah transaksi');
   }
 
   const clusterScore = clamp(

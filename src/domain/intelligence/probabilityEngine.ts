@@ -38,14 +38,18 @@ export class ProbabilityEngine {
       1,
     );
 
-    const confidence = clamp(
-      signal.confidence * 100 * 0.5 +
-        microstructure.liquidityQualityScore * 0.2 +
-        (1 - trapProbability) * 100 * 0.15 +
-        (historicalContext.patternMatches[0]?.similarity ?? 0) * 0.15,
-      0,
-      100,
-    ) / 100;
+    const confidencePenalty = microstructure.tradeFlowQuality === 'PROXY' ? 8 : 0;
+
+    const confidence =
+      clamp(
+        signal.confidence * 100 * 0.5 +
+          microstructure.liquidityQualityScore * 0.2 +
+          (1 - trapProbability) * 100 * 0.15 +
+          (historicalContext.patternMatches[0]?.similarity ?? 0) * 0.15 -
+          confidencePenalty,
+        0,
+        100,
+      ) / 100;
 
     return {
       pumpProbability,

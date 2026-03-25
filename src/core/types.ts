@@ -183,12 +183,18 @@ export interface OrderbookSnapshot {
   timestamp: number;
 }
 
+export type TradePrintSource = 'EXCHANGE_TRADE_FEED' | 'INFERRED_SNAPSHOT_DELTA';
+export type TradePrintQuality = 'TAPE' | 'PROXY';
+
 export interface TradePrint {
   pair: string;
   price: number;
   quantity: number;
   side: 'buy' | 'sell' | 'unknown';
   timestamp: number;
+  source: TradePrintSource;
+  quality: TradePrintQuality;
+  inferenceBasis?: 'volume24hQuote_delta_and_price_direction';
 }
 
 export interface MarketSnapshot {
@@ -196,6 +202,7 @@ export interface MarketSnapshot {
   ticker: PairTickerSnapshot;
   orderbook: OrderbookSnapshot | null;
   recentTrades: TradePrint[];
+  recentTradesSource: 'EXCHANGE_TRADE_FEED' | 'INFERRED_PROXY' | 'MIXED' | 'NONE';
   timestamp: number;
 }
 
@@ -271,6 +278,8 @@ export interface MicrostructureFeatures {
   exhaustionRiskScore: number;
   timestamp: number;
   evidence: string[];
+  tradeFlowSource: MarketSnapshot['recentTradesSource'];
+  tradeFlowQuality: TradePrintQuality;
 }
 
 export interface PatternMatchResult {

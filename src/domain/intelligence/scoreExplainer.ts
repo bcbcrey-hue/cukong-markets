@@ -39,7 +39,10 @@ export class ScoreExplainer {
         feature: 'clusterScore',
         weight: 10,
         contribution: microstructure.clusterScore / 6,
-        note: 'trade burst dan directional aggression',
+        note:
+          microstructure.tradeFlowQuality === 'PROXY'
+            ? 'trade burst/aggression berbasis proxy inferred snapshot'
+            : 'trade burst dan directional aggression dari tape',
       },
       {
         feature: 'spoofRiskPenalty',
@@ -64,7 +67,13 @@ export class ScoreExplainer {
     const reasons = [
       ...signal.reasons,
       ...(microstructure.accumulationScore >= 55 ? ['absorpsi dan support tersembunyi terdeteksi'] : []),
-      ...(microstructure.clusterScore >= 35 ? ['trade clustering mendukung continuation'] : []),
+      ...(microstructure.clusterScore >= 35
+        ? [
+            microstructure.tradeFlowQuality === 'PROXY'
+              ? 'proxy trade clustering mendukung continuation (akurasi terbatas)'
+              : 'trade clustering mendukung continuation',
+          ]
+        : []),
       ...(probability.pumpProbability >= 0.65 ? ['pump probability sudah di atas baseline auto'] : []),
       ...(historicalContext.patternMatches[0]
         ? [`mirip pola ${historicalContext.patternMatches[0].patternName}`]
@@ -73,7 +82,13 @@ export class ScoreExplainer {
 
     const warnings = [
       ...signal.warnings,
-      ...(microstructure.spoofRiskScore >= 45 ? ['spoof/fake wall risk mulai meningkat'] : []),
+      ...(microstructure.spoofRiskScore >= 45
+        ? [
+            microstructure.tradeFlowQuality === 'PROXY'
+              ? 'spoof/fake wall risk meningkat (follow-through berbasis proxy)'
+              : 'spoof/fake wall risk mulai meningkat',
+          ]
+        : []),
       ...validation.warnings,
       ...(timing.state === 'LATE' ? ['timing sudah mulai terlambat'] : []),
       ...(timing.state === 'AVOID' ? ['timing sebaiknya dihindari'] : []),
@@ -84,6 +99,7 @@ export class ScoreExplainer {
       `liquidityScore=${signal.liquidityScore.toFixed(1)}`,
       `spoofRisk=${microstructure.spoofRiskScore.toFixed(1)}`,
       `trapProbability=${(probability.trapProbability * 100).toFixed(1)}%`,
+      `tradeFlowSource=${microstructure.tradeFlowSource}`,
       ...validation.reasons,
     ];
 

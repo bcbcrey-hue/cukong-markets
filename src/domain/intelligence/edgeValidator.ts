@@ -61,6 +61,10 @@ export class EdgeValidator {
     if (probability.trapProbability >= 0.5) {
       warnings.push('trap probability meningkat');
     }
+    if (microstructure.tradeFlowQuality === 'PROXY') {
+      warnings.push('validasi edge memakai proxy trade-flow inferred, bukan tape trade riil');
+    }
+
 
     return {
       valid:

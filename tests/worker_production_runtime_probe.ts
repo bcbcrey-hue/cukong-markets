@@ -39,7 +39,8 @@ const snapshot = {
     midPrice: 1000000000,
     timestamp: Date.now(),
   },
-  recentTrades: [{ pair: 'btc_idr', price: 1000000000, quantity: 1, side: 'buy', timestamp: Date.now() - 1000 }],
+  recentTrades: [{ pair: 'btc_idr', price: 1000000000, quantity: 1, side: 'buy', timestamp: Date.now() - 1000, source: 'INFERRED_SNAPSHOT_DELTA', quality: 'PROXY', inferenceBasis: 'volume24hQuote_delta_and_price_direction' }],
+  recentTradesSource: 'INFERRED_PROXY',
   timestamp: Date.now(),
 };
 
