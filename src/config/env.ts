@@ -88,6 +88,14 @@ export interface EnvConfig {
   scannerHistoryLimit: number;
   orderbookDepthLevels: number;
   tradeClusterWindowMs: number;
+  discoveryAnomalySlots: number;
+  discoveryRotationSlots: number;
+  discoveryStealthSlots: number;
+  discoveryLiquidLeaderSlots: number;
+  discoveryMinVolumeIdr: number;
+  discoveryMaxSpreadPct: number;
+  discoveryMinDepthScore: number;
+  discoveryMajorPairMaxShare: number;
 
   probabilityThresholdAuto: number;
   confidenceThresholdAuto: number;
@@ -425,6 +433,14 @@ export const env: EnvConfig = {
   scannerHistoryLimit: readNumber('SCANNER_HISTORY_LIMIT', 300),
   orderbookDepthLevels: readNumber('ORDERBOOK_DEPTH_LEVELS', 20),
   tradeClusterWindowMs: readNumber('TRADE_CLUSTER_WINDOW_MS', 15_000),
+  discoveryAnomalySlots: readNumber('DISCOVERY_ANOMALY_SLOTS', 5),
+  discoveryRotationSlots: readNumber('DISCOVERY_ROTATION_SLOTS', 5),
+  discoveryStealthSlots: readNumber('DISCOVERY_STEALTH_SLOTS', 3),
+  discoveryLiquidLeaderSlots: readNumber('DISCOVERY_LIQUID_LEADER_SLOTS', 5),
+  discoveryMinVolumeIdr: readNumber('DISCOVERY_MIN_VOLUME_IDR', 2_000_000),
+  discoveryMaxSpreadPct: readNumber('DISCOVERY_MAX_SPREAD_PCT', 1.5),
+  discoveryMinDepthScore: readNumber('DISCOVERY_MIN_DEPTH_SCORE', 25),
+  discoveryMajorPairMaxShare: readNumber('DISCOVERY_MAJOR_PAIR_MAX_SHARE', 0.4),
 
   probabilityThresholdAuto: readNumber('PROBABILITY_THRESHOLD_AUTO', 0.72),
   confidenceThresholdAuto: readNumber('CONFIDENCE_THRESHOLD_AUTO', 0.68),

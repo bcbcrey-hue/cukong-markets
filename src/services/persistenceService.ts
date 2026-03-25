@@ -92,6 +92,18 @@ export function createDefaultSettings(): BotSettings {
       maxPairsTracked: env.maxPairsTracked,
       orderbookDepthLevels: env.orderbookDepthLevels,
       scannerHistoryLimit: env.scannerHistoryLimit,
+      discovery: {
+        slots: {
+          anomaly: env.discoveryAnomalySlots,
+          rotation: env.discoveryRotationSlots,
+          stealth: env.discoveryStealthSlots,
+          liquidLeader: env.discoveryLiquidLeaderSlots,
+        },
+        minVolumeIdr: env.discoveryMinVolumeIdr,
+        maxSpreadPct: env.discoveryMaxSpreadPct,
+        minDepthScore: env.discoveryMinDepthScore,
+        majorPairMaxShare: env.discoveryMajorPairMaxShare,
+      },
     },
     workers: {
       enabled: env.workerEnabled,

@@ -36,13 +36,7 @@ export class PairUniverse {
       items.push(snapshot);
     }
 
-    this.pairs = items
-      .map((item) => item.pair)
-      .sort((a, b) => {
-        const va = this.latest.get(a)?.volumeIdr ?? 0;
-        const vb = this.latest.get(b)?.volumeIdr ?? 0;
-        return vb - va;
-      });
+    this.pairs = items.map((item) => item.pair);
 
     return items;
   }

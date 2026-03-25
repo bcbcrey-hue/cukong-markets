@@ -15,6 +15,9 @@ import {
 
 const LEGACY_DEFAULT_BUY_SLIPPAGE_BPS = 25;
 const LEGACY_MAX_BUY_SLIPPAGE_BPS = 80;
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
 
 export class SettingsService {
   private settings: BotSettings = createDefaultSettings();
@@ -38,6 +41,14 @@ export class SettingsService {
       scanner: {
         ...defaults.scanner,
         ...input.scanner,
+        discovery: {
+          ...defaults.scanner.discovery,
+          ...input.scanner?.discovery,
+          slots: {
+            ...defaults.scanner.discovery.slots,
+            ...input.scanner?.discovery?.slots,
+          },
+        },
       },
       workers: {
         ...defaults.workers,
@@ -157,12 +168,20 @@ export class SettingsService {
   }
 
   async patchScanner(
-    partial: Partial<ScannerSettings>,
+    partial: DeepPartial<ScannerSettings>,
   ): Promise<BotSettings> {
     return this.patch({
       scanner: {
         ...this.settings.scanner,
         ...partial,
+        discovery: {
+          ...this.settings.scanner.discovery,
+          ...partial.discovery,
+          slots: {
+            ...this.settings.scanner.discovery.slots,
+            ...partial.discovery?.slots,
+          },
+        },
       },
     });
   }

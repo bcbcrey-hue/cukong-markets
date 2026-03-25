@@ -67,6 +67,33 @@ export interface StrategySettings {
   useEntryTiming: boolean;
 }
 
+export type DiscoveryBucket = 'ANOMALY' | 'ROTATION' | 'STEALTH' | 'LIQUID_LEADER';
+
+export interface DiscoveryBucketSlots {
+  anomaly: number;
+  rotation: number;
+  stealth: number;
+  liquidLeader: number;
+}
+
+export interface DiscoveryCandidate {
+  pair: string;
+  bucket: DiscoveryBucket;
+  volumeIdr: number;
+  spreadPct: number;
+  depthScore: number;
+  majorPair: boolean;
+  observedAt: number;
+}
+
+export interface DiscoverySettings {
+  slots: DiscoveryBucketSlots;
+  minVolumeIdr: number;
+  maxSpreadPct: number;
+  minDepthScore: number;
+  majorPairMaxShare: number;
+}
+
 export interface ScannerSettings {
   enabled: boolean;
   pollingIntervalMs: number;
@@ -75,6 +102,7 @@ export interface ScannerSettings {
   maxPairsTracked: number;
   orderbookDepthLevels: number;
   scannerHistoryLimit: number;
+  discovery: DiscoverySettings;
 }
 
 export interface WorkerSettings {
