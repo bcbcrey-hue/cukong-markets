@@ -46,6 +46,10 @@ npm run probe:list
 
 Probe official untuk kontrak ketahanan startup/state/scheduler:
 
+Probe official untuk historical context outcome-grounded:
+
+- `tests/history_outcome_grounding_probe.ts` (validasi `PairHistoryStore` memprioritaskan closed trade outcome `CONFIRMED_LIVE/PARTIAL_LIVE`, fallback proxy yang jujur saat data outcome live belum cukup, dan konsumsi metrik oleh `ProbabilityEngine`)
+
 - `tests/startup_corrupted_state_probe.ts` (validasi recovery startup ketika `runtime-state.json` korup + bukti file quarantine)
 - `tests/state_atomicity_probe.ts` (validasi `StateService.patch()` tidak commit state in-memory bila write persistence gagal)
 - `tests/state_replace_atomicity_probe.ts` (validasi `StateService.replace()` tidak commit state in-memory bila write persistence gagal)
