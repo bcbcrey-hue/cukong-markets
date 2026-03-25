@@ -79,7 +79,12 @@ export interface DiscoveryBucketSlots {
 export interface DiscoveryCandidate {
   pair: string;
   bucket: DiscoveryBucket;
+  discoveryScore: number;
   volumeIdr: number;
+  volumeAcceleration: number;
+  priceExpansionPct: number;
+  breakoutPressure: number;
+  orderbookImbalance: number;
   spreadPct: number;
   depthScore: number;
   majorPair: boolean;

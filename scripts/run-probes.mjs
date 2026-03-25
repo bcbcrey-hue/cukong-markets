@@ -34,6 +34,8 @@ const officialProbes = [
   'tests/worker_timeout_probe.ts',
   'tests/worker_production_runtime_probe.ts',
   'tests/discovery_contract_batch1_probe.ts',
+  'tests/discovery_anomaly_priority_probe.ts',
+  'tests/discovery_bucket_allocation_probe.ts',
 ];
 
 const manualProbes = ['tests/real_exchange_shadow_run_probe.ts'];

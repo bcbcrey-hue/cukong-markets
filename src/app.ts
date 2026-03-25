@@ -104,7 +104,11 @@ export async function createApp(): Promise<AppRuntime> {
 
   const pairUniverse = new PairUniverse();
   const indodax = new IndodaxClient();
-  const marketWatcher = new MarketWatcher(indodax, pairUniverse);
+  const marketWatcher = new MarketWatcher(
+    indodax,
+    pairUniverse,
+    () => settings.get().scanner.discovery,
+  );
   const history = new PairHistoryStore(persistence);
   const signalEngine = new SignalEngine(pairUniverse);
   const opportunityEngine = new OpportunityEngine(

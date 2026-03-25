@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import { logger } from '../../core/logger';
 import type {
+  DiscoverySettings,
   MarketSnapshot,
   OrderbookSnapshot,
   PairTickerSnapshot,
@@ -8,6 +9,7 @@ import type {
 } from '../../core/types';
 import type { IndodaxClient } from '../../integrations/indodax/client';
 import type { IndodaxOrderbook } from '../../integrations/indodax/publicApi';
+import { DiscoveryEngine } from './discoveryEngine';
 import type { PairUniverse } from './pairUniverse';
 
 interface TickerPoint {
@@ -16,27 +18,15 @@ interface TickerPoint {
   capturedAt: number;
 }
 
-function sumTopN(side: Array<[number, number]>, n = 5): number {
-  return side.slice(0, n).reduce((sum, [, size]) => sum + size, 0);
-}
-
-function calcImbalance(book: IndodaxOrderbook): number {
-  const bid = sumTopN(book.buy, 5);
-  const ask = sumTopN(book.sell, 5);
-  const total = bid + ask;
-  if (total <= 0) {
-    return 0;
-  }
-  return (bid - ask) / total;
-}
-
 export class MarketWatcher {
   private history = new Map<string, TickerPoint[]>();
   private inferredTrades = new Map<string, TradePrint[]>();
+  private readonly discoveryEngine = new DiscoveryEngine();
 
   constructor(
     private readonly indodax: IndodaxClient,
     private readonly universe: PairUniverse,
+    private readonly getDiscoverySettings: () => DiscoverySettings,
   ) {}
 
   private updateHistory(snapshot: PairTickerSnapshot): TickerPoint | undefined {
@@ -63,16 +53,6 @@ export class MarketWatcher {
     }
 
     return ((current - previous) / previous) * 100;
-  }
-
-  private computeLiquidityScore(bestBid: number, bestAsk: number, book: IndodaxOrderbook): number {
-    const spread = bestAsk > 0 ? ((bestAsk - bestBid) / bestAsk) * 100 : 0;
-    const depth = sumTopN(book.buy, 5) + sumTopN(book.sell, 5);
-
-    const spreadScore = Math.max(0, 100 - spread * 100);
-    const depthScore = Math.min(100, depth);
-
-    return (spreadScore * 0.6) + (depthScore * 0.4);
   }
 
   private getPriceBefore(pair: string, thresholdMs: number): number | undefined {
@@ -150,15 +130,24 @@ export class MarketWatcher {
   async batchSnapshot(limit = 10): Promise<MarketSnapshot[]> {
     const tickers = await this.indodax.getTickers();
     const metrics = this.universe.updateFromTickers(tickers);
-    const targets = metrics
-      .sort((a, b) => b.volumeIdr - a.volumeIdr)
-      .slice(0, limit);
+    const discovery = await this.discoveryEngine.select({
+      metrics,
+      settings: this.getDiscoverySettings(),
+      limit,
+      getPreviousPoint: (pair) => this.history.get(pair)?.at(-1),
+      getDepth: (pair) => this.indodax.getDepth(pair),
+    });
 
     const snapshots: MarketSnapshot[] = [];
 
-    for (const item of targets) {
+    for (const target of discovery.selected) {
+      const item = this.universe.get(target.pair);
+      if (!item) {
+        continue;
+      }
+
       try {
-        const orderbook = await this.indodax.getDepth(item.pair);
+        const orderbook = discovery.depthByPair.get(item.pair) ?? await this.indodax.getDepth(item.pair);
         const timestamp = Date.now();
         const ticker: PairTickerSnapshot = {
           pair: item.pair,
@@ -175,9 +164,6 @@ export class MarketWatcher {
         const previous = this.updateHistory(ticker);
         const recentTrades = this.inferTradePrints(ticker, previous);
         const snapshotOrderbook = this.buildOrderbookSnapshot(item.pair, orderbook, timestamp);
-
-        const prev1m = this.getPriceBefore(item.pair, timestamp - 60_000);
-        const prev5m = this.getPriceBefore(item.pair, timestamp - 300_000);
 
         ticker.change24hPct = this.percentChange(
           ticker.lastPrice,
