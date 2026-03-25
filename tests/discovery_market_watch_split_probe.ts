@@ -18,7 +18,7 @@ function signal(
     warnings: [],
     regime: 'BREAKOUT_SETUP',
     breakoutPressure: 70,
-    volumeAcceleration: 75,
+    quoteFlowAccelerationScore: 75,
     orderbookImbalance: 55,
     spreadPct: 0.2,
     marketPrice: 100,

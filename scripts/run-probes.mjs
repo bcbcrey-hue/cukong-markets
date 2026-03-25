@@ -29,6 +29,7 @@ const officialProbes = [
   'tests/discovery_scanner_settings_probe.ts',
   'tests/discovery_runtime_consumer_canonical_probe.ts',
   'tests/discovery_health_observability_probe.ts',
+  'tests/ticker_quote_flow_features_probe.ts',
   'tests/runtime_backend_regression.ts',
   'tests/live_execution_hardening_probe.ts',
   'tests/execution_summary_failed_probe.ts',

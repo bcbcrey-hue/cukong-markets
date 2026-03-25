@@ -29,7 +29,7 @@ export class EdgeValidator {
       microstructure.accumulationScore >= 50,
       microstructure.clusterScore >= 30,
       signal.breakoutPressure >= 6,
-      signal.volumeAcceleration >= 25,
+      signal.quoteFlowAccelerationScore >= 25,
       probability.pumpProbability >= 0.65,
       historicalContext.patternMatches[0]?.similarity >= 65,
     ].filter(Boolean).length;

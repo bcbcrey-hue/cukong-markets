@@ -3,7 +3,7 @@ import { clamp, pct } from '../../utils/math';
 
 interface TickerPoint {
   price: number;
-  volumeQuote: number;
+  cumulativeVolume24hQuote: number;
   capturedAt: number;
 }
 
@@ -14,17 +14,28 @@ export interface TickerFeatureSnapshot {
   change3m: number;
   change5m: number;
   change15m: number;
-  volume1m: number;
-  volume3m: number;
-  volume5m: number;
-  volume15mAvg: number;
-  volumeAcceleration: number;
+  quoteFlow1m: number;
+  quoteFlow3m: number;
+  quoteFlow5m: number;
+  quoteFlow15mAvgPerMin: number;
+  quoteFlowAccelerationScore: number;
   volatilityScore: number;
   momentumScore: number;
 }
 
-function sumVolume(points: TickerPoint[]): number {
-  return points.reduce((sum, item) => sum + item.volumeQuote, 0);
+function sumPositiveDelta(points: TickerPoint[], since: number): number {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const current = points[index];
+    if (current.capturedAt < since) {
+      continue;
+    }
+
+    const previous = points[index - 1];
+    total += Math.max(0, current.cumulativeVolume24hQuote - previous.cumulativeVolume24hQuote);
+  }
+
+  return total;
 }
 
 function avg(values: number[]): number {
@@ -55,7 +66,7 @@ export class TickerSnapshotStore {
 
     current.push({
       price: snapshot.lastPrice,
-      volumeQuote: snapshot.volume24hQuote,
+      cumulativeVolume24hQuote: snapshot.volume24hQuote,
       capturedAt: snapshot.timestamp,
     });
 
@@ -81,15 +92,11 @@ export class TickerSnapshotStore {
     const price5m = latestPriceBefore(points, now - 300_000);
     const price15m = latestPriceBefore(points, now - 900_000);
 
-    const last1m = points.filter((item) => item.capturedAt >= now - 60_000);
-    const last3m = points.filter((item) => item.capturedAt >= now - 180_000);
-    const last5m = points.filter((item) => item.capturedAt >= now - 300_000);
-    const last15m = points.filter((item) => item.capturedAt >= now - 900_000);
-
-    const volume1m = sumVolume(last1m);
-    const volume3m = sumVolume(last3m);
-    const volume5m = sumVolume(last5m);
-    const volume15mAvg = last15m.length > 0 ? sumVolume(last15m) / Math.max(1, last15m.length) : 0;
+    const quoteFlow1m = sumPositiveDelta(points, now - 60_000);
+    const quoteFlow3m = sumPositiveDelta(points, now - 180_000);
+    const quoteFlow5m = sumPositiveDelta(points, now - 300_000);
+    const quoteFlow15m = sumPositiveDelta(points, now - 900_000);
+    const quoteFlow15mAvgPerMin = quoteFlow15m / 15;
 
     const returns = points.slice(-20).map((item, index, arr) => {
       if (index === 0) {
@@ -114,12 +121,12 @@ export class TickerSnapshotStore {
       change3m: pct(price3m ?? snapshot.lastPrice, snapshot.lastPrice),
       change5m: pct(price5m ?? snapshot.lastPrice, snapshot.lastPrice),
       change15m: pct(price15m ?? snapshot.lastPrice, snapshot.lastPrice),
-      volume1m,
-      volume3m,
-      volume5m,
-      volume15mAvg,
-      volumeAcceleration:
-        volume15mAvg > 0 ? clamp((volume1m / volume15mAvg) * 10, 0, 100) : 0,
+      quoteFlow1m,
+      quoteFlow3m,
+      quoteFlow5m,
+      quoteFlow15mAvgPerMin,
+      quoteFlowAccelerationScore:
+        quoteFlow15mAvgPerMin > 0 ? clamp((quoteFlow1m / quoteFlow15mAvgPerMin) * 10, 0, 100) : 0,
       volatilityScore,
       momentumScore,
     };

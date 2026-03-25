@@ -43,7 +43,7 @@ export class FeaturePipeline {
       aggressionBias: clusters.aggressionBias,
       sweepScore: clusters.sweepDetected ? clusters.clusterScore : clusters.clusterScore * 0.55,
       breakoutPressureScore: signal.breakoutPressure,
-      volumeAccelerationScore: signal.volumeAcceleration,
+      quoteFlowAccelerationScore: signal.quoteFlowAccelerationScore,
       liquidityQualityScore,
       spreadScore: clamp(Math.max(0, 1.2 - signal.spreadPct) * 60, 0, 100),
       exhaustionRiskScore,

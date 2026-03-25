@@ -1819,7 +1819,7 @@ export class ExecutionEngine {
       warnings: [],
       regime: 'BREAKOUT_SETUP',
       breakoutPressure: 10,
-      volumeAcceleration: 10,
+      quoteFlowAccelerationScore: 10,
       orderbookImbalance: 0.2,
       spreadPct: 0.2,
       marketPrice: request.price ?? 0,
