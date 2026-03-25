@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-03-25T17:14:12.917Z",
+  "total": 3,
+  "passed": 1,
+  "failed": 2,
+  "results": [
+    {
+      "probe": "tests/break_startup_corrupted_state_probe.ts",
+      "status": "FAIL",
+      "stdout": "{\"level\":30,\"time\":1774458850354,\"app\":\"cukong-markets\",\"env\":\"test\",\"name\":\"cukong-markets\",\"module\":\"app-runtime\",\"phase\":\"persistence.bootstrap\",\"msg\":\"app startup phase started\"}\n{\"level\":50,\"time\":1774458850364,\"app\":\"cukong-markets\",\"env\":\"test\",\"name\":\"cukong-markets\",\"module\":\"app-runtime\",\"phase\":\"persistence.bootstrap\",\"durationMs\":11,\"error\":{\"name\":\"Error\",\"message\":\"app startup phase failed: persistence.bootstrap\",\"stack\":\"Error: app startup phase failed: persistence.bootstrap\\n    at runStartupPhase (/workspace/cukong-markets/src/app.ts:56:26)\\n    at async createApp (/workspace/cukong-markets/src/app.ts:78:3)\\n    at async main (/workspace/cukong-markets/tests/break_startup_corrupted_state_probe.ts:21:5)\",\"cause\":{\"name\":\"SyntaxError\",\"message\":\"Expected double-quoted property name in JSON at position 20 (line 1 column 21)\",\"stack\":\"SyntaxError: Expected double-quoted property name in JSON at position 20 (line 1 column 21)\\n    at JSON.parse (<anonymous>)\\n    at JsonStore.read (/workspace/cukong-markets/src/storage/jsonStore.ts:45:19)\\n    at async Promise.all (index 0)\\n    at async PersistenceService.bootstrap (/workspace/cukong-markets/src/services/persistenceService.ts:230:5)\\n    at async runStartupPhase (/workspace/cukong-markets/src/app.ts:52:20)\\n    at async createApp (/workspace/cukong-markets/src/app.ts:78:3)\\n    at async main (/workspace/cukong-markets/tests/break_startup_corrupted_state_probe.ts:21:5)\"}},\"msg\":\"app startup phase failed\"}",
+      "stderr": "npm warn Unknown env config \"http-proxy\". This will stop working in the next major version of npm.\nFAIL break_startup_corrupted_state_probe\nAssertionError [ERR_ASSERTION]: Startup harus punya recovery path saat state file rusak. Saat ini createApp gagal total jika state JSON korup (single-point startup failure).\n+ actual - expected\n\n+ Error: app startup phase failed: persistence.bootstrap\n+     at runStartupPhase (/workspace/cukong-markets/src/app.ts:56:26)\n+     at async createApp (/workspace/cukong-markets/src/app.ts:78:3)\n+     at async main (/workspace/cukong-markets/tests/break_startup_corrupted_state_probe.ts:21:5) {\n+   [cause]: SyntaxError: Expected double-quoted property name in JSON at position 20 (line 1 column 21)\n+       at JSON.parse (<anonymous>)\n+       at JsonStore.read (/workspace/cukong-markets/src/storage/jsonStore.ts:45:19)\n+       at async Promise.all (index 0)\n+       at async PersistenceService.bootstrap (/workspace/cukong-markets/src/services/persistenceService.ts:230:5)\n+       at async runStartupPhase (/workspace/cukong-markets/src/app.ts:52:20)\n+       at async createApp (/workspace/cukong-markets/src/app.ts:78:3)\n+       at async main (/workspace/cukong-markets/tests/break_startup_corrupted_state_probe.ts:21:5)\n+ }\n- null\n\n    at main (/workspace/cukong-markets/tests/break_startup_corrupted_state_probe.ts:26:10) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: [Error],\n  expected: null,\n  operator: 'strictEqual',\n  diff: 'simple'\n}",
+      "exitCode": 1
+    },
+    {
+      "probe": "tests/break_state_atomicity_probe.ts",
+      "status": "FAIL",
+      "stdout": "",
+      "stderr": "npm warn Unknown env config \"http-proxy\". This will stop working in the next major version of npm.\nFAIL break_state_atomicity_probe\nAssertionError [ERR_ASSERTION]: Mutasi memori harus atomic dengan persistence. Saat ini state memori berubah walau saveState gagal -> runtime vs disk divergen.\n\n1 !== 0\n\n    at main (/workspace/cukong-markets/tests/break_state_atomicity_probe.ts:61:10) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 0,\n  operator: 'strictEqual',\n  diff: 'simple'\n}",
+      "exitCode": 1
+    },
+    {
+      "probe": "tests/break_scheduler_overlap_guard_probe.ts",
+      "status": "PASS",
+      "stdout": "{\"level\":40,\"time\":1774458852786,\"app\":\"cukong-markets\",\"env\":\"test\",\"name\":\"cukong-markets\",\"module\":\"light-scheduler\",\"job\":\"overlap-test\",\"intervalMs\":1000,\"msg\":\"scheduler skipped overlapping run\"}\nPASS break_scheduler_overlap_guard_probe",
+      "stderr": "npm warn Unknown env config \"http-proxy\". This will stop working in the next major version of npm."
+    }
+  ]
+}

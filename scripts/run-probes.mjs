@@ -52,7 +52,12 @@ const officialProbes = [
   'tests/worker_production_runtime_probe.ts',
 ];
 
-const manualProbes = ['tests/real_exchange_shadow_run_probe.ts'];
+const manualProbes = [
+  'tests/real_exchange_shadow_run_probe.ts',
+  'tests/break_startup_corrupted_state_probe.ts',
+  'tests/break_state_atomicity_probe.ts',
+  'tests/break_scheduler_overlap_guard_probe.ts',
+];
 
 async function validateProbeRegistry() {
   const testFiles = (await readdir(path.resolve(repoRoot, 'tests')))
