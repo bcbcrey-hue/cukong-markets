@@ -135,12 +135,12 @@ function createDeps(accounts: MemoryAccounts) {
       get: () => ({
         status: 'STOPPED',
         emergencyStop: false,
+        lastHotlist: [],
         lastOpportunities: [],
       }),
       setStatus: noopAsync,
       setTradingMode: noopAsync,
     },
-    hotlist: { list: () => [], get: () => undefined },
     positions: { list: () => [], listOpen: () => [], getById: () => undefined },
     orders: { list: () => [] },
     accounts,

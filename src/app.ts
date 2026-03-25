@@ -119,6 +119,7 @@ export async function createApp(): Promise<AppRuntime> {
     workerPool,
   );
   const hotlistService = new HotlistService();
+  hotlistService.rehydrate(state.get().lastHotlist);
   const pumpCandidateWatch = new PumpCandidateWatch();
   const riskEngine = new RiskEngine();
   const backtest = new BacktestEngine(persistence, workerPool);
@@ -205,7 +206,6 @@ export async function createApp(): Promise<AppRuntime> {
     report,
     health,
     state,
-    hotlist: hotlistService,
     positions: positionManager,
     orders: orderManager,
     accounts: accountRegistry,

@@ -7,7 +7,6 @@ import type {
 } from '../../core/types';
 import { AccountRegistry } from '../../domain/accounts/accountRegistry';
 import { BacktestEngine } from '../../domain/backtest/backtestEngine';
-import { HotlistService } from '../../domain/market/hotlistService';
 import { SettingsService } from '../../domain/settings/settingsService';
 import { ExecutionEngine } from '../../domain/trading/executionEngine';
 import { OrderManager } from '../../domain/trading/orderManager';
@@ -49,7 +48,6 @@ interface HandlerDeps {
   report: ReportService;
   health: HealthService;
   state: StateService;
-  hotlist: HotlistService;
   positions: PositionManager;
   orders: OrderManager;
   accounts: AccountRegistry;
@@ -109,14 +107,14 @@ function clearAccountManualFlow(flow: UserFlowState): void {
 }
 
 function getTopSignal(
-  hotlist: HotlistService,
+  state: StateService,
   pair?: string,
 ): HotlistEntry | undefined {
-  const list = hotlist.list();
+  const list = state.get().lastHotlist;
   if (!pair) {
     return list[0];
   }
-  return hotlist.get(pair) ?? list.find((item) => item.pair === pair);
+  return list.find((item) => item.pair === pair);
 }
 
 function getSellFraction(action: string): number {
@@ -445,7 +443,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
     deps.report.statusText({
       health,
       activeAccounts: deps.accounts.listEnabled().length,
-      topSignal: deps.hotlist.list()[0],
+      topSignal: deps.state.get().lastHotlist[0],
       topOpportunity: deps.state.get().lastOpportunities[0],
     }),
     executeTradeKeyboard,
@@ -589,7 +587,7 @@ async function openMenu(
       );
       return;
     case 'HOT': {
-      const list = deps.hotlist.list();
+      const list = deps.state.get().lastHotlist;
       await replyText(
         ctx,
         deps.report.hotlistText(list),
@@ -638,7 +636,7 @@ async function openMenu(
       );
       return;
     case 'BUY_MENU': {
-      const list = deps.hotlist.list();
+      const list = deps.state.get().lastHotlist;
       await replyText(
         ctx,
         list.length > 0
@@ -985,7 +983,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'SIG' && parsed.action === 'DETAIL' && parsed.pair) {
-      const signal = getTopSignal(deps.hotlist, parsed.pair);
+      const signal = getTopSignal(deps.state, parsed.pair);
       const backMenu = resolveHotlistBackMenu(parsed.value);
 
       if (!signal) {
@@ -994,7 +992,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
         await replyText(
           ctx,
           deps.report.signalBreakdownText(signal),
-          hotlistKeyboard(deps.hotlist.list(), backMenu),
+          hotlistKeyboard(deps.state.get().lastHotlist, backMenu),
         );
       }
 
@@ -1003,10 +1001,10 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'BUY' && parsed.action === 'PICK' && parsed.pair) {
-      const signal = getTopSignal(deps.hotlist, parsed.pair);
+      const signal = getTopSignal(deps.state, parsed.pair);
       const backMenu = resolveHotlistBackMenu(parsed.value);
       if (!signal) {
-        await replyText(ctx, 'Signal tidak ditemukan.', hotlistKeyboard(deps.hotlist.list(), backMenu));
+        await replyText(ctx, 'Signal tidak ditemukan.', hotlistKeyboard(deps.state.get().lastHotlist, backMenu));
         await ctx.answerCbQuery();
         return;
       }
@@ -1021,7 +1019,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
             `Alasan: ${decision.reason}`,
             `Action=${signal.recommendedAction}, edgeValid=${signal.edgeValid ? 'true' : 'false'}`,
           ].join('\n'),
-          hotlistKeyboard(deps.hotlist.list(), backMenu),
+          hotlistKeyboard(deps.state.get().lastHotlist, backMenu),
         );
         await ctx.answerCbQuery();
         return;
@@ -1396,7 +1394,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
-    const signal = getTopSignal(deps.hotlist, userFlow.pendingBuyPair);
+    const signal = getTopSignal(deps.state, userFlow.pendingBuyPair);
     const account = deps.accounts.getDefault();
     const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
     const pendingBuyPair = userFlow.pendingBuyPair;
@@ -1426,7 +1424,7 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
           `Alasan: ${decision.reason}`,
           `Action=${signal.recommendedAction}, edgeValid=${signal.edgeValid ? 'true' : 'false'}`,
         ].join('\n'),
-        hotlistKeyboard(deps.hotlist.list(), backMenu),
+        hotlistKeyboard(deps.state.get().lastHotlist, backMenu),
       );
       return;
     }

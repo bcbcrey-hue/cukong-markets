@@ -39,11 +39,16 @@ async function main() {
     },
     health: { get: () => ({ callbackServerRunning: true }), build: async () => ({}) },
     state: {
-      get: () => ({ lastSignals: [], lastOpportunities: [], status: 'STOPPED', emergencyStop: false }),
+      get: () => ({
+        lastSignals: [],
+        lastHotlist: [],
+        lastOpportunities: [],
+        status: 'STOPPED',
+        emergencyStop: false,
+      }),
       setStatus: async () => undefined,
       setTradingMode: async () => undefined,
     },
-    hotlist: { list: () => [], get: () => undefined },
     positions: { list: () => [], listOpen: () => [], getById: () => undefined },
     orders: { list: () => [] },
     accounts: {

@@ -152,14 +152,11 @@ function createDeps(settings: FakeSettingsService) {
       get: () => ({
         status: 'STOPPED',
         emergencyStop: false,
+        lastHotlist: hotlistItems,
         lastOpportunities: [],
       }),
       setStatus: noopAsync,
       setTradingMode: noopAsync,
-    },
-    hotlist: {
-      list: () => hotlistItems,
-      get: (pair: string) => hotlistItems.find((item) => item.pair === pair),
     },
     positions: {
       list: () => [],

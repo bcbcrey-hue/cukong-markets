@@ -124,3 +124,4 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 - `INDODAX_HISTORY_MODE` runtime default adalah `v2_only`.
 - `INDODAX_CALLBACK_PATH` dikunci ke `/indodax/callback` oleh validasi env.
 - Guard BUY menolak harga referensi/entry/quantity yang invalid sebelum order dipersist.
+- Read-model monitoring Telegram (`status`, `hotlist`, `intelligence`, `spoof`, `pattern`, dan detail signal) memakai snapshot canonical dari `StateService` (`lastHotlist` + `lastOpportunities`) agar restart tidak menampilkan mismatch cache hotlist in-memory vs state persistence.
