@@ -134,6 +134,52 @@ function getSellFraction(action: string): number {
   }
 }
 
+function normalizeErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+
+  return fallback;
+}
+
+function formatManualBuyBlockedMessage(pair: string, reason: string): string {
+  const normalized = reason.toLowerCase();
+
+  if (normalized.includes('score') || normalized.includes('confidence') || normalized.includes('spoof')) {
+    return `⛔ Manual BUY ${pair} diblokir risk gate.\nAlasan: ${reason}`;
+  }
+
+  if (normalized.includes('cooldown')) {
+    return `⏳ Manual BUY ${pair} ditolak karena pair masih cooldown.\nDetail: ${reason}`;
+  }
+
+  if (normalized.includes('posisi terbuka pada pair yang sama')) {
+    return `⛔ Manual BUY ${pair} ditolak karena masih ada posisi terbuka pada pair yang sama.\nDetail: ${reason}`;
+  }
+
+  if (normalized.includes('default account tidak tersedia') || normalized.includes('account tidak ditemukan')) {
+    return `⛔ Manual BUY ${pair} gagal: account/default account tidak tersedia.\nDetail: ${reason}`;
+  }
+
+  if (normalized.includes('order buy aktif')) {
+    return `⛔ Manual BUY ${pair} ditolak karena active order BUY sudah ada.\nDetail: ${reason}`;
+  }
+
+  return `❌ Manual BUY ${pair} gagal diproses.\nDetail: ${reason}`;
+}
+
+function formatManualSellErrorMessage(pair: string, reason: string): string {
+  if (reason.toLowerCase().includes('order sell aktif')) {
+    return `⛔ Manual SELL ${pair} ditolak karena active order SELL sudah ada.\nDetail: ${reason}`;
+  }
+
+  return `❌ Manual SELL ${pair} gagal diproses.\nDetail: ${reason}`;
+}
+
 function renderRiskText(settings: SettingsService): string {
   const risk = settings.get().risk;
   return [
@@ -1004,20 +1050,32 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
         return;
       }
 
-      const result = await deps.execution.manualSell(
-        position.id,
-        position.quantity * fraction,
-        'MANUAL',
-      );
-      const openPositions = deps.positions.listOpen();
+      try {
+        const result = await deps.execution.manualSell(
+          position.id,
+          position.quantity * fraction,
+          'MANUAL',
+        );
+        const openPositions = deps.positions.listOpen();
 
-      await replyText(
-        ctx,
-        result,
-        openPositions.length > 0
-          ? positionsKeyboard(openPositions, backMenu)
-          : positionsMenuKeyboard(deps.settings.get()),
-      );
+        await replyText(
+          ctx,
+          result,
+          openPositions.length > 0
+            ? positionsKeyboard(openPositions, backMenu)
+            : positionsMenuKeyboard(deps.settings.get()),
+        );
+      } catch (error) {
+        const reason = normalizeErrorMessage(error, 'Terjadi error saat submit SELL.');
+        const openPositions = deps.positions.listOpen();
+        await replyText(
+          ctx,
+          formatManualSellErrorMessage(position.pair, reason),
+          openPositions.length > 0
+            ? positionsKeyboard(openPositions, backMenu)
+            : positionsMenuKeyboard(deps.settings.get()),
+        );
+      }
       await ctx.answerCbQuery();
       return;
     }
@@ -1341,11 +1399,18 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     const signal = getTopSignal(deps.hotlist, userFlow.pendingBuyPair);
     const account = deps.accounts.getDefault();
     const backMenu = userFlow.pendingBuyBackMenu ?? 'TRADE';
+    const pendingBuyPair = userFlow.pendingBuyPair;
 
     if (!signal || !account) {
       userFlow.pendingBuyPair = undefined;
       userFlow.pendingBuyBackMenu = undefined;
-      await replyText(ctx, 'Signal atau default account tidak tersedia.');
+      if (!signal && !account) {
+        await replyText(ctx, `⛔ Manual BUY ${pendingBuyPair} gagal: signal dan default account tidak tersedia.`);
+      } else if (!signal) {
+        await replyText(ctx, `⛔ Manual BUY ${pendingBuyPair} gagal: signal pair tidak ditemukan di hotlist.`);
+      } else {
+        await replyText(ctx, `⛔ Manual BUY ${pendingBuyPair} gagal: default account tidak tersedia.`);
+      }
       return;
     }
 
@@ -1366,13 +1431,23 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
-    const result = await deps.execution.buy(account.id, signal, amountIdr, 'MANUAL');
-    userFlow.pendingBuyPair = undefined;
-    userFlow.pendingBuyBackMenu = undefined;
-    await replyText(
-      ctx,
-      result,
-      backMenu === 'MON' ? monitoringKeyboard : positionsMenuKeyboard(deps.settings.get()),
-    );
+    try {
+      const result = await deps.execution.buy(account.id, signal, amountIdr, 'MANUAL');
+      await replyText(
+        ctx,
+        result,
+        backMenu === 'MON' ? monitoringKeyboard : positionsMenuKeyboard(deps.settings.get()),
+      );
+    } catch (error) {
+      const reason = normalizeErrorMessage(error, 'Terjadi error saat submit BUY.');
+      await replyText(
+        ctx,
+        formatManualBuyBlockedMessage(signal.pair, reason),
+        backMenu === 'MON' ? monitoringKeyboard : positionsMenuKeyboard(deps.settings.get()),
+      );
+    } finally {
+      userFlow.pendingBuyPair = undefined;
+      userFlow.pendingBuyBackMenu = undefined;
+    }
   });
 }
