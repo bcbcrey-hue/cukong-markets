@@ -5,6 +5,7 @@ import type {
   MicrostructureFeatures,
   OpportunityAssessment,
   SignalCandidate,
+  TradeOutcomeSummary,
 } from '../../core/types';
 import { PersistenceService } from '../../services/persistenceService';
 import { PatternMatcher } from './patternMatcher';
@@ -15,6 +16,12 @@ type AnomalyEntry = {
   type: string;
   createdAt: string;
   payload?: Record<string, unknown>;
+};
+
+type OutcomeHistorySummary = {
+  eligibleCount: number;
+  recentWinRate: number;
+  recentFalseBreakRate: number;
 };
 
 export class PairHistoryStore {
@@ -36,6 +43,54 @@ export class PairHistoryStore {
       current.shift();
     }
     target.set(pair, current);
+  }
+
+  private isOutcomeEligibleForContext(outcome: TradeOutcomeSummary): boolean {
+    return outcome.accuracy === 'CONFIRMED_LIVE' || outcome.accuracy === 'PARTIAL_LIVE';
+  }
+
+  private isLossContextOutcome(outcome: TradeOutcomeSummary): boolean {
+    if ((outcome.netPnl ?? 0) < 0 || (outcome.returnPercentage ?? 0) < 0) {
+      return true;
+    }
+
+    const reason = outcome.closeReason.toLowerCase();
+    return [
+      'stop',
+      'stop_loss',
+      'sl',
+      'trap',
+      'false_break',
+      'failed_breakout',
+      'breakout_fail',
+      'edge_rejected',
+    ].some((marker) => reason.includes(marker));
+  }
+
+  private async summarizeOutcomeHistory(pair: string): Promise<OutcomeHistorySummary> {
+    const outcomes = await this.persistence.readTradeOutcomes();
+    const eligible = outcomes
+      .filter((outcome) => outcome.pair === pair)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .filter((outcome) => this.isOutcomeEligibleForContext(outcome))
+      .slice(0, env.scannerHistoryLimit);
+
+    if (eligible.length === 0) {
+      return {
+        eligibleCount: 0,
+        recentWinRate: 0,
+        recentFalseBreakRate: 0,
+      };
+    }
+
+    const wins = eligible.filter((outcome) => (outcome.netPnl ?? 0) > 0).length;
+    const lossContexts = eligible.filter((outcome) => this.isLossContextOutcome(outcome)).length;
+
+    return {
+      eligibleCount: eligible.length,
+      recentWinRate: wins / eligible.length,
+      recentFalseBreakRate: lossContexts / eligible.length,
+    };
   }
 
   async recordSnapshot(snapshot: MarketSnapshot): Promise<void> {
@@ -146,16 +201,36 @@ export class PairHistoryStore {
       contextNotes.push(`pattern terdekat: ${patternMatches[0].patternName}`);
     }
 
-    const recentWinRate =
+    const outcomeSummary = await this.summarizeOutcomeHistory(pair);
+
+    const proxyWinRate =
       opportunities.length > 0
         ? opportunities.filter((item) => item.edgeValid).length / opportunities.length
         : 0;
-
-    const recentFalseBreakRate =
+    const proxyFalseBreakRate =
       opportunities.length > 0
         ? opportunities.filter((item) => item.trapProbability >= 0.55).length /
           opportunities.length
         : 0;
+
+    const hasOutcomeGroundedMetrics = outcomeSummary.eligibleCount > 0;
+    const recentWinRate = hasOutcomeGroundedMetrics
+      ? outcomeSummary.recentWinRate
+      : proxyWinRate;
+    const recentFalseBreakRate = hasOutcomeGroundedMetrics
+      ? outcomeSummary.recentFalseBreakRate
+      : proxyFalseBreakRate;
+
+    if (hasOutcomeGroundedMetrics) {
+      contextNotes.push(
+        `historical outcome grounded dari ${outcomeSummary.eligibleCount} closed trade (CONFIRMED_LIVE/PARTIAL_LIVE)`,
+      );
+      if (outcomeSummary.eligibleCount < 3) {
+        contextNotes.push('sample closed trade masih kecil, bobot history dijaga konservatif');
+      }
+    } else {
+      contextNotes.push('historical outcome live belum tersedia, fallback ke proxy opportunity sementara');
+    }
 
     return {
       pair,
