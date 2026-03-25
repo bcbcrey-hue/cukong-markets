@@ -1,5 +1,11 @@
 import { logger } from '../../core/logger';
-import type { DiscoverySettings, MarketSnapshot, PairTickerSnapshot, TradePrint } from '../../core/types';
+import type {
+  DiscoveryObservabilitySummary,
+  DiscoverySettings,
+  MarketSnapshot,
+  PairTickerSnapshot,
+  TradePrint,
+} from '../../core/types';
 import type { IndodaxClient } from '../../integrations/indodax/client';
 import type { PairUniverse } from './pairUniverse';
 import { DiscoveryEngine } from './discoveryEngine';
@@ -12,6 +18,7 @@ interface TickerPoint {
 export class MarketWatcher {
   private inferredTrades = new Map<string, TradePrint[]>();
   private lastTickerByPair = new Map<string, TickerPoint>();
+  private lastDiscoverySummary: DiscoveryObservabilitySummary | null = null;
   private readonly discoveryEngine: DiscoveryEngine;
 
   constructor(
@@ -66,6 +73,7 @@ export class MarketWatcher {
       async (pair) => this.indodax.getDepth(pair),
       this.getDiscoverySettings(),
     );
+    this.lastDiscoverySummary = discovery.summary;
 
     const snapshots: MarketSnapshot[] = [];
 
@@ -111,5 +119,9 @@ export class MarketWatcher {
     return Object.fromEntries(
       [...this.lastTickerByPair.entries()].map(([pair, point]) => [pair, [point]]),
     );
+  }
+
+  getLastDiscoverySummary(): DiscoveryObservabilitySummary | null {
+    return this.lastDiscoverySummary;
   }
 }

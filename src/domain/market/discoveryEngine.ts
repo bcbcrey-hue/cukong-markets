@@ -1,5 +1,10 @@
 import { env } from '../../config/env';
-import type { DiscoverySettings, OrderbookSnapshot, PairTickerSnapshot } from '../../core/types';
+import type {
+  DiscoveryObservabilitySummary,
+  DiscoverySettings,
+  OrderbookSnapshot,
+  PairTickerSnapshot,
+} from '../../core/types';
 import type { IndodaxOrderbook } from '../../integrations/indodax/publicApi';
 import { DiscoveryAllocator } from './discoveryAllocator';
 import { DiscoveryScorer, type DiscoveryRankedCandidate } from './discoveryScorer';
@@ -11,6 +16,7 @@ export interface DiscoverySelectionResult {
   selected: DiscoveryRankedCandidate[];
   preDepthShortlist: DiscoveryRankedCandidate[];
   orderbookByPair: Map<string, OrderbookSnapshot>;
+  summary: DiscoveryObservabilitySummary;
 }
 
 export class DiscoveryEngine {
@@ -81,6 +87,7 @@ export class DiscoveryEngine {
       .filter((candidate) => candidate.volumeIdr >= settings.minVolumeIdr)
       .filter((candidate) => candidate.spreadPct <= settings.maxSpreadPct)
       .sort((a, b) => b.discoveryScore - a.discoveryScore);
+    const spreadRejectedCount = snapshots.length - preDepthCandidates.length;
 
     const shortlistSize = Math.min(
       preDepthCandidates.length,
@@ -109,11 +116,28 @@ export class DiscoveryEngine {
 
     const depthFiltered = enriched.filter((candidate) => candidate.depthScore >= settings.minDepthScore);
     const selected = this.allocator.allocate(depthFiltered, limit, settings);
+    const summary: DiscoveryObservabilitySummary = {
+      slotPlan: {
+        anomaly: settings.anomalySlots,
+        rotation: settings.rotationSlots,
+        stealth: settings.stealthSlots,
+        liquidLeader: settings.liquidLeaderSlots,
+      },
+      passed: {
+        majorPair: selected.filter((candidate) => candidate.majorPair).length,
+        anomaly: selected.filter((candidate) => candidate.bucket === 'ANOMALY').length,
+      },
+      rejected: {
+        spread: spreadRejectedCount,
+        depth: Math.max(0, enriched.length - depthFiltered.length),
+      },
+    };
 
     return {
       selected,
       preDepthShortlist,
       orderbookByPair,
+      summary,
     };
   }
 }

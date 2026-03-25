@@ -75,6 +75,23 @@ export interface DiscoverySettings {
   majorPairMaxShare: number;
 }
 
+export interface DiscoveryObservabilitySummary {
+  slotPlan: {
+    anomaly: number;
+    rotation: number;
+    stealth: number;
+    liquidLeader: number;
+  };
+  passed: {
+    majorPair: number;
+    anomaly: number;
+  };
+  rejected: {
+    spread: number;
+    depth: number;
+  };
+}
+
 export interface RiskSettings {
   maxOpenPositions: number;
   maxPositionSizeIdr: number;
@@ -109,6 +126,7 @@ export interface ScannerSettings {
   maxPairsTracked: number;
   orderbookDepthLevels: number;
   scannerHistoryLimit: number;
+  discovery: DiscoverySettings;
 }
 
 export interface WorkerSettings {
@@ -130,7 +148,6 @@ export interface BotSettings {
   risk: RiskSettings;
   strategy: StrategySettings;
   scanner: ScannerSettings;
-  discovery: DiscoverySettings;
   workers: WorkerSettings;
   backtest: BacktestSettings;
   updatedAt: string;
