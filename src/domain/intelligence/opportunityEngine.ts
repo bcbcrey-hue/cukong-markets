@@ -95,6 +95,8 @@ export class OpportunityEngine {
     if (microstructure.spoofRiskScore >= 60) {
       await this.history.recordAnomaly(snapshot.pair, 'SPOOF_RISK', {
         spoofRiskScore: microstructure.spoofRiskScore,
+        tradeFlowSource: microstructure.tradeFlowSource,
+        tradeFlowQuality: microstructure.tradeFlowQuality,
       });
     }
 

@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     ticker: ticker({ timestamp: baseTs, volume24hQuote: 1_000 }),
     orderbook: null,
     recentTrades: [],
+    recentTradesSource: 'NONE',
     timestamp: baseTs,
   };
 

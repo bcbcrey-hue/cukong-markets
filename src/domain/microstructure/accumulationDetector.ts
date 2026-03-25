@@ -13,6 +13,7 @@ export function detectAccumulation(
 ): AccumulationDetectionResult {
   const orderbook = snapshot.orderbook;
   const evidence: string[] = [];
+  const proxyTradeFlow = snapshot.recentTradesSource !== 'EXCHANGE_TRADE_FEED';
 
   if (!orderbook) {
     return {
@@ -51,7 +52,11 @@ export function detectAccumulation(
   }
 
   if (tradeBias > 0.1) {
-    evidence.push('agresi beli inferred flow lebih dominan');
+    evidence.push('bias beli pada proxy flow lebih dominan');
+  }
+
+  if (proxyTradeFlow) {
+    evidence.push('sinyal akumulasi trade-flow memakai proxy inferred snapshot, bukan tape riil');
   }
 
   const accumulationScore = clamp(

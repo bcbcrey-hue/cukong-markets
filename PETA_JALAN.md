@@ -233,6 +233,11 @@ Padahal itu bukan tape/trade stream riil.
 **Kesimpulan audit:**
 Microstructure **ada**, tetapi **belum cukup valid untuk disebut normal/akurat tinggi**.
 
+**Catatan implementasi kontrak jujur (runtime):**
+- `TradePrint` wajib memuat `source` dan `quality` untuk membedakan tape riil vs proxy inferred.
+- `MarketSnapshot` wajib memuat `recentTradesSource` agar consumer tahu provenance data trade-flow.
+- Evidence microstructure, warning edge, dan explainer harus menyebut ketika basisnya proxy inferred.
+
 ---
 
 ### P0.3 — Monitoring Telegram memang berpotensi tidak sinkron karena memakai sumber data berbeda

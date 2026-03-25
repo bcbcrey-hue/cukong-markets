@@ -33,6 +33,7 @@ export function detectIceberg(
     return Math.abs(price - orderbook.bestAsk) <= Math.max(1e-8, orderbook.bestAsk * 0.001);
   }).length;
 
+  const proxyTradeFlow = snapshot.recentTradesSource !== 'EXCHANGE_TRADE_FEED';
   let hiddenLiquiditySide: IcebergDetectionResult['hiddenLiquiditySide'] = 'NONE';
 
   if (repeatedBidRefill >= 3) {
@@ -45,9 +46,19 @@ export function detectIceberg(
     evidence.push('best ask berulang kali refill di level hampir sama');
   }
 
+  const tradeFlowBonus =
+    snapshot.recentTrades.length >= 4
+      ? proxyTradeFlow
+        ? 4
+        : 12
+      : 0;
+
+  if (proxyTradeFlow && snapshot.recentTrades.length > 0) {
+    evidence.push('bonus iceberg dari trade-flow diturunkan karena sumbernya proxy inferred');
+  }
+
   const icebergScore = clamp(
-    Math.max(repeatedBidRefill, repeatedAskRefill) * 18 +
-      (snapshot.recentTrades.length >= 4 ? 12 : 0),
+    Math.max(repeatedBidRefill, repeatedAskRefill) * 18 + tradeFlowBonus,
     0,
     100,
   );

@@ -19,6 +19,7 @@ export function detectSpoofing(
   const orderbook = snapshot.orderbook;
   const previous = recentSnapshots.at(-1);
   const evidence: string[] = [];
+  const proxyTradeFlow = snapshot.recentTradesSource !== 'EXCHANGE_TRADE_FEED';
 
   if (!orderbook || !previous?.orderbook) {
     return {
@@ -54,17 +55,21 @@ export function detectSpoofing(
   if (bidFlashRatio >= 1.8 && buyFollowThrough <= sellFollowThrough) {
     spoofDirection = 'BUY';
     suspectedLevels = orderbook.bids.slice(0, 2).map((level) => level.price);
-    evidence.push('bid wall muncul cepat tanpa follow-through beli');
+    evidence.push('bid wall muncul cepat tanpa proxy follow-through beli');
   }
 
   if (askFlashRatio >= 1.8 && sellFollowThrough <= buyFollowThrough) {
     spoofDirection = 'SELL';
     suspectedLevels = orderbook.asks.slice(0, 2).map((level) => level.price);
-    evidence.push('ask wall muncul cepat tanpa follow-through jual');
+    evidence.push('ask wall muncul cepat tanpa proxy follow-through jual');
   }
 
   if (Math.abs(currentBidDepth - currentAskDepth) > Math.max(currentBidDepth, currentAskDepth) * 0.55) {
     evidence.push('ketimpangan depth top-of-book terlalu ekstrem');
+  }
+
+  if (proxyTradeFlow) {
+    evidence.push('spoof follow-through dibaca dari proxy inferred snapshot delta, bukan tape riil');
   }
 
   const spoofRiskScore = clamp(

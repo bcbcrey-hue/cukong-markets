@@ -118,9 +118,10 @@ function makeSnapshot(pair: string, price: number, bid = price * 0.999, ask = pr
       timestamp: now,
     },
     recentTrades: [
-      { pair, price, quantity: 6.2, side: 'buy', timestamp: now - 2000 },
-      { pair, price: price * 1.001, quantity: 5.1, side: 'buy', timestamp: now - 1000 },
+      { pair, price, quantity: 6.2, side: 'buy', timestamp: now - 2000, source: 'INFERRED_SNAPSHOT_DELTA', quality: 'PROXY', inferenceBasis: 'volume24hQuote_delta_and_price_direction' },
+      { pair, price: price * 1.001, quantity: 5.1, side: 'buy', timestamp: now - 1000, source: 'INFERRED_SNAPSHOT_DELTA', quality: 'PROXY', inferenceBasis: 'volume24hQuote_delta_and_price_direction' },
     ],
+    recentTradesSource: 'INFERRED_PROXY',
     timestamp: now,
   };
 }
@@ -236,6 +237,12 @@ async function main() {
   assert.ok(
     opportunities.every((o) => o.pair && Number.isFinite(o.finalScore) && o.entryTiming.state),
     'OpportunityAssessment fields should be consistent',
+  );
+  assert.ok(
+    opportunities.every((o) =>
+      o.warnings.some((warning) => warning.includes('proxy trade-flow inferred'))
+    ),
+    'Opportunity warnings must disclose proxy inferred trade-flow dependency',
   );
 
   for (const opp of opportunities) {

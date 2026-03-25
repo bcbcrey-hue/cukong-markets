@@ -67,6 +67,17 @@ async function main() {
   assert(selectedPairs.includes('stealth_idr'), 'stealth pair should be selected by discovery ranking');
   assert(!selectedPairs.includes('volume_giant_badspread_idr'), 'top volume with bad spread must be filtered out');
 
+  assert(
+    snapshots.every((item) => item.recentTradesSource === 'INFERRED_PROXY'),
+    'MarketWatcher snapshots must mark recentTradesSource as INFERRED_PROXY',
+  );
+
+  const flattenedTrades = snapshots.flatMap((item) => item.recentTrades);
+  assert(
+    flattenedTrades.every((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
+    'MarketWatcher inferred trades must be explicitly labeled as proxy and inferred',
+  );
+
   console.log('PASS market_watcher_selection_probe');
 }
 
