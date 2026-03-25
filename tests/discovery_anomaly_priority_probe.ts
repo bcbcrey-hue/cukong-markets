@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import type { DiscoverySettings } from '../src/core/types';
 import { MarketWatcher } from '../src/domain/market/marketWatcher';
+import { isMajorPair } from '../src/domain/market/majorPairContract';
 import { PairUniverse } from '../src/domain/market/pairUniverse';
 import type { IndodaxClient } from '../src/integrations/indodax/client';
 import type { IndodaxOrderbook, IndodaxTickerEntry } from '../src/integrations/indodax/publicApi';
@@ -61,7 +62,7 @@ class FakeIndodaxClient {
   }
 
   async getDepth(pair: string): Promise<IndodaxOrderbook> {
-    if (pair === 'btc_idr' || pair === 'eth_idr' || pair === 'usdt_idr') {
+    if (isMajorPair(pair)) {
       return { buy: [[1_039_500_000, 500], [1_039_000_000, 300]], sell: [[1_040_000_000, 520], [1_040_500_000, 250]] };
     }
 
