@@ -71,13 +71,16 @@ Boundary penting:
 - CI **tidak** menjalankan `npm run verify:shadow-live` karena itu jalur manual live exchange.
 - Setiap stage berat bergantung ke stage sebelumnya agar fail lebih cepat di tahap murah.
 
-Artefak yang diunggah stage `runtime_contract`:
+Strategi artifact handoff CI:
 
-- `test_reports/ci_probe_list.txt`
-- `test_reports/ci_probe_audit.txt`
-- `test_reports/ci_verify.txt`
-- `test_reports/ci_runtime_contract_stdout.json`
-- `test_reports/runtime_contract_batch3_current.json`
+- Stage `verify` mengunggah artifact intermediate `verify-evidence` berisi:
+  - `test_reports/ci_probe_list.txt`
+  - `test_reports/ci_probe_audit.txt`
+  - `test_reports/ci_verify.txt`
+- Stage `runtime_contract` mengunduh `verify-evidence`, lalu menambahkan:
+  - `test_reports/ci_runtime_contract_stdout.json`
+  - `test_reports/runtime_contract_batch3_current.json`
+- Stage `runtime_contract` mengunggah bundle akhir `verification-artifacts`.
 
 ## Bukti runtime worker production/build
 

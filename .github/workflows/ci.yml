@@ -95,6 +95,16 @@ jobs:
       - name: Run official verify
         run: npm run verify | tee test_reports/ci_verify.txt
 
+      - name: Upload verify evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-evidence
+          if-no-files-found: error
+          path: |
+            test_reports/ci_probe_list.txt
+            test_reports/ci_probe_audit.txt
+            test_reports/ci_verify.txt
+
   runtime_contract:
     name: Runtime contract evidence
     runs-on: ubuntu-latest
@@ -114,6 +124,12 @@ jobs:
 
       - name: Prepare test_reports directory
         run: mkdir -p test_reports
+
+      - name: Download verify evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: verify-evidence
+          path: test_reports
 
       - name: Generate runtime contract artifact
         run: npm run runtime:contract | tee test_reports/ci_runtime_contract_stdout.json
