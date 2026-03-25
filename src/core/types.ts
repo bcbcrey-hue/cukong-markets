@@ -41,6 +41,40 @@ export interface StoredAccount extends LegacyUploadedAccount {
   enabled: boolean;
 }
 
+export type DiscoveryBucketType =
+  | 'ANOMALY'
+  | 'ROTATION'
+  | 'STEALTH'
+  | 'LIQUID_LEADER';
+
+export interface DiscoveryCandidate {
+  pair: string;
+  bucket: DiscoveryBucketType;
+  volumeIdr: number;
+  spreadPct: number;
+  depthScore: number;
+  majorPair: boolean;
+  tags: string[];
+  snapshotAt: number;
+}
+
+export interface DiscoveryBucket {
+  type: DiscoveryBucketType;
+  slots: number;
+  candidates: DiscoveryCandidate[];
+}
+
+export interface DiscoverySettings {
+  anomalySlots: number;
+  rotationSlots: number;
+  stealthSlots: number;
+  liquidLeaderSlots: number;
+  minVolumeIdr: number;
+  maxSpreadPct: number;
+  minDepthScore: number;
+  majorPairMaxShare: number;
+}
+
 export interface RiskSettings {
   maxOpenPositions: number;
   maxPositionSizeIdr: number;
@@ -96,6 +130,7 @@ export interface BotSettings {
   risk: RiskSettings;
   strategy: StrategySettings;
   scanner: ScannerSettings;
+  discovery: DiscoverySettings;
   workers: WorkerSettings;
   backtest: BacktestSettings;
   updatedAt: string;

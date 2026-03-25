@@ -1,3 +1,4 @@
+import type { DiscoveryCandidate } from '../../core/types';
 import type { IndodaxTickerEntry } from '../../integrations/indodax/publicApi';
 
 export interface PairMetricSnapshot {
@@ -17,7 +18,7 @@ export class PairUniverse {
   private latest = new Map<string, PairMetricSnapshot>();
 
   updateFromTickers(tickers: Record<string, IndodaxTickerEntry>): PairMetricSnapshot[] {
-    const items: PairMetricSnapshot[] = [];
+    const seen = new Set<string>();
 
     for (const [pair, ticker] of Object.entries(tickers)) {
       const snapshot: PairMetricSnapshot = {
@@ -33,31 +34,48 @@ export class PairUniverse {
       };
 
       this.latest.set(pair, snapshot);
-      items.push(snapshot);
+      seen.add(pair);
     }
 
-    this.pairs = items
-      .map((item) => item.pair)
-      .sort((a, b) => {
-        const va = this.latest.get(a)?.volumeIdr ?? 0;
-        const vb = this.latest.get(b)?.volumeIdr ?? 0;
-        return vb - va;
-      });
-
-    return items;
+    this.pairs = [...seen].sort((a, b) => a.localeCompare(b));
+    return this.listSnapshots();
   }
 
-  top(limit = 50): string[] {
-    return this.pairs.slice(0, limit);
+  listPairs(limit?: number): string[] {
+    const pairs = [...this.pairs];
+    if (typeof limit === 'number') {
+      return pairs.slice(0, Math.max(0, limit));
+    }
+    return pairs;
+  }
+
+  listSnapshots(limit?: number): PairMetricSnapshot[] {
+    const snapshots = this.listPairs(limit)
+      .map((pair) => this.latest.get(pair))
+      .filter((item): item is PairMetricSnapshot => Boolean(item));
+    return snapshots;
   }
 
   get(pair: string): PairMetricSnapshot | undefined {
     return this.latest.get(pair);
   }
 
+  toDiscoveryCandidates(snapshotAt = Date.now()): DiscoveryCandidate[] {
+    return this.listSnapshots().map((item) => ({
+      pair: item.pair,
+      bucket: 'LIQUID_LEADER',
+      volumeIdr: item.volumeIdr,
+      spreadPct: item.bestAsk > 0 ? ((item.bestAsk - item.bestBid) / item.bestAsk) * 100 : 0,
+      depthScore: 0,
+      majorPair: item.pair.startsWith('btc_') || item.pair.startsWith('eth_'),
+      tags: [],
+      snapshotAt,
+    }));
+  }
+
   exportMetrics(history: Record<string, unknown>) {
     return {
-      pairs: this.pairs,
+      pairs: this.listPairs(),
       latest: Object.fromEntries(this.latest.entries()),
       history,
     };
