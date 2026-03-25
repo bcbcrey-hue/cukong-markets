@@ -4,7 +4,6 @@ import { env } from '../../config/env';
 import { AccountRegistry } from '../../domain/accounts/accountRegistry';
 import { BacktestEngine } from '../../domain/backtest/backtestEngine';
 import { AccountStore } from '../../domain/accounts/accountStore';
-import { HotlistService } from '../../domain/market/hotlistService';
 import { ExecutionEngine } from '../../domain/trading/executionEngine';
 import { OrderManager } from '../../domain/trading/orderManager';
 import { PositionManager } from '../../domain/trading/positionManager';
@@ -22,7 +21,6 @@ export interface TelegramBotDeps {
   report: ReportService;
   health: HealthService;
   state: StateService;
-  hotlist: HotlistService;
   positions: PositionManager;
   orders: OrderManager;
   accounts: AccountRegistry;

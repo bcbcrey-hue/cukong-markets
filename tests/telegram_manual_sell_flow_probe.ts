@@ -80,14 +80,11 @@ function createDeps(mode: 'success' | 'failure') {
       get: () => ({
         status: 'STOPPED',
         emergencyStop: false,
+        lastHotlist: [],
         lastOpportunities: [],
       }),
       setStatus: noopAsync,
       setTradingMode: noopAsync,
-    },
-    hotlist: {
-      list: () => [],
-      get: () => undefined,
     },
     positions: {
       list: () => [position],

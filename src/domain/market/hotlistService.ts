@@ -7,6 +7,15 @@ import type {
 export class HotlistService {
   private items: HotlistEntry[] = [];
 
+  rehydrate(entries: HotlistEntry[]): void {
+    this.items = [...entries]
+      .sort((a, b) => a.rank - b.rank)
+      .map((item, index) => ({
+        ...item,
+        rank: index + 1,
+      }));
+  }
+
   update(input: OpportunityAssessment[]): HotlistEntry[] {
     this.items = [...input]
       .sort((a, b) => b.finalScore - a.finalScore)

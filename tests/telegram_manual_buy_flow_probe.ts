@@ -105,14 +105,11 @@ function createDeps(mode: 'success' | 'failure') {
         status: 'STOPPED',
         emergencyStop: false,
         pairCooldowns: {},
+        lastHotlist: [hotlistItem],
         lastOpportunities: [],
       }),
       setStatus: noopAsync,
       setTradingMode: noopAsync,
-    },
-    hotlist: {
-      list: () => [hotlistItem],
-      get: (pair: string) => (pair === hotlistItem.pair ? hotlistItem : undefined),
     },
     positions: {
       list: () => [],
