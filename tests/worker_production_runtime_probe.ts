@@ -51,7 +51,7 @@ const signal = {
   warnings: [],
   regime: 'BREAKOUT_SETUP',
   breakoutPressure: 60,
-  volumeAcceleration: 50,
+  quoteFlowAccelerationScore: 50,
   orderbookImbalance: 0.1,
   spreadPct: 0.2,
   marketPrice: 1000000000,

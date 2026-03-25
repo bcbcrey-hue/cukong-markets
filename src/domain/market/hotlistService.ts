@@ -38,7 +38,7 @@ export class HotlistService {
       warnings: item.warnings,
       regime: item.marketRegime,
       breakoutPressure: item.breakoutPressure,
-      volumeAcceleration: item.volumeAcceleration,
+      quoteFlowAccelerationScore: item.quoteFlowAccelerationScore,
       orderbookImbalance: item.orderbookImbalance,
       spreadPct: item.spreadPct,
       marketPrice: item.referencePrice,

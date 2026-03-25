@@ -214,7 +214,7 @@ export interface SignalCandidate {
   warnings: string[];
   regime: MarketRegime;
   breakoutPressure: number;
-  volumeAcceleration: number;
+  quoteFlowAccelerationScore: number;
   orderbookImbalance: number;
   spreadPct: number;
   marketPrice: number;
@@ -265,7 +265,7 @@ export interface MicrostructureFeatures {
   aggressionBias: number;
   sweepScore: number;
   breakoutPressureScore: number;
-  volumeAccelerationScore: number;
+  quoteFlowAccelerationScore: number;
   liquidityQualityScore: number;
   spreadScore: number;
   exhaustionRiskScore: number;
@@ -329,7 +329,7 @@ export interface OpportunityAssessment {
   edgeValid: boolean;
   marketRegime: MarketRegime;
   breakoutPressure: number;
-  volumeAcceleration: number;
+  quoteFlowAccelerationScore: number;
   orderbookImbalance: number;
   change1m: number;
   change5m: number;

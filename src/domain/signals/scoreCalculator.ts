@@ -27,7 +27,7 @@ export interface ScoreCalculationResult {
   regime: MarketRegime;
   confidence: number;
   breakoutPressure: number;
-  volumeAcceleration: number;
+  quoteFlowAccelerationScore: number;
   orderbookImbalance: number;
   spreadPct: number;
   reasons: string[];
@@ -45,9 +45,9 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
   const { classification, ticker, orderbook } = input;
 
   const volumeAnomaly = volumeSpikeScore({
-    volume1m: ticker.volume1m,
-    volume5m: ticker.volume5m,
-    volume15mAvg: ticker.volume15mAvg,
+    quoteFlow1m: ticker.quoteFlow1m,
+    quoteFlow5m: ticker.quoteFlow5m,
+    quoteFlow15mAvgPerMin: ticker.quoteFlow15mAvgPerMin,
     change1m: ticker.change1m,
   });
 
@@ -62,7 +62,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
   const accumulation = silentAccumulationScore({
     change1m: ticker.change1m,
     change5m: ticker.change5m,
-    volumeAcceleration: ticker.volumeAcceleration,
+    quoteFlowAccelerationScore: ticker.quoteFlowAccelerationScore,
     orderbookImbalance: orderbook.orderbookImbalance,
     spreadBps: orderbook.spreadBps,
   });
@@ -70,7 +70,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
   const rotation = hotRotationScore({
     change5m: ticker.change5m,
     change15m: ticker.change15m,
-    volumeAcceleration: ticker.volumeAcceleration,
+    quoteFlowAccelerationScore: ticker.quoteFlowAccelerationScore,
     volatilityScore: ticker.volatilityScore,
   });
 
@@ -83,7 +83,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
 
   const spreadTightening = clamp(10 - orderbook.spreadBps / 8, 0, 10);
   const priceAcceleration = clamp(Math.max(0, ticker.change3m) * 2.2, 0, 14);
-  const tradeBurst = clamp(ticker.volumeAcceleration * 0.12, 0, 10);
+  const tradeBurst = clamp(ticker.quoteFlowAccelerationScore * 0.12, 0, 10);
 
   const slippagePenalty = clamp((orderbook.spreadBps - 45) / 10, 0, 10);
   const liquidityPenalty = clamp(8 - orderbook.depthScore * 0.08, 0, 8);
@@ -128,7 +128,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
   const reasons: string[] = [];
   const warnings: string[] = [];
 
-  if (volumeAnomaly >= 8) reasons.push('volume anomaly meningkat');
+  if (volumeAnomaly >= 8) reasons.push('anomali quote-flow proxy meningkat');
   if (imbalance >= 7) reasons.push('bid-side orderbook dominan');
   if (breakoutReadiness >= 7) reasons.push('breakout setup mulai matang');
   if (accumulation >= 5) reasons.push('indikasi silent accumulation');
@@ -145,7 +145,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
       feature: 'volumeAnomaly',
       weight: 18,
       contribution: volumeAnomaly,
-      note: 'volume spike vs baseline',
+      note: 'quote-flow spike vs baseline',
     },
     {
       feature: 'breakoutReadiness',
@@ -187,7 +187,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
       feature: 'tradeBurst',
       weight: 10,
       contribution: tradeBurst,
-      note: 'volume acceleration proxy',
+      note: 'quote-flow acceleration proxy',
     },
     {
       feature: 'slippagePenalty',
@@ -228,7 +228,7 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
     regime,
     confidence,
     breakoutPressure: breakoutReadiness,
-    volumeAcceleration: ticker.volumeAcceleration,
+    quoteFlowAccelerationScore: ticker.quoteFlowAccelerationScore,
     orderbookImbalance: orderbook.orderbookImbalance,
     spreadPct: orderbook.current.spreadPct,
     reasons,

@@ -48,7 +48,7 @@ export class SignalEngine {
       warnings: scored.warnings,
       regime: scored.regime,
       breakoutPressure: scored.breakoutPressure,
-      volumeAcceleration: scored.volumeAcceleration,
+      quoteFlowAccelerationScore: scored.quoteFlowAccelerationScore,
       orderbookImbalance: scored.orderbookImbalance,
       spreadPct: scored.spreadPct,
       marketPrice: bundle.ticker.lastPrice,

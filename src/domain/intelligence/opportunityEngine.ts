@@ -123,7 +123,7 @@ export class OpportunityEngine {
       edgeValid: validation.valid,
       marketRegime: historicalContext.regime,
       breakoutPressure: signal.breakoutPressure,
-      volumeAcceleration: signal.volumeAcceleration,
+      quoteFlowAccelerationScore: signal.quoteFlowAccelerationScore,
       orderbookImbalance: signal.orderbookImbalance,
       change1m: signal.change1m,
       change5m: signal.change5m,

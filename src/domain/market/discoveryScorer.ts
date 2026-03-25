@@ -17,7 +17,7 @@ export interface DiscoveryRankedCandidate {
   snapshot: PairMetricSnapshot;
   ticker: TickerFeatureSnapshot;
   discoveryScore: number;
-  volumeAcceleration: number;
+  quoteFlowAccelerationScore: number;
   priceExpansion: number;
   breakoutPressure: number;
   orderbookImbalance: number;
@@ -37,7 +37,7 @@ function isMajorPair(pair: string): boolean {
 
 function classifyBucket(candidate: {
   majorPair: boolean;
-  volumeAcceleration: number;
+  quoteFlowAccelerationScore: number;
   priceExpansion: number;
   breakoutPressure: number;
 }): DiscoveryBucketType {
@@ -45,7 +45,7 @@ function classifyBucket(candidate: {
     return 'LIQUID_LEADER';
   }
 
-  if (candidate.volumeAcceleration >= 55 && candidate.priceExpansion >= 35) {
+  if (candidate.quoteFlowAccelerationScore >= 55 && candidate.priceExpansion >= 35) {
     return 'ANOMALY';
   }
 
@@ -63,7 +63,7 @@ export class DiscoveryScorer {
         ? ((input.snapshot.bestAsk - input.snapshot.bestBid) / input.snapshot.bestAsk) * 100
         : 0;
 
-    const volumeAcceleration = clamp(input.ticker.volumeAcceleration, 0, 100);
+    const quoteFlowAccelerationScore = clamp(input.ticker.quoteFlowAccelerationScore, 0, 100);
     const priceExpansion = clamp(Math.max(0, input.ticker.change1m) * 12, 0, 100);
     const breakoutPressure = clamp(
       Math.max(0, input.ticker.change1m) * 6 + Math.max(0, input.ticker.change5m) * 4,
@@ -75,7 +75,7 @@ export class DiscoveryScorer {
     const majorPair = isMajorPair(input.snapshot.pair);
     const bucket = classifyBucket({
       majorPair,
-      volumeAcceleration,
+      quoteFlowAccelerationScore,
       priceExpansion,
       breakoutPressure,
     });
@@ -83,14 +83,14 @@ export class DiscoveryScorer {
     const reasons: string[] = [];
     const warnings: string[] = [];
 
-    if (volumeAcceleration >= 45) reasons.push('volume_acceleration');
+    if (quoteFlowAccelerationScore >= 45) reasons.push('quote_flow_acceleration');
     if (priceExpansion >= 30) reasons.push('price_expansion');
     if (breakoutPressure >= 30) reasons.push('breakout_pressure');
     if (spreadQuality >= 55) reasons.push('spread_still_reasonable');
     if (spreadPct > 1.2) warnings.push('spread_too_wide_pre_depth');
 
     const discoveryScore =
-      volumeAcceleration * 0.34 +
+      quoteFlowAccelerationScore * 0.34 +
       priceExpansion * 0.3 +
       breakoutPressure * 0.24 +
       spreadQuality * 0.12;
@@ -104,7 +104,7 @@ export class DiscoveryScorer {
       snapshot: input.snapshot,
       ticker: input.ticker,
       discoveryScore,
-      volumeAcceleration,
+      quoteFlowAccelerationScore,
       priceExpansion,
       breakoutPressure,
       orderbookImbalance: 0,

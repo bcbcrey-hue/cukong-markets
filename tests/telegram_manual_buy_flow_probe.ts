@@ -52,7 +52,7 @@ function createDeps(mode: 'success' | 'failure') {
     warnings: [],
     regime: 'BREAKOUT_SETUP' as const,
     breakoutPressure: 75,
-    volumeAcceleration: 70,
+    quoteFlowAccelerationScore: 70,
     orderbookImbalance: 0.3,
     spreadPct: 0.2,
     marketPrice: 1_000_000_000,

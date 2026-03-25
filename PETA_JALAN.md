@@ -193,7 +193,7 @@ Yang benar-benar ada:
 
 ### P0.1 — Basis volume untuk signal kemungkinan salah secara fundamental
 **Masalah:**
-Store ticker menyimpan `volume24hQuote` dari snapshot, lalu menghitung `volume1m`, `volume3m`, `volume5m`, `volume15mAvg` dengan menjumlahkan angka snapshot tersebut di dalam window.
+Store ticker menyimpan `volume24hQuote` dari snapshot, lalu (sebelum patch P0.1) menghitung `volume1m`, `volume3m`, `volume5m`, `volume15mAvg` dengan menjumlahkan angka snapshot tersebut di dalam window.
 
 **Kenapa ini kritis:**
 `volume24hQuote` adalah angka kumulatif 24 jam dari exchange, bukan delta per interval. Menjumlahkan snapshot kumulatif akan menghasilkan angka turunan yang bias.
@@ -204,8 +204,8 @@ Signal berikut berpotensi salah atau minimal bias:
 - `silentAccumulation`
 - `hotRotation`
 - `tradeBurst`
-- `volumeAcceleration`
-- semua ranking yang bergantung pada volume acceleration
+- `quoteFlowAccelerationScore` (pengganti `volumeAcceleration` berbasis proxy flow)
+- semua ranking yang bergantung pada akselerasi flow
 
 **Kesimpulan audit:**
 Layer signal memang hidup, tetapi **normalitasnya gagal** karena fondasi volume kemungkinan salah.
@@ -498,4 +498,3 @@ Tetapi repo ini juga **belum layak diklaim seluruh sinyalnya normal** karena aud
 - **Seluruh sinyal normal:** TIDAK
 - **Monitoring Telegram sinkron penuh:** TIDAK
 - **Perlu perbaikan keras sebelum dipercaya penuh:** YA
-
