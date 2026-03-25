@@ -28,38 +28,23 @@ export class PumpCandidateWatch {
     limit: number,
     majorPairMaxShare: number,
   ): SignalCandidate[] {
+    const finalLimit = Math.max(0, Math.floor(limit));
+    if (finalLimit === 0) {
+      return [];
+    }
+
     const sorted = [...signals].sort((a, b) => b.score - a.score);
-    const majorLimit = Math.max(1, Math.floor(Math.max(0, Math.min(1, majorPairMaxShare)) * limit));
-    const selected: SignalCandidate[] = [];
-    const deferredMajors: SignalCandidate[] = [];
-    let majorCount = 0;
+    const clampedShare = Math.max(0, Math.min(1, majorPairMaxShare));
+    const majorLimit = Math.floor(clampedShare * finalLimit);
 
-    for (const item of sorted) {
-      if (selected.length >= limit) {
-        break;
-      }
+    const majors = sorted.filter((item) => classifyPair(item.pair).pairClass === 'MAJOR');
+    const nonMajors = sorted.filter((item) => classifyPair(item.pair).pairClass !== 'MAJOR');
 
-      const isMajor = classifyPair(item.pair).pairClass === 'MAJOR';
-      if (!isMajor) {
-        selected.push(item);
-        continue;
-      }
+    const selectedNonMajors = nonMajors.slice(0, finalLimit);
+    const remainingSlots = Math.max(0, finalLimit - selectedNonMajors.length);
+    const allowedMajorSlots = Math.max(0, Math.min(remainingSlots, majorLimit));
+    const selectedMajors = majors.slice(0, allowedMajorSlots);
 
-      if (majorCount < majorLimit) {
-        selected.push(item);
-        majorCount += 1;
-      } else {
-        deferredMajors.push(item);
-      }
-    }
-
-    for (const item of deferredMajors) {
-      if (selected.length >= limit) {
-        break;
-      }
-      selected.push(item);
-    }
-
-    return selected;
+    return [...selectedNonMajors, ...selectedMajors].sort((a, b) => b.score - a.score);
   }
 }

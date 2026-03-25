@@ -120,6 +120,36 @@ async function main(): Promise<void> {
     'High-liquidity majors excluded by candidate cap must not leak into final hotlist.',
   );
 
+  const strictZeroShareCandidates = service.buildCandidateFeed(signals, 4, 0);
+  assert.ok(
+    strictZeroShareCandidates.every((item) => !['btc_idr', 'eth_idr', 'sol_idr'].includes(item.pair)),
+    'majorPairMaxShare=0 must block major pairs from final candidate feed.',
+  );
+
+  const lowNonMajorSignals: SignalCandidate[] = [
+    makeSignal('btc_idr', 99, 99, 0.1, 0.2),
+    makeSignal('eth_idr', 98, 98, 0.1, 0.2),
+    makeSignal('sol_idr', 97, 97, 0.1, 0.2),
+    makeSignal('bnb_idr', 96, 96, 0.1, 0.2),
+    makeSignal('xrp_idr', 95, 85, 0.8, 1.5),
+    makeSignal('doge_idr', 94, 84, 0.7, 1.4),
+  ];
+  const cappedWhenNonMajorLow = service.buildCandidateFeed(lowNonMajorSignals, 6, 0.25);
+  const cappedMajors = cappedWhenNonMajorLow.filter(
+    (item) => ['btc_idr', 'eth_idr', 'sol_idr'].includes(item.pair),
+  );
+
+  assert.ok(
+    cappedMajors.length <= 1,
+    'When non-major candidates are limited, major pairs must still stay within cap.',
+  );
+
+  const cappedHotlist = hotlist.update(cappedWhenNonMajorLow.map(toOpportunity));
+  assert.ok(
+    cappedHotlist.filter((item) => ['btc_idr', 'eth_idr', 'sol_idr'].includes(item.pair)).length <= 1,
+    'Hotlist must not contain major pairs above candidate cap, even under low non-major supply.',
+  );
+
   console.log('market_watch_vs_hotlist_probe: ok');
 }
 
