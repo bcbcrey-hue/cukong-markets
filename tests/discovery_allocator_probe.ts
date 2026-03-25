@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import type { DiscoverySettings } from '../src/core/types';
 import { DiscoveryAllocator } from '../src/domain/market/discoveryAllocator';
 import type { DiscoveryRankedCandidate } from '../src/domain/market/discoveryScorer';
 
@@ -64,6 +65,17 @@ function candidate(
   };
 }
 
+const discoverySettings: DiscoverySettings = {
+  anomalySlots: 1,
+  rotationSlots: 1,
+  stealthSlots: 1,
+  liquidLeaderSlots: 2,
+  minVolumeIdr: 150_000_000,
+  maxSpreadPct: 1.2,
+  minDepthScore: 15,
+  majorPairMaxShare: 0.5,
+};
+
 async function main() {
   const allocator = new DiscoveryAllocator();
   const selected = allocator.allocate(
@@ -76,11 +88,12 @@ async function main() {
       candidate('stealth_a_idr', 90, 'STEALTH', false),
     ],
     4,
+    discoverySettings,
   );
 
   assert.equal(selected.length, 4, 'allocator should fill up to requested limit');
   const majorCount = selected.filter((item) => item.majorPair).length;
-  assert(majorCount <= 2, 'major pair cap must prevent liquid leaders from dominating final output');
+  assert(majorCount <= 2, 'major pair cap must follow runtime majorPairMaxShare upper bound');
   assert(selected.some((item) => item.bucket === 'ANOMALY'), 'ANOMALY bucket should be present');
   assert(selected.some((item) => item.bucket === 'ROTATION'), 'ROTATION bucket should be present');
   assert(selected.some((item) => item.bucket === 'STEALTH'), 'STEALTH bucket should be present');

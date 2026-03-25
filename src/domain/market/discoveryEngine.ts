@@ -1,5 +1,5 @@
 import { env } from '../../config/env';
-import type { OrderbookSnapshot, PairTickerSnapshot } from '../../core/types';
+import type { DiscoverySettings, OrderbookSnapshot, PairTickerSnapshot } from '../../core/types';
 import type { IndodaxOrderbook } from '../../integrations/indodax/publicApi';
 import { DiscoveryAllocator } from './discoveryAllocator';
 import { DiscoveryScorer, type DiscoveryRankedCandidate } from './discoveryScorer';
@@ -69,6 +69,7 @@ export class DiscoveryEngine {
   async discover(
     limit: number,
     fetchDepth: (pair: string) => Promise<IndodaxOrderbook>,
+    settings: DiscoverySettings,
   ): Promise<DiscoverySelectionResult> {
     const snapshots = this.universe.listSnapshots();
 
@@ -77,13 +78,19 @@ export class DiscoveryEngine {
         const ticker = this.tickerStore.buildFeatures(this.toTicker(snapshot));
         return this.scorer.scorePreDepth({ snapshot, ticker });
       })
-      .filter((candidate) => candidate.volumeIdr >= env.discoveryMinVolumeIdr)
-      .filter((candidate) => candidate.spreadPct <= env.discoveryMaxSpreadPct)
+      .filter((candidate) => candidate.volumeIdr >= settings.minVolumeIdr)
+      .filter((candidate) => candidate.spreadPct <= settings.maxSpreadPct)
       .sort((a, b) => b.discoveryScore - a.discoveryScore);
 
     const shortlistSize = Math.min(
       preDepthCandidates.length,
-      Math.max(limit * 2, env.discoveryAnomalySlots + env.discoveryRotationSlots + env.discoveryStealthSlots + env.discoveryLiquidLeaderSlots),
+      Math.max(
+        limit * 2,
+        settings.anomalySlots +
+          settings.rotationSlots +
+          settings.stealthSlots +
+          settings.liquidLeaderSlots,
+      ),
     );
 
     const preDepthShortlist = preDepthCandidates.slice(0, shortlistSize);
@@ -100,8 +107,8 @@ export class DiscoveryEngine {
       }),
     );
 
-    const depthFiltered = enriched.filter((candidate) => candidate.depthScore >= env.discoveryMinDepthScore);
-    const selected = this.allocator.allocate(depthFiltered, limit);
+    const depthFiltered = enriched.filter((candidate) => candidate.depthScore >= settings.minDepthScore);
+    const selected = this.allocator.allocate(depthFiltered, limit, settings);
 
     return {
       selected,

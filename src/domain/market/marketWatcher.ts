@@ -1,5 +1,5 @@
 import { logger } from '../../core/logger';
-import type { MarketSnapshot, PairTickerSnapshot, TradePrint } from '../../core/types';
+import type { DiscoverySettings, MarketSnapshot, PairTickerSnapshot, TradePrint } from '../../core/types';
 import type { IndodaxClient } from '../../integrations/indodax/client';
 import type { PairUniverse } from './pairUniverse';
 import { DiscoveryEngine } from './discoveryEngine';
@@ -17,6 +17,7 @@ export class MarketWatcher {
   constructor(
     private readonly indodax: IndodaxClient,
     private readonly universe: PairUniverse,
+    private readonly getDiscoverySettings: () => DiscoverySettings,
   ) {
     this.discoveryEngine = new DiscoveryEngine(this.universe);
   }
@@ -63,6 +64,7 @@ export class MarketWatcher {
     const discovery = await this.discoveryEngine.discover(
       Math.max(0, limit),
       async (pair) => this.indodax.getDepth(pair),
+      this.getDiscoverySettings(),
     );
 
     const snapshots: MarketSnapshot[] = [];

@@ -1,24 +1,27 @@
-import { env } from '../../config/env';
-import type { DiscoveryBucketType } from '../../core/types';
+import type { DiscoveryBucketType, DiscoverySettings } from '../../core/types';
 import type { DiscoveryRankedCandidate } from './discoveryScorer';
 
 const BUCKETS: DiscoveryBucketType[] = ['ANOMALY', 'ROTATION', 'STEALTH', 'LIQUID_LEADER'];
 
 export class DiscoveryAllocator {
-  allocate(candidates: DiscoveryRankedCandidate[], limit: number): DiscoveryRankedCandidate[] {
+  allocate(
+    candidates: DiscoveryRankedCandidate[],
+    limit: number,
+    settings: DiscoverySettings,
+  ): DiscoveryRankedCandidate[] {
     const safeLimit = Math.max(0, limit);
     if (safeLimit === 0 || candidates.length === 0) {
       return [];
     }
 
     const slotsByBucket: Record<DiscoveryBucketType, number> = {
-      ANOMALY: env.discoveryAnomalySlots,
-      ROTATION: env.discoveryRotationSlots,
-      STEALTH: env.discoveryStealthSlots,
-      LIQUID_LEADER: env.discoveryLiquidLeaderSlots,
+      ANOMALY: settings.anomalySlots,
+      ROTATION: settings.rotationSlots,
+      STEALTH: settings.stealthSlots,
+      LIQUID_LEADER: settings.liquidLeaderSlots,
     };
 
-    const majorCap = Math.max(1, Math.floor(safeLimit * env.discoveryMajorPairMaxShare));
+    const majorCap = Math.max(0, Math.min(safeLimit, Math.floor(safeLimit * settings.majorPairMaxShare)));
     let majorUsed = 0;
 
     const byBucket = new Map<DiscoveryBucketType, DiscoveryRankedCandidate[]>();

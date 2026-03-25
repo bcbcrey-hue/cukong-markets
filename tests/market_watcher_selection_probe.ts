@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
 
+import type { DiscoverySettings } from '../src/core/types';
 import { MarketWatcher } from '../src/domain/market/marketWatcher';
 import { PairUniverse } from '../src/domain/market/pairUniverse';
 import type { IndodaxClient } from '../src/integrations/indodax/client';
 import type { IndodaxOrderbook, IndodaxTickerEntry } from '../src/integrations/indodax/publicApi';
+
+
+const discoverySettings: DiscoverySettings = {
+  anomalySlots: 2,
+  rotationSlots: 1,
+  stealthSlots: 1,
+  liquidLeaderSlots: 1,
+  minVolumeIdr: 200_000_000,
+  maxSpreadPct: 1.2,
+  minDepthScore: 15,
+  majorPairMaxShare: 0.5,
+};
 
 class FakeIndodaxClient {
   async getTickers(): Promise<Record<string, IndodaxTickerEntry>> {
@@ -41,7 +54,11 @@ async function seedHistory(watcher: MarketWatcher) {
 }
 
 async function main() {
-  const watcher = new MarketWatcher(new FakeIndodaxClient() as unknown as IndodaxClient, new PairUniverse());
+  const watcher = new MarketWatcher(
+    new FakeIndodaxClient() as unknown as IndodaxClient,
+    new PairUniverse(),
+    () => discoverySettings,
+  );
   await seedHistory(watcher);
   const snapshots = await watcher.batchSnapshot(3);
   const selectedPairs = snapshots.map((item) => item.pair);
