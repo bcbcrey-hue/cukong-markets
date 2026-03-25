@@ -12,6 +12,7 @@ import { WorkerPoolService } from './services/workerPoolService';
 import { AccountStore } from './domain/accounts/accountStore';
 import { HotlistService } from './domain/market/hotlistService';
 import { MarketWatcher } from './domain/market/marketWatcher';
+import { buildDiscoveryObservabilityNotes } from './domain/market/discoveryObservability';
 import { PairUniverse } from './domain/market/pairUniverse';
 import { PumpCandidateWatch } from './domain/market/pumpCandidateWatch';
 import { SignalEngine } from './domain/signals/signalEngine';
@@ -105,7 +106,7 @@ export async function createApp(): Promise<AppRuntime> {
 
   const pairUniverse = new PairUniverse();
   const indodax = new IndodaxClient();
-  const marketWatcher = new MarketWatcher(indodax, pairUniverse, () => settings.get().discovery);
+  const marketWatcher = new MarketWatcher(indodax, pairUniverse, () => settings.get().scanner.discovery);
   const history = new PairHistoryStore(persistence);
   const signalEngine = new SignalEngine(pairUniverse);
   const opportunityEngine = new OpportunityEngine(
@@ -302,7 +303,7 @@ export async function createApp(): Promise<AppRuntime> {
     const pumpCandidates = pumpCandidateWatch.buildCandidateFeed(
       scored,
       candidateLimit,
-      currentSettings.discovery.majorPairMaxShare,
+      currentSettings.scanner.discovery.majorPairMaxShare,
     );
     const candidatePairs = new Set(pumpCandidates.map((item) => item.pair));
     const candidateSnapshots = snapshots.filter((snapshot) => candidatePairs.has(snapshot.pair));
@@ -404,6 +405,10 @@ export async function createApp(): Promise<AppRuntime> {
         `workersEnabled=${settings.get().workers.enabled}`,
         `marketScanIntervalMs=${marketScanIntervalMs}`,
         `runtimePollingIntervalMs=${runtimePollingIntervalMs}`,
+        ...buildDiscoveryObservabilityNotes(
+          marketWatcher.getLastDiscoverySummary(),
+          settings.get().scanner.discovery,
+        ),
       ],
     });
   });

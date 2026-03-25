@@ -16,18 +16,34 @@ import {
 
 const LEGACY_DEFAULT_BUY_SLIPPAGE_BPS = 25;
 const LEGACY_MAX_BUY_SLIPPAGE_BPS = 80;
+type LegacySettingsShape = Partial<BotSettings> & {
+  discovery?: Partial<DiscoverySettings>;
+  scanner?: Omit<Partial<ScannerSettings>, 'discovery'> & { discovery?: Partial<DiscoverySettings> };
+};
+type ScannerPatch = Omit<Partial<ScannerSettings>, 'discovery'> & {
+  discovery?: Partial<DiscoverySettings>;
+};
 
 export class SettingsService {
   private settings: BotSettings = createDefaultSettings();
 
   constructor(private readonly persistence: PersistenceService) {}
 
-  private normalize(input: BotSettings): BotSettings {
+  private normalize(input: LegacySettingsShape): BotSettings {
     const defaults = createDefaultSettings();
+    const { discovery: _legacyDiscovery, ...inputWithoutLegacyDiscovery } = input;
+    const legacyDiscovery = input.discovery ?? {};
+    const scannerInput: ScannerPatch = input.scanner ?? {};
+    const scannerDiscoveryInput = scannerInput.discovery ?? {};
+    const mergedDiscovery: DiscoverySettings = {
+      ...defaults.scanner.discovery,
+      ...legacyDiscovery,
+      ...scannerDiscoveryInput,
+    };
 
     const next: BotSettings = {
       ...defaults,
-      ...input,
+      ...inputWithoutLegacyDiscovery,
       risk: {
         ...defaults.risk,
         ...input.risk,
@@ -38,11 +54,8 @@ export class SettingsService {
       },
       scanner: {
         ...defaults.scanner,
-        ...input.scanner,
-      },
-      discovery: {
-        ...defaults.discovery,
-        ...input.discovery,
+        ...scannerInput,
+        discovery: mergedDiscovery,
       },
       workers: {
         ...defaults.workers,
@@ -162,12 +175,17 @@ export class SettingsService {
   }
 
   async patchScanner(
-    partial: Partial<ScannerSettings>,
+    partial: ScannerPatch,
   ): Promise<BotSettings> {
+    const nextDiscovery = partial.discovery
+      ? { ...this.settings.scanner.discovery, ...partial.discovery }
+      : this.settings.scanner.discovery;
+
     return this.patch({
       scanner: {
         ...this.settings.scanner,
         ...partial,
+        discovery: nextDiscovery,
       },
     });
   }
@@ -176,12 +194,7 @@ export class SettingsService {
   async patchDiscovery(
     partial: Partial<DiscoverySettings>,
   ): Promise<BotSettings> {
-    return this.patch({
-      discovery: {
-        ...this.settings.discovery,
-        ...partial,
-      },
-    });
+    return this.patchScanner({ discovery: partial });
   }
 
   async patchWorkers(
