@@ -536,7 +536,11 @@ async function openMenu(
       await replyStatus(ctx, deps);
       return;
     case 'MW':
-      await replyText(ctx, deps.report.marketWatchText(deps.state.get().lastSignals), monitoringKeyboard);
+      await replyText(
+        ctx,
+        deps.report.marketWatchText(deps.state.get().lastMarketOverview),
+        monitoringKeyboard,
+      );
       return;
     case 'HOT': {
       const list = deps.hotlist.list();

@@ -3,6 +3,7 @@ import type {
   ExecutionSummary,
   HealthSnapshot,
   HotlistEntry,
+  MarketOverview,
   OpportunityAssessment,
   OrderRecord,
   PositionRecord,
@@ -193,12 +194,38 @@ export class ReportService {
     return ['🔥 HOTLIST', ...lines].join('\n');
   }
 
-  marketWatchText(signals: SignalCandidate[]): string {
-    if (!signals.length) {
+  marketWatchText(input: MarketOverview | SignalCandidate[] | null): string {
+    const overview = Array.isArray(input)
+      ? ({
+        timestamp: Date.now(),
+        breadth: {
+          totalPairs: input.length,
+          gainers1m: input.filter((item) => item.change1m > 0).length,
+          losers1m: input.filter((item) => item.change1m < 0).length,
+          gainers5m: input.filter((item) => item.change5m > 0).length,
+          losers5m: input.filter((item) => item.change5m < 0).length,
+        },
+        liquidLeaders: [...input].sort((a, b) => b.liquidityScore - a.liquidityScore).slice(0, 5),
+        rotationLeaders: [...input]
+          .sort((a, b) => Math.abs(b.change5m) - Math.abs(a.change5m))
+          .slice(0, 5),
+        watchlist: [...input].sort((a, b) => b.score - a.score).slice(0, 8),
+      } satisfies MarketOverview)
+      : input;
+
+    if (!overview || overview.watchlist.length === 0) {
       return '👁️ Market watch belum berisi pair aktif.';
     }
 
-    const lines = signals.slice(0, 8).map((item, index) =>
+    const breadthLine = `breadth=total:${overview.breadth.totalPairs}, g1m:${overview.breadth.gainers1m}, l1m:${overview.breadth.losers1m}, g5m:${overview.breadth.gainers5m}, l5m:${overview.breadth.losers5m}`;
+    const liquidLeaders = overview.liquidLeaders.length > 0
+      ? `liquid=${overview.liquidLeaders.map((item) => item.pair).join(', ')}`
+      : 'liquid=-';
+    const rotationSummary = overview.rotationLeaders.length > 0
+      ? `rotation=${overview.rotationLeaders.map((item) => item.pair).join(', ')}`
+      : 'rotation=-';
+
+    const lines = overview.watchlist.slice(0, 8).map((item, index) =>
       [
         `${index + 1}. ${item.pair}`,
         `p=${asNum(item.marketPrice, 8)}`,
@@ -209,7 +236,7 @@ export class ReportService {
       ].join(' | '),
     );
 
-    return ['👁️ MARKET WATCH', ...lines].join('\n');
+    return ['👁️ MARKET WATCH', breadthLine, liquidLeaders, rotationSummary, ...lines].join('\n');
   }
 
   private orderbookDebugLines(signal: {

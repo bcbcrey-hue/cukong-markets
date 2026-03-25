@@ -39,6 +39,8 @@ export function createDefaultRuntimeState(): RuntimeState {
     activeTradingMode: env.defaultTradingMode,
     pairCooldowns: {},
     pairs: {},
+    lastMarketOverview: null,
+    lastPumpCandidates: [],
     lastHotlist: [],
     lastSignals: [],
     lastOpportunities: [],
