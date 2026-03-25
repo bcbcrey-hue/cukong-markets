@@ -49,6 +49,9 @@ export class JsonStore<T> {
         await this.write(this.cloneFallback());
         return this.cloneFallback();
       }
+      if (error instanceof SyntaxError) {
+        return this.recoverFromCorruptedJson(error);
+      }
       throw error;
     }
   }
@@ -76,6 +79,44 @@ export class JsonStore<T> {
 
   private cloneFallback(): T {
     return JSON.parse(JSON.stringify(this.fallback)) as T;
+  }
+
+  private async recoverFromCorruptedJson(error: SyntaxError): Promise<T> {
+    const quarantineFilePath = `${this.filePath}.corrupt-${Date.now()}.json`;
+    let quarantineWritten = false;
+
+    try {
+      const raw = await readFile(this.filePath, 'utf8');
+      await this.ensureDir();
+      await writeFile(quarantineFilePath, raw, 'utf8');
+      quarantineWritten = true;
+    } catch (quarantineError) {
+      console.error(
+        '[json-store] failed to write corrupted-state quarantine',
+        JSON.stringify({
+          filePath: this.filePath,
+          quarantineFilePath,
+          quarantineError:
+            quarantineError instanceof Error
+              ? quarantineError.message
+              : String(quarantineError),
+        }),
+      );
+    }
+
+    const fallback = this.cloneFallback();
+    await this.write(fallback);
+
+    console.error(
+      '[json-store] recovered from corrupted json state using fallback',
+      JSON.stringify({
+        filePath: this.filePath,
+        quarantineFilePath: quarantineWritten ? quarantineFilePath : null,
+        error: error.message,
+      }),
+    );
+
+    return fallback;
   }
 }
 

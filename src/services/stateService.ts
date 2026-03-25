@@ -34,21 +34,23 @@ export class StateService {
   }
 
   async replace(next: RuntimeState): Promise<RuntimeState> {
-    this.state = {
+    const candidate: RuntimeState = {
       ...next,
       lastUpdatedAt: new Date().toISOString(),
     };
-    await this.persistence.saveState(this.state);
+    await this.persistence.saveState(candidate);
+    this.state = candidate;
     return this.state;
   }
 
   async patch(partial: Partial<RuntimeState>): Promise<RuntimeState> {
-    this.state = {
+    const candidate: RuntimeState = {
       ...this.state,
       ...partial,
       lastUpdatedAt: new Date().toISOString(),
     };
-    await this.persistence.saveState(this.state);
+    await this.persistence.saveState(candidate);
+    this.state = candidate;
     return this.state;
   }
 
