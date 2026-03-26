@@ -272,6 +272,24 @@ async function main() {
   );
   assert.equal(deps.__probe.getBuyCallCount(), 0, 'Blocked BUY callback must not call execution.buy');
 
+  const openMinPump = buildCallback({ namespace: 'SET', action: 'MIN_PUMP_PROBABILITY' });
+  await bot.actionHandler!(createActionContext(openMinPump, replies));
+  await bot.textHandler!(createTextContext('65', replies));
+  assert.equal(
+    settings.get().strategy.minPumpProbability,
+    0.65,
+    'MIN_PUMP_PROBABILITY should accept percent input and persist normalized decimal',
+  );
+
+  const openMinConfidence = buildCallback({ namespace: 'SET', action: 'MIN_CONFIDENCE' });
+  await bot.actionHandler!(createActionContext(openMinConfidence, replies));
+  await bot.textHandler!(createTextContext('0.72', replies));
+  assert.equal(
+    settings.get().strategy.minConfidence,
+    0.72,
+    'MIN_CONFIDENCE should accept decimal input and persist directly',
+  );
+
   console.log('PASS telegram_slippage_confirmation_probe');
 }
 
