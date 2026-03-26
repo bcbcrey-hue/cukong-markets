@@ -114,7 +114,10 @@ export class DiscoveryEngine {
       }),
     );
 
-    const depthFiltered = enriched.filter((candidate) => candidate.depthScore >= settings.minDepthScore);
+    const minDepthGate = Math.max(3, settings.minDepthScore);
+    const depthFiltered = enriched
+      .filter((candidate) => candidate.depthScore >= 3)
+      .filter((candidate) => candidate.depthScore >= minDepthGate);
     const selected = this.allocator.allocate(depthFiltered, limit, settings);
     const summary: DiscoveryObservabilitySummary = {
       slotPlan: {

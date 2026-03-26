@@ -1,7 +1,7 @@
 import type { DiscoveryBucketType, DiscoverySettings } from '../../core/types';
 import type { DiscoveryRankedCandidate } from './discoveryScorer';
 
-const BUCKETS: DiscoveryBucketType[] = ['ANOMALY', 'ROTATION', 'STEALTH', 'LIQUID_LEADER'];
+const BUCKETS: DiscoveryBucketType[] = ['ANOMALY', 'STEALTH', 'ROTATION', 'LIQUID_LEADER'];
 
 export class DiscoveryAllocator {
   allocate(
@@ -30,7 +30,12 @@ export class DiscoveryAllocator {
         bucket,
         candidates
           .filter((item) => item.bucket === bucket)
-          .sort((a, b) => b.discoveryScore - a.discoveryScore),
+          .sort((a, b) => {
+            if (a.majorPair !== b.majorPair) {
+              return Number(a.majorPair) - Number(b.majorPair);
+            }
+            return b.discoveryScore - a.discoveryScore;
+          }),
       );
     }
 
@@ -70,7 +75,12 @@ export class DiscoveryAllocator {
       }
     }
 
-    const remaining = [...candidates].sort((a, b) => b.discoveryScore - a.discoveryScore);
+    const remaining = [...candidates].sort((a, b) => {
+      if (a.majorPair !== b.majorPair) {
+        return Number(a.majorPair) - Number(b.majorPair);
+      }
+      return b.discoveryScore - a.discoveryScore;
+    });
     for (const candidate of remaining) {
       if (selected.length >= safeLimit) {
         break;

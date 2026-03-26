@@ -18,18 +18,18 @@ const MID_CAPS = new Set(['xrp', 'ada', 'doge', 'trx', 'bnb', 'pepe', 'shib']);
 export function classifyPair(pair: string): PairClassification {
   const { baseAsset, quoteAsset } = splitPair(pair);
 
-  let tier: PairTier = 'C';
+  let tier: PairTier = 'A';
   let pairClass: PairClass = 'MICRO';
-  let regimeHint: MarketRegime = 'QUIET';
+  let regimeHint: MarketRegime = 'BREAKOUT_SETUP';
 
   if (isMajorBaseAsset(baseAsset)) {
-    tier = 'A';
+    tier = 'C';
     pairClass = 'MAJOR';
-    regimeHint = 'ACCUMULATION';
+    regimeHint = 'QUIET';
   } else if (MID_CAPS.has(baseAsset)) {
     tier = 'B';
     pairClass = 'MID';
-    regimeHint = 'BREAKOUT_SETUP';
+    regimeHint = 'ACCUMULATION';
   }
 
   return {
