@@ -151,6 +151,12 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
     - `tests/runtime_selector_fallback_general_probe.ts`
     - `tests/runtime_selector_fallback_pair_priority_probe.ts`
     - `tests/runtime_selector_monitoring_continuity_probe.ts`
+- Jalur Batch 4 exit scalping intelligence sudah diprove:
+  - TP sekarang soft/guard rail (bukan hard auto-sell) ketika continuation + quote flow masih sehat (`tests/hold_winner_while_pump_healthy_probe.ts`).
+  - Kondisi distribusi/dump risk memicu `DUMP_EXIT` (`tests/dump_exit_trigger_probe.ts`).
+  - Kondisi market darurat memicu `EMERGENCY_EXIT` override (`tests/emergency_exit_override_probe.ts`).
+  - Wiring runtime monitor posisi ke jalur action `SCALE_OUT`/exit dibuktikan hidup (`tests/runtime_exit_wiring_probe.ts`).
+  - Metadata posisi (`pumpState`, `lastContinuationScore`, `lastDumpRisk`, `lastScaleOutAt`, `emergencyExitArmed`) dipersist dan ikut update di mark loop (`tests/position_mark_pnl_correctness_probe.ts`).
 - `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
 
 ## Batas yang masih harus jujur
@@ -165,6 +171,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
 - Probe Batch 3 runtime selector saat ini fokus pada logika pemilihan kandidat di source/probe; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback di market nyata.
+- Probe Batch 4 exit intelligence sudah menutup logika exit decision + wiring monitor, tetapi belum membuktikan slippage/partial-fill real exchange pada skenario dump ekstrem.
 - End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
 - Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.
 

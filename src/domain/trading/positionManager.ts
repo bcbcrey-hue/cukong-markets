@@ -12,6 +12,9 @@ export interface OpenPositionInput {
   stopLossPrice: number | null;
   takeProfitPrice: number | null;
   sourceOrderId?: string;
+  entryStyle?: 'SCOUT' | 'CONFIRM';
+  continuationScore?: number;
+  dumpRisk?: number;
 }
 
 export class PositionManager {
@@ -42,6 +45,14 @@ export class PositionManager {
             totalBoughtQuantity,
             totalSoldQuantity,
             totalEntryFeesPaid,
+            entryStyle: position.entryStyle ?? 'CONFIRM',
+            pumpState: position.pumpState ?? 'ACTIVE',
+            lastContinuationScore: Number.isFinite(position.lastContinuationScore)
+              ? position.lastContinuationScore
+              : 0,
+            lastDumpRisk: Number.isFinite(position.lastDumpRisk) ? position.lastDumpRisk : 0,
+            lastScaleOutAt: position.lastScaleOutAt ?? null,
+            emergencyExitArmed: position.emergencyExitArmed ?? false,
           };
         })
       : [];
@@ -99,6 +110,12 @@ export class PositionManager {
       totalSoldQuantity: 0,
       stopLossPrice: input.stopLossPrice,
       takeProfitPrice: input.takeProfitPrice,
+      entryStyle: input.entryStyle ?? 'CONFIRM',
+      pumpState: 'ACTIVE',
+      lastContinuationScore: input.continuationScore ?? 0,
+      lastDumpRisk: input.dumpRisk ?? 0,
+      lastScaleOutAt: null,
+      emergencyExitArmed: false,
       openedAt: now,
       updatedAt: now,
       closedAt: null,
@@ -148,6 +165,11 @@ export class PositionManager {
       totalBoughtQuantity: (current.totalBoughtQuantity ?? current.quantity) + addedQuantity,
       stopLossPrice: input.stopLossPrice,
       takeProfitPrice: input.takeProfitPrice,
+      entryStyle: input.entryStyle ?? current.entryStyle ?? 'CONFIRM',
+      pumpState: current.pumpState ?? 'ACTIVE',
+      lastContinuationScore: input.continuationScore ?? current.lastContinuationScore ?? 0,
+      lastDumpRisk: input.dumpRisk ?? current.lastDumpRisk ?? 0,
+      emergencyExitArmed: current.emergencyExitArmed ?? false,
       updatedAt: nowIso(),
       sourceOrderId: input.sourceOrderId ?? current.sourceOrderId,
     };
@@ -157,7 +179,16 @@ export class PositionManager {
     return next;
   }
 
-  async updateMark(pair: string, markPrice: number): Promise<void> {
+  async updateMark(
+    pair: string,
+    markPrice: number,
+    metadata?: {
+      continuationScore?: number;
+      dumpRisk?: number;
+      pumpState?: PositionRecord['pumpState'];
+      emergencyExitArmed?: boolean;
+    },
+  ): Promise<void> {
     this.positions = this.positions.map((item) => {
       if (item.status === 'CLOSED' || item.pair !== pair) {
         return item;
@@ -173,6 +204,10 @@ export class PositionManager {
           item.quantity,
           item.entryFeesPaid ?? 0,
         ),
+        pumpState: metadata?.pumpState ?? item.pumpState,
+        lastContinuationScore: metadata?.continuationScore ?? item.lastContinuationScore,
+        lastDumpRisk: metadata?.dumpRisk ?? item.lastDumpRisk,
+        emergencyExitArmed: metadata?.emergencyExitArmed ?? item.emergencyExitArmed,
         updatedAt: nowIso(),
       };
     });
@@ -237,6 +272,8 @@ export class PositionManager {
           : safeCloseQuantity > 0
             ? 'PARTIALLY_CLOSED'
             : current.status,
+      lastScaleOutAt:
+        !isFullyClosed && safeCloseQuantity > 0 ? nowIso() : current.lastScaleOutAt ?? null,
       updatedAt: nowIso(),
       closedAt: isFullyClosed ? nowIso() : current.closedAt,
     };

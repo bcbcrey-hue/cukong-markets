@@ -3,6 +3,20 @@ export type ExecutionMode = 'SIMULATED' | 'LIVE';
 export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
+export type PositionEntryStyle = 'SCOUT' | 'CONFIRM';
+export type PositionPumpState = 'ACTIVE' | 'WEAKENING' | 'DISTRIBUTING' | 'COLLAPSING';
+export type ExitAction = 'HOLD' | 'SCALE_OUT' | 'TAKE_PROFIT_EXIT' | 'DUMP_EXIT' | 'EMERGENCY_EXIT';
+export type PositionCloseReason =
+  | 'AUTO_EXIT'
+  | 'MANUAL_SELL'
+  | 'SELL_ALL_POSITIONS'
+  | 'SCALE_OUT'
+  | 'TAKE_PROFIT_EXIT'
+  | 'DUMP_EXIT'
+  | 'EMERGENCY_EXIT'
+  | 'TAKE_PROFIT'
+  | 'STOP_LOSS'
+  | 'TRAILING_STOP';
 export type RuntimeStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'ERROR';
 export type PairClass = 'MAJOR' | 'MID' | 'MICRO';
 export type EntryTimingState =
@@ -418,7 +432,8 @@ export interface OrderRecord {
   executedTradeCount?: number;
   lastExecutedAt?: string;
   relatedPositionId?: string;
-  closeReason?: string;
+  closeReason?: PositionCloseReason;
+  entryStyle?: PositionEntryStyle;
   notes?: string;
 }
 
@@ -443,10 +458,40 @@ export interface PositionRecord {
   totalSoldQuantity: number;
   stopLossPrice: number | null;
   takeProfitPrice: number | null;
+  entryStyle: PositionEntryStyle;
+  pumpState: PositionPumpState;
+  lastContinuationScore: number;
+  lastDumpRisk: number;
+  lastScaleOutAt: string | null;
+  emergencyExitArmed: boolean;
   openedAt: string;
   updatedAt: string;
   closedAt: string | null;
   sourceOrderId?: string;
+}
+
+export interface ExitDecisionInput {
+  pnlPct: number;
+  peakPnlPct: number;
+  spreadPct: number;
+  retraceFromPeakPct: number;
+  continuationScore: number;
+  quoteFlowScore: number;
+  imbalance: number;
+  dumpRisk: number;
+  stopLossPct: number;
+  takeProfitPct: number;
+  trailingStopPct: number;
+  emergencyExitArmed: boolean;
+}
+
+export interface ExitDecisionResult {
+  action: ExitAction;
+  shouldExit: boolean;
+  shouldScaleOut: boolean;
+  closeFraction: number;
+  closeReason?: PositionCloseReason;
+  rationale: string[];
 }
 
 export interface TradeRecord {

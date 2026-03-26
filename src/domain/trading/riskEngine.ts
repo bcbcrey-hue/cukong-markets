@@ -1,11 +1,13 @@
 import type {
   BotSettings,
+  ExitDecisionResult,
   OpportunityAssessment,
   PositionRecord,
   RiskCheckResult,
   SignalCandidate,
   StoredAccount,
 } from '../../core/types';
+import { ExitDecisionEngine } from '../intelligence/exitDecisionEngine';
 
 export interface RiskEntryCheckInput {
   account: StoredAccount;
@@ -16,10 +18,6 @@ export interface RiskEntryCheckInput {
   cooldownUntil?: number | null;
 }
 
-export interface ExitDecision {
-  shouldExit: boolean;
-  reason?: 'TAKE_PROFIT' | 'STOP_LOSS' | 'TRAILING_STOP';
-}
 type EntryLane = 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
 
 function pctChange(from: number, to: number): number {
@@ -31,6 +29,8 @@ function pctChange(from: number, to: number): number {
 }
 
 export class RiskEngine {
+  private readonly exitDecision = new ExitDecisionEngine();
+
   resolveLaneAdjustedAmountIdr(input: RiskEntryCheckInput): {
     lane: EntryLane;
     baseAmountIdr: number;
@@ -215,45 +215,75 @@ export class RiskEngine {
   evaluateExit(
     position: PositionRecord,
     settings: BotSettings,
-  ): ExitDecision {
+    marketInput?: {
+      spreadPct?: number;
+      continuationScore?: number;
+      quoteFlowScore?: number;
+      imbalance?: number;
+      dumpRisk?: number;
+    },
+  ): ExitDecisionResult {
     if (position.status === 'CLOSED') {
-      return { shouldExit: false };
+      return {
+        action: 'HOLD',
+        shouldExit: false,
+        shouldScaleOut: false,
+        closeFraction: 0,
+        rationale: ['position already closed'],
+      };
     }
 
     const pnlPct = pctChange(position.averageEntryPrice, position.currentPrice);
     const peakPrice = position.peakPrice ?? position.currentPrice;
     const peakPnlPct = pctChange(position.averageEntryPrice, peakPrice);
+    const retraceFromPeakPct =
+      peakPrice > 0 ? Math.max(0, ((peakPrice - position.currentPrice) / peakPrice) * 100) : 0;
+
+    const stopGuardTriggered =
+      position.stopLossPrice !== null && position.currentPrice <= position.stopLossPrice;
+    const takeProfitGuardTriggered =
+      position.takeProfitPrice !== null && position.currentPrice >= position.takeProfitPrice;
+    const emergencyArmed = position.emergencyExitArmed || stopGuardTriggered;
+
+    const decision = this.exitDecision.decide({
+      pnlPct,
+      peakPnlPct,
+      spreadPct: marketInput?.spreadPct ?? 0,
+      retraceFromPeakPct,
+      continuationScore: marketInput?.continuationScore ?? position.lastContinuationScore ?? 0,
+      quoteFlowScore: marketInput?.quoteFlowScore ?? 12,
+      imbalance: marketInput?.imbalance ?? 0.05,
+      dumpRisk: marketInput?.dumpRisk ?? position.lastDumpRisk ?? 0,
+      stopLossPct: settings.risk.stopLossPct,
+      takeProfitPct: settings.risk.takeProfitPct,
+      trailingStopPct: settings.risk.trailingStopPct,
+      emergencyExitArmed: emergencyArmed,
+    });
 
     if (
-      position.takeProfitPrice !== null &&
-      position.currentPrice >= position.takeProfitPrice
+      takeProfitGuardTriggered
+      && decision.action === 'HOLD'
+      && !decision.shouldScaleOut
+      && decision.closeFraction === 0
     ) {
-      return { shouldExit: true, reason: 'TAKE_PROFIT' };
+      return {
+        ...decision,
+        rationale: [...decision.rationale, 'Take-profit guard rail tercapai tapi winner masih sehat'],
+      };
     }
 
-    if (
-      position.stopLossPrice !== null &&
-      position.currentPrice <= position.stopLossPrice
-    ) {
-      return { shouldExit: true, reason: 'STOP_LOSS' };
+    if (stopGuardTriggered && decision.action === 'HOLD') {
+      return {
+        action: 'EMERGENCY_EXIT',
+        shouldExit: true,
+        shouldScaleOut: false,
+        closeFraction: 1,
+        closeReason: 'EMERGENCY_EXIT',
+        rationale: ['Stop guard rail terpicu dengan market tidak aman'],
+      };
     }
 
-    if (pnlPct >= settings.risk.takeProfitPct) {
-      return { shouldExit: true, reason: 'TAKE_PROFIT' };
-    }
-
-    if (pnlPct <= -Math.abs(settings.risk.stopLossPct)) {
-      return { shouldExit: true, reason: 'STOP_LOSS' };
-    }
-
-    const trailingTrigger = settings.risk.takeProfitPct * 0.7;
-    const trailingFloorPct = peakPnlPct - Math.abs(settings.risk.trailingStopPct);
-
-    if (peakPnlPct >= trailingTrigger && pnlPct <= trailingFloorPct) {
-      return { shouldExit: true, reason: 'TRAILING_STOP' };
-    }
-
-    return { shouldExit: false };
+    return decision;
   }
 
   buildStops(

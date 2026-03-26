@@ -33,13 +33,23 @@ async function main() {
   assert.equal(opened.currentPrice, 100, 'Initial mark follows first known execution price');
   assert.equal(opened.peakPrice, 100, 'Initial peak follows initial mark');
   assert.equal(opened.unrealizedPnl, -1, 'Initial unrealized pnl must include entry fee');
+  assert.equal(opened.entryStyle, 'CONFIRM', 'Default entry style should fallback to CONFIRM');
+  assert.equal(opened.pumpState, 'ACTIVE', 'Default pump state should be ACTIVE');
 
-  await positionManager.updateMark('btc_idr', 90);
+  await positionManager.updateMark('btc_idr', 90, {
+    continuationScore: 0.28,
+    dumpRisk: 0.75,
+    pumpState: 'DISTRIBUTING',
+    emergencyExitArmed: false,
+  });
   const markedDown = positionManager.getById(opened.id);
   assert.ok(markedDown, 'Position should exist after mark down');
   assert.equal(markedDown.currentPrice, 90, 'Current price should track market mark');
   assert.equal(markedDown.peakPrice, 100, 'Peak price should not drop on lower mark');
   assert.equal(markedDown.unrealizedPnl, -11, 'Unrealized pnl should use current mark and fees');
+  assert.equal(markedDown.lastContinuationScore, 0.28, 'Continuation metadata should update on mark');
+  assert.equal(markedDown.lastDumpRisk, 0.75, 'Dump risk metadata should update on mark');
+  assert.equal(markedDown.pumpState, 'DISTRIBUTING', 'Pump state metadata should update on mark');
 
   const averaged = await positionManager.applyBuyFill({
     accountId: 'acc-1',
@@ -72,9 +82,14 @@ async function main() {
   const risk = new RiskEngine();
   const settings = createDefaultSettings();
   const exitBeforeNewMark = risk.evaluateExit(averaged, settings);
-  assert.equal(exitBeforeNewMark.reason, 'STOP_LOSS', 'Risk decision should follow stale-lower mark, not buy fill');
+  assert.equal(exitBeforeNewMark.action, 'DUMP_EXIT', 'Risk decision should follow stale-lower mark, not buy fill');
 
-  await positionManager.updateMark('btc_idr', 130);
+  await positionManager.updateMark('btc_idr', 130, {
+    continuationScore: 0.72,
+    dumpRisk: 0.2,
+    pumpState: 'ACTIVE',
+    emergencyExitArmed: false,
+  });
   const markedUp = positionManager.getById(opened.id);
   assert.ok(markedUp, 'Position should exist after mark up');
   assert.equal(markedUp.currentPrice, 130, 'Mark update should set current mark');
@@ -102,7 +117,14 @@ async function main() {
   assert.match(report, /unreal=19\.00/, 'Report unrealized pnl must display mark-based value');
 
   const exitAfterNewMark = risk.evaluateExit(partiallyClosed, settings);
-  assert.equal(exitAfterNewMark.reason, 'TAKE_PROFIT', 'Risk decision should react to updated mark');
+  assert.equal(exitAfterNewMark.action, 'SCALE_OUT', 'Risk decision should react to updated mark with soft TP behaviour');
+
+  const reloadedManager = new PositionManager(persistence);
+  await reloadedManager.load();
+  const reloaded = reloadedManager.getById(opened.id);
+  assert.ok(reloaded, 'Position should persist after reload');
+  assert.equal(reloaded.lastDumpRisk, partiallyClosed.lastDumpRisk, 'Dump risk metadata must persist');
+  assert.equal(reloaded.pumpState, partiallyClosed.pumpState, 'Pump state metadata must persist');
 
   console.log('PASS position_mark_pnl_correctness_probe');
 }
