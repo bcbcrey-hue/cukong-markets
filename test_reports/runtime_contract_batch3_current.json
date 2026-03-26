@@ -1,9 +1,9 @@
 {
-  "generatedAtUtc": "2026-03-26T16:49:58.266Z",
+  "generatedAtUtc": "2026-03-26T21:32:13.934Z",
   "verifierContractVersion": "phase2-batch3-v2",
   "sourceOfTruth": {
     "repository": "https://github.com/masreykangtrade-oss/cukong-markets",
-    "roadmap": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP.md",
+    "roadmap": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP-REFACTOR-LOGIC.md",
     "runtimeEnvModule": "src/config/env.ts"
   },
   "processStart": {
