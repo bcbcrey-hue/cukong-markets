@@ -293,10 +293,20 @@ export function calculateScore(input: ScoreCalculationInput): ScoreCalculationRe
     },
   ];
 
+  const depthConfidenceScore =
+    orderbook.depthScore < 3
+      ? -40
+      : orderbook.depthScore <= 18
+        ? 16
+        : orderbook.depthScore <= 30
+          ? 7
+          : 2;
+
   const confidence = clamp(
-    total * 0.6 +
-      Math.max(0, orderbook.depthScore - 40) * 0.25 +
-      Math.max(0, ticker.momentumScore - 20) * 0.15,
+    total * 0.68 +
+      depthConfidenceScore +
+      Math.max(0, ticker.momentumScore - 20) * 0.12 -
+      (deadBookPenalty > 0 ? 20 : 0),
     0,
     100,
   ) / 100;

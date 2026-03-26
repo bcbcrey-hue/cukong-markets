@@ -30,6 +30,7 @@ const officialProbes = [
   'tests/discovery_scanner_settings_probe.ts',
   'tests/discovery_runtime_consumer_canonical_probe.ts',
   'tests/discovery_health_observability_probe.ts',
+  'tests/discovery_score_confidence_pivot_probe.ts',
   'tests/history_outcome_grounding_probe.ts',
   'tests/ticker_quote_flow_features_probe.ts',
   'tests/runtime_backend_regression.ts',

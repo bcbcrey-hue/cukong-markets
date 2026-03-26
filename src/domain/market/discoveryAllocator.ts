@@ -21,8 +21,16 @@ export class DiscoveryAllocator {
       LIQUID_LEADER: settings.liquidLeaderSlots,
     };
 
-    const majorCap = Math.max(0, Math.min(safeLimit, Math.floor(safeLimit * settings.majorPairMaxShare)));
+    const majorCapRaw = Math.max(
+      0,
+      Math.min(safeLimit, Math.floor(safeLimit * settings.majorPairMaxShare)),
+    );
+    const allowLiquidLeaderFallbackMajor =
+      majorCapRaw === 0 &&
+      settings.majorPairMaxShare > 0 &&
+      settings.liquidLeaderSlots > 0;
     let majorUsed = 0;
+    let liquidLeaderFallbackMajorUsed = false;
 
     const byBucket = new Map<DiscoveryBucketType, DiscoveryRankedCandidate[]>();
     for (const bucket of BUCKETS) {
@@ -47,8 +55,18 @@ export class DiscoveryAllocator {
         return false;
       }
 
-      if (candidate.majorPair && majorUsed >= majorCap) {
-        return false;
+      if (candidate.majorPair) {
+        if (majorUsed < majorCapRaw) {
+          // keep strict cap path
+        } else if (
+          allowLiquidLeaderFallbackMajor &&
+          candidate.bucket === 'LIQUID_LEADER' &&
+          !liquidLeaderFallbackMajorUsed
+        ) {
+          liquidLeaderFallbackMajorUsed = true;
+        } else {
+          return false;
+        }
       }
 
       selected.push(candidate);
