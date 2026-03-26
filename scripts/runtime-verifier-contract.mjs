@@ -31,7 +31,8 @@ const runtimeContract = {
   verifierContractVersion: 'phase2-batch3-v2',
   sourceOfTruth: {
     repository: 'https://github.com/masreykangtrade-oss/cukong-markets',
-    roadmap: 'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP.md',
+    roadmap:
+      'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP-REFACTOR-LOGIC.md',
     runtimeEnvModule: 'src/config/env.ts',
   },
   processStart: {
