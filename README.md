@@ -38,6 +38,14 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run verify`
 - `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch3_current.json`)
 
+Job/check utama workflow bernama `verify-runtime-contract`.
+
+### Catatan penting soal status check PR
+
+- Dari source code, kita bisa membuktikan workflow + job + langkah validasi memang terdefinisi.
+- Tetapi status “check PR benar-benar finish success” adalah data eksekusi GitHub Actions per-run (bukan bukti yang bisa dipastikan hanya dari isi repository).
+- Rule “PR tidak boleh merge jika CI gagal” juga **bukan otomatis dari source**; itu harus di-set di GitHub Branch Protection / Ruleset.
+
 Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
 
 ```bash
@@ -166,7 +174,7 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
 
 Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
 
-## Batas pengujian yang belum tercakup penuh
+## Batas pengujian yang belum tercakup penuh (Incomplete testing)
 
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.

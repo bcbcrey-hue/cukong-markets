@@ -109,6 +109,7 @@ async function runProbe(probe, index) {
   const env = {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || 'test',
+    LOG_LEVEL: process.env.LOG_LEVEL || 'warn',
     APP_NAME: process.env.APP_NAME || 'cukong-markets',
     PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL || 'https://kangtrade.top',
     APP_BIND_HOST: process.env.APP_BIND_HOST || '127.0.0.1',
@@ -141,7 +142,7 @@ async function runProbe(probe, index) {
   };
 
   process.stdout.write(`\n[probe] ${probe}\n`);
-  const { stdout, stderr } = await execFileAsync('npm', ['exec', '--', 'tsx', probe], {
+  const { stdout, stderr } = await execFileAsync('node', ['--import', 'tsx', probe], {
     cwd: repoRoot,
     env,
   });
