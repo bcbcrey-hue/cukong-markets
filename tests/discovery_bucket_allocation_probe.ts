@@ -125,6 +125,53 @@ async function main(): Promise<void> {
     'missing ANOMALY slot should be backfilled by next best candidate regardless of bucket',
   );
 
+  const lowShareSettings: DiscoverySettings = {
+    ...settings,
+    anomalySlots: 2,
+    stealthSlots: 1,
+    rotationSlots: 1,
+    liquidLeaderSlots: 1,
+    majorPairMaxShare: 0.12,
+  };
+
+  const lowShareSelected = allocator.allocate(
+    [
+      candidate('anom_1_idr', 95, 'ANOMALY'),
+      candidate('anom_2_idr', 94, 'ANOMALY'),
+      candidate('stealth_1_idr', 93, 'STEALTH'),
+      candidate('rot_1_idr', 92, 'ROTATION'),
+      candidate('btc_idr', 99, 'LIQUID_LEADER', true),
+    ],
+    5,
+    lowShareSettings,
+  );
+
+  assert(
+    lowShareSelected.some((item) => item.pair === 'btc_idr'),
+    'when liquidLeaderSlots>0 and share>0, allocator must still allow one major fallback even if floor(limit*share)=0',
+  );
+  assert.equal(
+    lowShareSelected.filter((item) => item.majorPair).length,
+    1,
+    'major fallback path must stay hard-capped to one pair in low-share small-limit scenario',
+  );
+
+  const zeroShareSelected = allocator.allocate(
+    [
+      candidate('anom_1_idr', 95, 'ANOMALY'),
+      candidate('anom_2_idr', 94, 'ANOMALY'),
+      candidate('stealth_1_idr', 93, 'STEALTH'),
+      candidate('rot_1_idr', 92, 'ROTATION'),
+      candidate('btc_idr', 99, 'LIQUID_LEADER', true),
+    ],
+    5,
+    { ...lowShareSettings, majorPairMaxShare: 0 },
+  );
+  assert(
+    zeroShareSelected.every((item) => !item.majorPair),
+    'majorPairMaxShare=0 must continue to block all major pairs, including liquid leader fallback',
+  );
+
   console.log('PASS discovery_bucket_allocation_probe');
 }
 

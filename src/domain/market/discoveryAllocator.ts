@@ -1,7 +1,7 @@
 import type { DiscoveryBucketType, DiscoverySettings } from '../../core/types';
 import type { DiscoveryRankedCandidate } from './discoveryScorer';
 
-const BUCKETS: DiscoveryBucketType[] = ['ANOMALY', 'ROTATION', 'STEALTH', 'LIQUID_LEADER'];
+const BUCKETS: DiscoveryBucketType[] = ['ANOMALY', 'STEALTH', 'ROTATION', 'LIQUID_LEADER'];
 
 export class DiscoveryAllocator {
   allocate(
@@ -21,8 +21,16 @@ export class DiscoveryAllocator {
       LIQUID_LEADER: settings.liquidLeaderSlots,
     };
 
-    const majorCap = Math.max(0, Math.min(safeLimit, Math.floor(safeLimit * settings.majorPairMaxShare)));
+    const majorCapRaw = Math.max(
+      0,
+      Math.min(safeLimit, Math.floor(safeLimit * settings.majorPairMaxShare)),
+    );
+    const allowLiquidLeaderFallbackMajor =
+      majorCapRaw === 0 &&
+      settings.majorPairMaxShare > 0 &&
+      settings.liquidLeaderSlots > 0;
     let majorUsed = 0;
+    let liquidLeaderFallbackMajorUsed = false;
 
     const byBucket = new Map<DiscoveryBucketType, DiscoveryRankedCandidate[]>();
     for (const bucket of BUCKETS) {
@@ -30,7 +38,12 @@ export class DiscoveryAllocator {
         bucket,
         candidates
           .filter((item) => item.bucket === bucket)
-          .sort((a, b) => b.discoveryScore - a.discoveryScore),
+          .sort((a, b) => {
+            if (a.majorPair !== b.majorPair) {
+              return Number(a.majorPair) - Number(b.majorPair);
+            }
+            return b.discoveryScore - a.discoveryScore;
+          }),
       );
     }
 
@@ -42,8 +55,18 @@ export class DiscoveryAllocator {
         return false;
       }
 
-      if (candidate.majorPair && majorUsed >= majorCap) {
-        return false;
+      if (candidate.majorPair) {
+        if (majorUsed < majorCapRaw) {
+          // keep strict cap path
+        } else if (
+          allowLiquidLeaderFallbackMajor &&
+          candidate.bucket === 'LIQUID_LEADER' &&
+          !liquidLeaderFallbackMajorUsed
+        ) {
+          liquidLeaderFallbackMajorUsed = true;
+        } else {
+          return false;
+        }
       }
 
       selected.push(candidate);
@@ -70,7 +93,12 @@ export class DiscoveryAllocator {
       }
     }
 
-    const remaining = [...candidates].sort((a, b) => b.discoveryScore - a.discoveryScore);
+    const remaining = [...candidates].sort((a, b) => {
+      if (a.majorPair !== b.majorPair) {
+        return Number(a.majorPair) - Number(b.majorPair);
+      }
+      return b.discoveryScore - a.discoveryScore;
+    });
     for (const candidate of remaining) {
       if (selected.length >= safeLimit) {
         break;
