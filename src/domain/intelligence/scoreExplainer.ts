@@ -92,6 +92,8 @@ export class ScoreExplainer {
       ...validation.warnings,
       ...(timing.state === 'LATE' ? ['timing sudah mulai terlambat'] : []),
       ...(timing.state === 'AVOID' ? ['timing sebaiknya dihindari'] : []),
+      ...(timing.state === 'CHASING' ? ['setup sudah masuk area chasing'] : []),
+      ...(timing.state === 'DEAD' ? ['setup dianggap mati untuk entry batch ini'] : []),
     ];
 
     const riskContext = [

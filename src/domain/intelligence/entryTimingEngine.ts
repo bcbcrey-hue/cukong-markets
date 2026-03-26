@@ -16,21 +16,31 @@ export class EntryTimingEngine {
   }): EntryTimingAssessment {
     const { signal, microstructure, probability, historicalContext } = input;
 
-    if (microstructure.spoofRiskScore >= 60 || signal.spreadPct > 1.5) {
+    if (
+      microstructure.spoofRiskScore >= 68 ||
+      signal.spreadPct > 1.8 ||
+      probability.trapProbability >= 0.62
+    ) {
       return {
-        state: 'AVOID',
-        quality: 10,
-        reason: 'spoof risk/spread tidak mendukung entry',
+        state: 'DEAD',
+        quality: 8,
+        reason: 'setup rusak: spoof/trap/spread terlalu berat',
         leadScore: 0,
+        entryStyle: 'DEAD',
       };
     }
 
-    if (microstructure.exhaustionRiskScore >= 60 || signal.change5m >= 4.5) {
+    if (
+      microstructure.exhaustionRiskScore >= 60 ||
+      signal.change5m >= 4.5 ||
+      signal.change1m >= 1.8
+    ) {
       return {
-        state: 'LATE',
+        state: 'CHASING',
         quality: 28,
-        reason: 'move sudah terlalu lanjut dan rawan exhaustion',
+        reason: 'harga sudah terlalu lanjut, rawan entry chasing',
         leadScore: 18,
+        entryStyle: 'CHASING',
       };
     }
 
@@ -44,29 +54,50 @@ export class EntryTimingEngine {
       100,
     );
 
-    if (leadScore >= 64 && signal.change1m <= 1.2) {
+    if (
+      leadScore >= 62 &&
+      probability.pumpProbability >= 0.6 &&
+      signal.change1m <= 1.1 &&
+      microstructure.accumulationScore >= 52
+    ) {
       return {
-        state: 'EARLY',
+        state: 'SCOUT_WINDOW',
         quality: 78,
-        reason: 'akumulasi dan cluster kuat, entry masih relatif dini',
+        reason: 'pre-pump pressure sehat, cocok untuk scout entry kecil',
         leadScore,
+        entryStyle: 'SCOUT',
       };
     }
 
-    if (leadScore >= 55) {
+    if (
+      leadScore >= 56 &&
+      probability.continuationProbability >= 0.56 &&
+      signal.change1m <= 1.5
+    ) {
+      return {
+        state: 'CONFIRM_WINDOW',
+        quality: 70,
+        reason: 'continuation cukup kuat untuk add-on confirm',
+        leadScore,
+        entryStyle: 'CONFIRM',
+      };
+    }
+
+    if (leadScore >= 50) {
       return {
         state: 'READY',
-        quality: 70,
-        reason: 'konfirmasi cukup matang untuk entry terukur',
+        quality: 58,
+        reason: 'sinyal layak pantau, tetapi belum cukup kuat untuk scout/confirm',
         leadScore,
       };
     }
 
     return {
-      state: 'AVOID',
+      state: 'DEAD',
       quality: 24,
-      reason: 'timing belum cukup matang dan belum ada lead jelas',
+      reason: 'timing belum punya lead yang bisa dieksekusi',
       leadScore,
+      entryStyle: 'DEAD',
     };
   }
 }

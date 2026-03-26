@@ -133,6 +133,13 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
 - Guard BUY untuk harga/reference/quantity invalid sudah dibuktikan ditolak sebelum persist lewat probe (`tests/buy_entry_price_guard_probe.ts`).
+- Jalur Batch 2 scout/confirm sudah diprove di level engine melalui probe:
+  - `tests/scout_enter_route_probe.ts` (route `SCOUT_ENTER`)
+  - `tests/add_on_confirm_probe.ts` (route `ADD_ON_CONFIRM` + rejection saat continuation rusak)
+  - `tests/add_on_confirm_account_scope_probe.ts` (add-on pair sama di akun lain tetap ditolak)
+  - `tests/scout_lane_sizing_probe.ts` (size scout < size normal)
+  - `tests/normal_entry_other_account_same_pair_probe.ts` (entry normal/scout tidak diblok posisi akun lain)
+  - `tests/chasing_entry_rejected_probe.ts` (setup `CHASING` ditolak)
 - `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
 
 ## Batas yang masih harus jujur
@@ -145,6 +152,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 ## Batas pengujian yang belum tercakup penuh
 
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
+- Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
 - End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
 - Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.
 

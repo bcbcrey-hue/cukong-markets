@@ -4,7 +4,26 @@ export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
 export type RuntimeStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'ERROR';
-export type EntryTimingState = 'EARLY' | 'READY' | 'LATE' | 'AVOID';
+export type EntryTimingState =
+  | 'EARLY'
+  | 'READY'
+  | 'LATE'
+  | 'AVOID'
+  | 'SCOUT_WINDOW'
+  | 'CONFIRM_WINDOW'
+  | 'CHASING'
+  | 'DEAD';
+export type OpportunityAction =
+  | 'WATCH'
+  | 'PREPARE_ENTRY'
+  | 'CONFIRM_ENTRY'
+  | 'AVOID'
+  | 'ENTER'
+  | 'SCOUT_ENTER'
+  | 'ADD_ON_CONFIRM'
+  | 'EMERGENCY_EXIT'
+  | 'DUMP_EXIT'
+  | 'TAKE_PROFIT_EXIT';
 export type SummaryAccuracy =
   | 'SIMULATED'
   | 'OPTIMISTIC_LIVE'
@@ -324,6 +343,7 @@ export interface EntryTimingAssessment {
   quality: number;
   reason: string;
   leadScore: number;
+  entryStyle?: 'SCOUT' | 'CONFIRM' | 'CHASING' | 'DEAD';
 }
 
 export interface OpportunityAssessment {
@@ -347,7 +367,11 @@ export interface OpportunityAssessment {
   warnings: string[];
   featureBreakdown: ScoreContribution[];
   historicalContext?: HistoricalContext;
-  recommendedAction: 'WATCH' | 'PREPARE_ENTRY' | 'CONFIRM_ENTRY' | 'AVOID' | 'ENTER';
+  recommendedAction: OpportunityAction;
+  entryStyle?: 'SCOUT' | 'CONFIRM' | 'LATE' | 'DEAD';
+  pumpState?: 'PRE_PUMP' | 'CONTINUATION' | 'OVEREXTENDED' | 'DUMP_RISK';
+  lastContinuationScore?: number;
+  lastDumpRisk?: number;
   riskContext: string[];
   historicalMatchSummary: string;
   referencePrice: number;
@@ -658,6 +682,9 @@ export interface RiskCheckResult {
   allowed: boolean;
   reasons: string[];
   warnings: string[];
+  entryLane?: 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
+  baseAmountIdr?: number;
+  adjustedAmountIdr?: number;
 }
 
 export interface ManualOrderRequest {
@@ -679,7 +706,12 @@ export interface AutoExecutionDecision {
     | 'CONFIRM_ENTRY'
     | 'ENTER'
     | 'EXIT'
-    | 'AVOID';
+    | 'AVOID'
+    | 'SCOUT_ENTER'
+    | 'ADD_ON_CONFIRM'
+    | 'EMERGENCY_EXIT'
+    | 'DUMP_EXIT'
+    | 'TAKE_PROFIT_EXIT';
   reasons: string[];
 }
 

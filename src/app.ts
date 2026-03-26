@@ -338,7 +338,7 @@ export async function createApp(): Promise<AppRuntime> {
       top &&
       currentSettings.tradingMode === 'FULL_AUTO' &&
       top.edgeValid &&
-      top.recommendedAction === 'ENTER' &&
+      ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(top.recommendedAction) &&
       top.pumpProbability >= currentSettings.strategy.minPumpProbability &&
       top.confidence >= currentSettings.strategy.minConfidence
     ) {

@@ -65,28 +65,81 @@ export class OpportunityEngine {
     });
 
     const finalScore = clamp(
-      signal.score * 0.72 +
-        probability.pumpProbability * 20 +
-        probability.continuationProbability * 12 -
-        probability.trapProbability * 24 -
-        microstructure.spoofRiskScore * 0.12 +
+      signal.score * 0.58 +
+        probability.pumpProbability * 24 +
+        probability.continuationProbability * 20 -
+        probability.trapProbability * 30 -
+        microstructure.spoofRiskScore * 0.08 +
+        microstructure.accumulationScore * 0.1 +
+        microstructure.clusterScore * 0.06 +
+        signal.breakoutPressure * 1.8 +
+        signal.quoteFlowAccelerationScore * 0.22 +
         (validation.valid ? 6 : -6) +
-        timing.quality * 0.1,
+        timing.quality * 0.14,
       0,
       100,
     );
 
     let recommendedAction: OpportunityAssessment['recommendedAction'] = 'WATCH';
+    let entryStyle: OpportunityAssessment['entryStyle'];
+    let pumpState: OpportunityAssessment['pumpState'] = 'PRE_PUMP';
 
-    if (!validation.valid || timing.state === 'AVOID') {
+    const lowTimeToTrigger =
+      signal.breakoutPressure >= 6 && signal.quoteFlowAccelerationScore >= 28 && signal.change1m < 1.2;
+    const microThinHealthy =
+      signal.spreadPct <= 0.75 &&
+      (signal.bidDepthTop10 ?? 0) > 0 &&
+      (signal.askDepthTop10 ?? 0) > 0 &&
+      (signal.bidDepthTop10 ?? 0) >= (signal.askDepthTop10 ?? 0) * 1.08;
+    const prePumpPressureValid =
+      probability.pumpProbability >= 0.61 &&
+      signal.breakoutPressure >= 6 &&
+      signal.quoteFlowAccelerationScore >= 24;
+    const notOverextended =
+      signal.change1m <= 1.4 && signal.change5m <= 3.8 && microstructure.exhaustionRiskScore < 55;
+    const continuationStrong =
+      probability.continuationProbability >= 0.58 &&
+      signal.quoteFlowAccelerationScore >= 22 &&
+      microstructure.clusterScore >= 28;
+    const continuationBroken =
+      probability.continuationProbability < 0.5 ||
+      signal.quoteFlowAccelerationScore < 18 ||
+      microstructure.clusterScore < 22;
+
+    if (probability.trapProbability >= 0.52 || microstructure.spoofRiskScore >= 65) {
+      pumpState = 'DUMP_RISK';
+    } else if (!notOverextended) {
+      pumpState = 'OVEREXTENDED';
+    } else if (continuationStrong) {
+      pumpState = 'CONTINUATION';
+    }
+
+    if (!validation.valid || ['DEAD', 'AVOID'].includes(timing.state)) {
       recommendedAction = 'AVOID';
+      entryStyle = 'DEAD';
+    } else if (timing.state === 'CHASING') {
+      recommendedAction = signal.score >= 62 ? 'WATCH' : 'AVOID';
+      entryStyle = 'LATE';
     } else if (
-      probability.pumpProbability >= env.probabilityThresholdAuto &&
-      probability.confidence >= env.confidenceThresholdAuto &&
-      ['EARLY', 'READY'].includes(timing.state)
+      timing.state === 'SCOUT_WINDOW' &&
+      microThinHealthy &&
+      prePumpPressureValid &&
+      lowTimeToTrigger &&
+      notOverextended &&
+      probability.confidence >= env.confidenceThresholdAuto * 0.9
     ) {
-      recommendedAction = 'ENTER';
-    } else if (probability.pumpProbability >= 0.62) {
+      recommendedAction = 'SCOUT_ENTER';
+      entryStyle = 'SCOUT';
+    } else if (
+      timing.state === 'CONFIRM_WINDOW' &&
+      continuationStrong &&
+      notOverextended &&
+      !continuationBroken &&
+      probability.confidence >= env.confidenceThresholdAuto * 0.95
+    ) {
+      recommendedAction = 'ADD_ON_CONFIRM';
+      entryStyle = 'CONFIRM';
+    } else if (continuationStrong && notOverextended) {
       recommendedAction = 'CONFIRM_ENTRY';
     } else if (signal.score >= 60) {
       recommendedAction = 'PREPARE_ENTRY';
@@ -100,7 +153,7 @@ export class OpportunityEngine {
       });
     }
 
-    if (timing.state === 'LATE') {
+    if (timing.state === 'CHASING' || timing.state === 'LATE') {
       await this.history.recordAnomaly(snapshot.pair, 'LATE_ENTRY', {
         change1m: signal.change1m,
         change5m: signal.change5m,
@@ -135,6 +188,10 @@ export class OpportunityEngine {
       featureBreakdown: explanation.featureBreakdown,
       historicalContext,
       recommendedAction,
+      entryStyle,
+      pumpState,
+      lastContinuationScore: probability.continuationProbability,
+      lastDumpRisk: probability.trapProbability,
       riskContext: explanation.riskContext,
       historicalMatchSummary: explanation.historicalMatchSummary,
       referencePrice: signal.marketPrice,
