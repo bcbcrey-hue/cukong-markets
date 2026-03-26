@@ -1,4 +1,3 @@
-
 Roadmap — Pembuka Upgrade Otak Bot Baru
 ---
 Prinsip utama roadmap baru
@@ -129,7 +128,7 @@ Rule wajib
 Semua keputusan entry harus melewati decisionPolicyEngine
 Regime harus bisa memblokir trade
 `DISTRIBUTION` = block / very defensive
-`TRAP_RISK` = block
+`TRAP\_RISK` = block
 Regime harus bisa mengubah agresivitas
 `EXPANSION` = boleh lebih agresif
 `QUIET` = lebih sabar / defensif
@@ -229,16 +228,16 @@ Output minimum wajib
   action: 'ENTER' | 'SKIP' | 'WAIT';
   sizeMultiplier: number;
   aggressiveness: 'LOW' | 'NORMAL' | 'HIGH';
-  reasons: string[];
+  reasons: string\[];
 }
 ```
 Aturan keputusan minimum
 Regime policy
-`TRAP_RISK` => `SKIP`
+`TRAP\_RISK` => `SKIP`
 `DISTRIBUTION` => `SKIP`
 `QUIET` => boleh `WAIT` atau `ENTER` kecil jika syarat scout sangat kuat
 `EXPANSION` => boleh naikkan aggressiveness bila risk tidak block
-`ACCUMULATION` / `BREAKOUT_SETUP` => boleh jadi lane entry yang valid bila discovery dan risk mendukung
+`ACCUMULATION` / `BREAKOUT\_SETUP` => boleh jadi lane entry yang valid bila discovery dan risk mendukung
 Discovery policy
 discovery quality rendah => `SKIP` atau `WAIT`
 discovery quality menengah => tidak boleh agresif penuh
@@ -339,7 +338,7 @@ jangan buka scope baru di luar jalur decision layer
 11) Acceptance criteria final untuk penambahan ini
 Decision Policy Layer baru dianggap benar bila semua ini terpenuhi:
 Tidak ada jalur auto-entry yang bypass policy
-Regime `DISTRIBUTION` dan `TRAP_RISK` benar-benar bisa block trade
+Regime `DISTRIBUTION` dan `TRAP\_RISK` benar-benar bisa block trade
 `EXPANSION` dan `QUIET` benar-benar mempengaruhi aggressiveness
 Discovery benar-benar menjadi minimum quality gate
 Output decision eksplisit ada:
