@@ -1,8 +1,7 @@
-import type { MarketRegime } from '../../core/types';
+import type { MarketRegime, PairClass } from '../../core/types';
 import { isMajorBaseAsset, splitPair } from './majorPairContract';
 
 export type PairTier = 'A' | 'B' | 'C';
-export type PairClass = 'MAJOR' | 'MID' | 'MICRO';
 
 export interface PairClassification {
   pair: string;

@@ -4,6 +4,7 @@ export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED';
 export type RuntimeStatus = 'IDLE' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'STOPPED' | 'ERROR';
+export type PairClass = 'MAJOR' | 'MID' | 'MICRO';
 export type EntryTimingState =
   | 'EARLY'
   | 'READY'
@@ -218,6 +219,8 @@ export interface TradePrint {
 
 export interface MarketSnapshot {
   pair: string;
+  discoveryBucket?: DiscoveryBucketType;
+  pairClass?: PairClass;
   ticker: PairTickerSnapshot;
   orderbook: OrderbookSnapshot | null;
   recentTrades: TradePrint[];
@@ -234,6 +237,8 @@ export interface ScoreContribution {
 
 export interface SignalCandidate {
   pair: string;
+  discoveryBucket?: DiscoveryBucketType;
+  pairClass?: PairClass;
   score: number;
   confidence: number;
   reasons: string[];
@@ -348,6 +353,8 @@ export interface EntryTimingAssessment {
 
 export interface OpportunityAssessment {
   pair: string;
+  discoveryBucket?: DiscoveryBucketType;
+  pairClass?: PairClass;
   rawScore: number;
   finalScore: number;
   confidence: number;

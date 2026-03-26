@@ -8,6 +8,7 @@ import type {
 } from '../../core/types';
 import type { IndodaxClient } from '../../integrations/indodax/client';
 import type { PairUniverse } from './pairUniverse';
+import { classifyPair } from './pairClassifier';
 import { DiscoveryEngine } from './discoveryEngine';
 
 interface TickerPoint {
@@ -105,6 +106,8 @@ export class MarketWatcher {
 
         snapshots.push({
           pair: selected.pair,
+          discoveryBucket: selected.bucket,
+          pairClass: classifyPair(selected.pair).pairClass,
           ticker,
           orderbook: discovery.orderbookByPair.get(selected.pair) ?? null,
           recentTrades: this.inferTradePrints(ticker, previous),
