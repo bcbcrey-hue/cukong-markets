@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { OpportunityEngine } from '../src/domain/intelligence/opportunityEngine';
 import { RiskEngine } from '../src/domain/trading/riskEngine';
 import { createDefaultSettings } from '../src/services/persistenceService';
-import type { HistoricalContext, MarketSnapshot, OpportunityAssessment, SignalCandidate, StoredAccount } from '../src/core/types';
+import type {
+  HistoricalContext,
+  MarketSnapshot,
+  OpportunityAssessment,
+  PositionRecord,
+  SignalCandidate,
+  StoredAccount,
+} from '../src/core/types';
 
 function makeSignal(pair: string): SignalCandidate {
   const now = Date.now();
@@ -164,7 +171,7 @@ async function main() {
 
   const risk = new RiskEngine();
   const settings = createDefaultSettings();
-  const openPosition = {
+  const openPosition: PositionRecord = {
     id: 'p1',
     pair,
     accountId: 'acc-1',
@@ -183,6 +190,12 @@ async function main() {
     totalSoldQuantity: 0,
     stopLossPrice: 95,
     takeProfitPrice: 110,
+    entryStyle: 'CONFIRM',
+    pumpState: 'ACTIVE',
+    lastContinuationScore: 0.63,
+    lastDumpRisk: 0.2,
+    lastScaleOutAt: null,
+    emergencyExitArmed: false,
     openedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     closedAt: null,

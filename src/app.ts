@@ -327,6 +327,21 @@ export async function createApp(): Promise<AppRuntime> {
     lastLaunchErrorType: 'none',
   };
 
+  const toPositionPumpState = (
+    opportunityPumpState?: OpportunityAssessment['pumpState'],
+  ): 'ACTIVE' | 'WEAKENING' | 'DISTRIBUTING' | 'COLLAPSING' => {
+    if (opportunityPumpState === 'DUMP_RISK') {
+      return 'COLLAPSING';
+    }
+    if (opportunityPumpState === 'OVEREXTENDED') {
+      return 'DISTRIBUTING';
+    }
+    if (opportunityPumpState === 'PRE_PUMP') {
+      return 'WEAKENING';
+    }
+    return 'ACTIVE';
+  };
+
   const runtimePollingIntervalMs = settings.get().scanner.pollingIntervalMs;
   const marketScanIntervalMs = settings.get().scanner.marketWatchIntervalMs;
 
@@ -385,8 +400,15 @@ export async function createApp(): Promise<AppRuntime> {
     await persistence.saveHotlistSnapshot(hotlist);
     await persistence.saveOpportunitySnapshot(opportunities);
 
+    const opportunitiesByPair = new Map(opportunities.map((item) => [item.pair, item]));
     for (const snapshot of snapshots) {
-      await positionManager.updateMark(snapshot.pair, snapshot.ticker.lastPrice);
+      const pairOpportunity = opportunitiesByPair.get(snapshot.pair);
+      await positionManager.updateMark(snapshot.pair, snapshot.ticker.lastPrice, {
+        continuationScore: pairOpportunity?.continuationProbability,
+        dumpRisk: pairOpportunity?.trapProbability,
+        pumpState: toPositionPumpState(pairOpportunity?.pumpState),
+        emergencyExitArmed: (pairOpportunity?.trapProbability ?? 0) >= 0.85,
+      });
       await state.markPairSeen(snapshot.pair);
     }
 

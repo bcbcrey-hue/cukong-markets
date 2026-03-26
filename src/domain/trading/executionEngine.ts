@@ -6,6 +6,7 @@ import type {
   OpportunityAssessment,
   OrderRecord,
   PositionRecord,
+  PositionCloseReason,
   SignalCandidate,
   ShadowRunCheckResult,
   ShadowRunEvidence,
@@ -1251,6 +1252,7 @@ export class ExecutionEngine {
         stopLossPrice: stops.stopLossPrice,
         takeProfitPrice: stops.takeProfitPrice,
         sourceOrderId: order.id,
+        entryStyle: order.entryStyle,
       });
     } else {
       const targetPosition =
@@ -1556,6 +1558,14 @@ export class ExecutionEngine {
     ].join('; ');
   }
 
+  private resolveEntryStyle(candidate: ExecutionCandidate): 'SCOUT' | 'CONFIRM' {
+    if ('finalScore' in candidate && candidate.recommendedAction === 'SCOUT_ENTER') {
+      return 'SCOUT';
+    }
+
+    return 'CONFIRM';
+  }
+
   decideAutoExecution(candidate: ExecutionCandidate): AutoExecutionDecision {
     const settings = this.settings.get();
 
@@ -1728,6 +1738,7 @@ export class ExecutionEngine {
       referencePrice,
       status: 'OPEN',
       notes: this.getCandidateNotes(signal),
+      entryStyle: this.resolveEntryStyle(signal),
     });
 
     if (this.shouldSimulate(settings.tradingMode, settings)) {
@@ -1743,6 +1754,9 @@ export class ExecutionEngine {
         stopLossPrice: stops.stopLossPrice,
         takeProfitPrice: stops.takeProfitPrice,
         sourceOrderId: order.id,
+        entryStyle: this.resolveEntryStyle(signal),
+        continuationScore: 'finalScore' in signal ? signal.continuationProbability : undefined,
+        dumpRisk: 'finalScore' in signal ? signal.trapProbability : undefined,
       });
 
       await this.journal.append({
@@ -1884,7 +1898,7 @@ export class ExecutionEngine {
     positionId: string,
     quantityToSell: number,
     source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO' = 'MANUAL',
-    closeReason = source === 'AUTO' ? 'AUTO_EXIT' : 'MANUAL_SELL',
+    closeReason: PositionCloseReason = source === 'AUTO' ? 'AUTO_EXIT' : 'MANUAL_SELL',
   ): Promise<string> {
     const position = this.positions.getById(positionId);
     if (!position || position.status === 'CLOSED') {
@@ -2583,8 +2597,15 @@ export class ExecutionEngine {
     const messages: string[] = [];
 
     for (const position of this.positions.listOpen()) {
-      const exit = this.risk.evaluateExit(position, settings);
-      if (!exit.shouldExit) {
+      const opportunity = this.state.get().pairs[position.pair]?.lastOpportunity ?? null;
+      const exit = this.risk.evaluateExit(position, settings, {
+        spreadPct: opportunity?.spreadPct ?? 0,
+        continuationScore: opportunity?.continuationProbability ?? position.lastContinuationScore,
+        quoteFlowScore: opportunity?.quoteFlowAccelerationScore ?? 0,
+        imbalance: opportunity?.orderbookImbalance ?? 0,
+        dumpRisk: opportunity?.trapProbability ?? position.lastDumpRisk,
+      });
+      if (exit.action === 'HOLD') {
         continue;
       }
 
@@ -2593,8 +2614,25 @@ export class ExecutionEngine {
         continue;
       }
 
-      await this.manualSell(position.id, position.quantity, 'AUTO', exit.reason ?? 'AUTO_EXIT');
-      messages.push(`${position.pair} exit by ${exit.reason}`);
+      if (exit.action === 'SCALE_OUT' && exit.shouldScaleOut) {
+        const scaleQuantity = Math.max(
+          Math.min(position.quantity, position.quantity * Math.max(0.05, exit.closeFraction)),
+          Math.min(position.quantity, 1e-8),
+        );
+        await this.manualSell(position.id, scaleQuantity, 'AUTO', 'SCALE_OUT');
+        messages.push(`${position.pair} scale-out qty=${scaleQuantity.toFixed(8)}`);
+        continue;
+      }
+
+      const closeReason: PositionCloseReason =
+        exit.closeReason
+        ?? (exit.action === 'TAKE_PROFIT_EXIT'
+          ? 'TAKE_PROFIT_EXIT'
+          : exit.action === 'DUMP_EXIT'
+            ? 'DUMP_EXIT'
+            : 'EMERGENCY_EXIT');
+      await this.manualSell(position.id, position.quantity, 'AUTO', closeReason);
+      messages.push(`${position.pair} exit by ${closeReason}`);
     }
 
     return messages;

@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type { OrderRecord, OrderSide, OrderType } from '../../core/types';
+import type {
+  OrderRecord,
+  OrderSide,
+  OrderType,
+  PositionCloseReason,
+  PositionEntryStyle,
+} from '../../core/types';
 import { PersistenceService } from '../../services/persistenceService';
 import { nowIso } from '../../utils/time';
 
@@ -19,7 +25,8 @@ export interface CreateOrderInput {
   exchangeUpdatedAt?: string;
   relatedPositionId?: string;
   referencePrice?: number | null;
-  closeReason?: string;
+  closeReason?: PositionCloseReason;
+  entryStyle?: PositionEntryStyle;
   notes?: string;
 }
 
@@ -95,6 +102,7 @@ export class OrderManager {
       exchangeUpdatedAt: input.exchangeUpdatedAt,
       relatedPositionId: input.relatedPositionId,
       closeReason: input.closeReason,
+      entryStyle: input.entryStyle,
       notes: input.notes,
     };
 
