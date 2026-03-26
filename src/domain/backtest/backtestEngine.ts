@@ -168,7 +168,7 @@ export async function simulateBacktestReplay(
       !opportunity.edgeValid ||
       opportunity.pumpProbability < input.settings.strategy.minPumpProbability ||
       opportunity.confidence < input.settings.strategy.minConfidence ||
-      !['EARLY', 'READY'].includes(opportunity.entryTiming.state)
+      !['EARLY', 'READY', 'SCOUT_WINDOW', 'CONFIRM_WINDOW'].includes(opportunity.entryTiming.state)
     ) {
       continue;
     }

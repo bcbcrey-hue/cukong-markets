@@ -20,6 +20,7 @@ export interface ExitDecision {
   shouldExit: boolean;
   reason?: 'TAKE_PROFIT' | 'STOP_LOSS' | 'TRAILING_STOP';
 }
+type EntryLane = 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
 
 function pctChange(from: number, to: number): number {
   if (from <= 0) {
@@ -30,6 +31,32 @@ function pctChange(from: number, to: number): number {
 }
 
 export class RiskEngine {
+  resolveLaneAdjustedAmountIdr(input: RiskEntryCheckInput): {
+    lane: EntryLane;
+    baseAmountIdr: number;
+    adjustedAmountIdr: number;
+  } {
+    const baseAmountIdr = input.amountIdr;
+    const signal = 'finalScore' in input.signal ? input.signal : null;
+    const action = signal?.recommendedAction;
+    let lane: EntryLane = 'DEFAULT';
+    let multiplier = 1;
+
+    if (action === 'SCOUT_ENTER') {
+      lane = 'SCOUT';
+      multiplier = 0.3;
+    } else if (action === 'ADD_ON_CONFIRM') {
+      lane = 'ADD_ON_CONFIRM';
+      multiplier = 0.55;
+    }
+
+    return {
+      lane,
+      baseAmountIdr,
+      adjustedAmountIdr: Math.max(0, baseAmountIdr * multiplier),
+    };
+  }
+
   private getPair(signal: SignalCandidate | OpportunityAssessment): string {
     return signal.pair;
   }
@@ -65,12 +92,18 @@ export class RiskEngine {
   checkCanEnter(input: RiskEntryCheckInput): RiskCheckResult {
     const reasons: string[] = [];
     const warnings: string[] = [];
+    const plan = this.resolveLaneAdjustedAmountIdr(input);
+    const signal = 'finalScore' in input.signal ? input.signal : null;
+    const laneSpreadTolerance = plan.lane === 'SCOUT' ? 1.35 : 1;
+    const laneCooldownTolerance = plan.lane === 'SCOUT' ? 0.45 : 1;
+    const laneSpoofTolerance =
+      plan.lane === 'SCOUT' ? input.settings.strategy.spoofRiskBlockThreshold + 0.08 : input.settings.strategy.spoofRiskBlockThreshold;
 
     if (!input.account.enabled) {
       reasons.push('Account nonaktif');
     }
 
-    if (!Number.isFinite(input.amountIdr) || input.amountIdr <= 0) {
+    if (!Number.isFinite(plan.adjustedAmountIdr) || plan.adjustedAmountIdr <= 0) {
       reasons.push('Ukuran posisi tidak valid');
     }
 
@@ -86,11 +119,11 @@ export class RiskEngine {
       reasons.push('Confidence di bawah minimum');
     }
 
-    if (this.getSpread(input.signal) > input.settings.risk.maxPairSpreadPct) {
+    if (this.getSpread(input.signal) > input.settings.risk.maxPairSpreadPct * laneSpreadTolerance) {
       reasons.push('Spread pair melebihi batas risiko');
     }
 
-    if (input.amountIdr > input.settings.risk.maxPositionSizeIdr) {
+    if (plan.adjustedAmountIdr > input.settings.risk.maxPositionSizeIdr) {
       reasons.push('Ukuran posisi melebihi batas');
     }
 
@@ -98,17 +131,18 @@ export class RiskEngine {
       reasons.push('Jumlah posisi terbuka mencapai batas');
     }
 
-    const samePairOpen = input.openPositions.some(
+    const openSamePairPositions = input.openPositions.filter(
       (item) => item.pair === this.getPair(input.signal),
     );
-    if (samePairOpen) {
+    const samePairOpen = openSamePairPositions.length > 0;
+    if (samePairOpen && plan.lane !== 'ADD_ON_CONFIRM') {
       reasons.push('Masih ada posisi terbuka pada pair yang sama');
     }
 
     if (
       input.cooldownUntil &&
       Number.isFinite(input.cooldownUntil) &&
-      input.cooldownUntil > Date.now()
+      input.cooldownUntil > Date.now() + input.settings.risk.cooldownMs * (1 - laneCooldownTolerance)
     ) {
       reasons.push('Pair masih cooldown');
     }
@@ -121,27 +155,46 @@ export class RiskEngine {
       warnings.push('Breakout pressure masih lemah');
     }
 
-    if ('finalScore' in input.signal) {
-      if (!input.signal.edgeValid) {
+    if (signal) {
+      if (!signal.edgeValid) {
         reasons.push('Opportunity belum lolos edge validation');
       }
 
-      if (input.signal.pumpProbability < input.settings.strategy.minPumpProbability) {
+      if (signal.pumpProbability < input.settings.strategy.minPumpProbability * (plan.lane === 'SCOUT' ? 0.9 : 1)) {
         reasons.push('Pump probability di bawah minimum auto entry');
       }
 
-      if (input.signal.entryTiming.state === 'LATE' || input.signal.entryTiming.state === 'AVOID') {
+      if (['LATE', 'AVOID', 'CHASING', 'DEAD'].includes(signal.entryTiming.state)) {
         reasons.push('Timing entry tidak layak');
       }
 
-      if (input.signal.trapProbability >= 0.45) {
+      if (signal.trapProbability >= (plan.lane === 'SCOUT' ? 0.7 : 0.45)) {
         warnings.push('Trap probability relatif tinggi');
+      }
+
+      if (plan.lane === 'SCOUT' && signal.trapProbability >= 0.78) {
+        reasons.push('Trap probability ekstrem untuk scout lane');
+      }
+
+      if (plan.lane === 'ADD_ON_CONFIRM') {
+        if (openSamePairPositions.length === 0) {
+          reasons.push('Add-on confirm butuh posisi aktif pair yang sama');
+        }
+        if (signal.continuationProbability < 0.58) {
+          reasons.push('Continuation tidak cukup kuat untuk add-on confirm');
+        }
+        if (signal.change1m > 1.7 || signal.change5m > 4.2) {
+          reasons.push('Harga sudah overextended untuk add-on confirm');
+        }
+        if (signal.quoteFlowAccelerationScore < 18 || signal.orderbookImbalance < 0.05) {
+          reasons.push('Bid persistence/ask vacuum tidak mendukung add-on');
+        }
       }
     }
 
     if (
       input.settings.strategy.useAntiSpoof &&
-      this.getSpoofRisk(input.signal) >= input.settings.strategy.spoofRiskBlockThreshold
+      this.getSpoofRisk(input.signal) >= laneSpoofTolerance
     ) {
       reasons.push('Spoof/trap risk threshold terlewati');
     }
@@ -150,6 +203,9 @@ export class RiskEngine {
       allowed: reasons.length === 0,
       reasons,
       warnings,
+      entryLane: plan.lane,
+      baseAmountIdr: plan.baseAmountIdr,
+      adjustedAmountIdr: plan.adjustedAmountIdr,
     };
   }
 

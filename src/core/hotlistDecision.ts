@@ -11,7 +11,7 @@ export interface HotlistUiDecision {
 type HotlistDecisionInput = Pick<HotlistEntry | OpportunityAssessment, 'recommendedAction' | 'edgeValid' | 'entryTiming' | 'warnings' | 'reasons'>;
 
 export function isHotlistEntryActionable(input: HotlistDecisionInput): boolean {
-  return input.edgeValid && input.recommendedAction === 'ENTER';
+  return input.edgeValid && ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(input.recommendedAction);
 }
 
 export function evaluateHotlistUiDecision(input: HotlistDecisionInput): HotlistUiDecision {
@@ -31,7 +31,11 @@ export function evaluateHotlistUiDecision(input: HotlistDecisionInput): HotlistU
     };
   }
 
-  if (input.recommendedAction === 'ENTER') {
+  if (
+    input.recommendedAction === 'ENTER' ||
+    input.recommendedAction === 'SCOUT_ENTER' ||
+    input.recommendedAction === 'ADD_ON_CONFIRM'
+  ) {
     return {
       status: 'READY',
       canManualBuy: true,

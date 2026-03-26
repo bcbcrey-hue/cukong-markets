@@ -1596,6 +1596,24 @@ export class ExecutionEngine {
     }
 
     if ('finalScore' in candidate) {
+      if (candidate.recommendedAction === 'SCOUT_ENTER') {
+        return {
+          shouldEnter: true,
+          shouldExit: false,
+          action: 'SCOUT_ENTER',
+          reasons: ['Opportunity scout lane aktif'],
+        };
+      }
+
+      if (candidate.recommendedAction === 'ADD_ON_CONFIRM') {
+        return {
+          shouldEnter: true,
+          shouldExit: false,
+          action: 'ADD_ON_CONFIRM',
+          reasons: ['Opportunity continuation mengizinkan add-on'],
+        };
+      }
+
       if (!candidate.edgeValid) {
         return {
           shouldEnter: false,
@@ -1614,7 +1632,12 @@ export class ExecutionEngine {
         };
       }
 
-      if (candidate.entryTiming.state === 'LATE' || candidate.entryTiming.state === 'AVOID') {
+      if (
+        candidate.entryTiming.state === 'LATE' ||
+        candidate.entryTiming.state === 'AVOID' ||
+        candidate.entryTiming.state === 'CHASING' ||
+        candidate.entryTiming.state === 'DEAD'
+      ) {
         return {
           shouldEnter: false,
           shouldExit: false,
@@ -1681,10 +1704,11 @@ export class ExecutionEngine {
     if (!riskResult.allowed) {
       throw new Error(riskResult.reasons.join('; '));
     }
+    const executionAmountIdr = riskResult.adjustedAmountIdr ?? amountIdr;
 
     const { entryPrice, referencePrice, quantity } = this.validateBuyIntent(
       signal,
-      amountIdr,
+      executionAmountIdr,
       settings,
     );
     const stops = this.risk.buildStops(entryPrice, settings);
@@ -1750,7 +1774,7 @@ export class ExecutionEngine {
 
     try {
       const api = this.indodax.forAccount(account);
-      const liveResult = await api.trade(signal.pair, 'buy', entryPrice, amountIdr);
+      const liveResult = await api.trade(signal.pair, 'buy', entryPrice, executionAmountIdr);
       const exchangeOrderId = this.extractExchangeOrderId(liveResult.return);
 
       logger.info(

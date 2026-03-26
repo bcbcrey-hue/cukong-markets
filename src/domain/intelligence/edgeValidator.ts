@@ -22,7 +22,11 @@ export class EdgeValidator {
     const blockedBySpoof = microstructure.spoofRiskScore >= 55;
     const blockedBySpread = signal.spreadPct > 1.25;
     const blockedByLiquidity = signal.liquidityScore < 20;
-    const blockedByTiming = timingState === 'LATE' || timingState === 'AVOID';
+    const blockedByTiming =
+      timingState === 'LATE' ||
+      timingState === 'AVOID' ||
+      timingState === 'CHASING' ||
+      timingState === 'DEAD';
 
     const confirmations = [
       signal.score >= 70,
