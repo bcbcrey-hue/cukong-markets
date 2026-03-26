@@ -42,6 +42,8 @@ export class SignalEngine {
 
     return {
       pair: bundle.pair,
+      discoveryBucket: bundle.discoveryBucket,
+      pairClass: bundle.pairClass ?? classification.pairClass,
       score: scored.total,
       confidence: scored.confidence,
       reasons: scored.reasons,

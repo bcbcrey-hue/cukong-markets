@@ -168,6 +168,8 @@ export class OpportunityEngine {
 
     return {
       pair: snapshot.pair,
+      discoveryBucket: signal.discoveryBucket,
+      pairClass: signal.pairClass,
       rawScore: signal.score,
       finalScore,
       confidence: probability.confidence,

@@ -34,6 +34,7 @@ import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
 import { SummaryService } from './services/summaryService';
 import { AppServer } from './server/appServer';
+import type { BotSettings, OpportunityAssessment, PairClass } from './core/types';
 
 export interface AppRuntime {
   start(): Promise<void>;
@@ -43,6 +44,67 @@ export interface AppRuntime {
 }
 
 const startupLog = createChildLogger({ module: 'app-runtime' });
+
+const pairClassPriority: Record<PairClass, number> = {
+  MICRO: 0,
+  MID: 1,
+  MAJOR: 2,
+};
+
+function sortByPairClassThenScore(
+  a: OpportunityAssessment,
+  b: OpportunityAssessment,
+): number {
+  const aClassPriority = pairClassPriority[a.pairClass ?? 'MAJOR'] ?? 3;
+  const bClassPriority = pairClassPriority[b.pairClass ?? 'MAJOR'] ?? 3;
+
+  if (aClassPriority !== bClassPriority) {
+    return aClassPriority - bClassPriority;
+  }
+
+  return b.finalScore - a.finalScore;
+}
+
+function isRuntimeEntryEligible(
+  candidate: OpportunityAssessment,
+  settings: BotSettings,
+): boolean {
+  return (
+    candidate.edgeValid &&
+    ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(candidate.recommendedAction) &&
+    candidate.pumpProbability >= settings.strategy.minPumpProbability &&
+    candidate.confidence >= settings.strategy.minConfidence
+  );
+}
+
+export function selectRuntimeEntryCandidate(
+  opportunities: OpportunityAssessment[],
+  settings: BotSettings,
+): OpportunityAssessment | undefined {
+  const eligible = opportunities.filter((item) => isRuntimeEntryEligible(item, settings));
+  const scoutAnomaly = eligible
+    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'ANOMALY')
+    .sort(sortByPairClassThenScore);
+  if (scoutAnomaly[0]) {
+    return scoutAnomaly[0];
+  }
+
+  const scoutStealth = eligible
+    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'STEALTH')
+    .sort(sortByPairClassThenScore);
+  if (scoutStealth[0]) {
+    return scoutStealth[0];
+  }
+
+  const addOn = eligible
+    .filter((item) => item.recommendedAction === 'ADD_ON_CONFIRM')
+    .sort(sortByPairClassThenScore);
+  if (addOn[0]) {
+    return addOn[0];
+  }
+
+  return [...eligible].sort(sortByPairClassThenScore)[0];
+}
 
 async function runStartupPhase<T>(phase: string, task: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
@@ -328,29 +390,25 @@ export async function createApp(): Promise<AppRuntime> {
       await state.markPairSeen(snapshot.pair);
     }
 
-    const top = opportunities[0];
+    const selectedRuntimeCandidate = selectRuntimeEntryCandidate(opportunities, currentSettings);
 
-    if (top) {
-      await state.markSignal(top.pair);
+    if (selectedRuntimeCandidate) {
+      await state.markSignal(selectedRuntimeCandidate.pair);
     }
 
     if (
-      top &&
-      currentSettings.tradingMode === 'FULL_AUTO' &&
-      top.edgeValid &&
-      ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(top.recommendedAction) &&
-      top.pumpProbability >= currentSettings.strategy.minPumpProbability &&
-      top.confidence >= currentSettings.strategy.minConfidence
+      selectedRuntimeCandidate &&
+      currentSettings.tradingMode === 'FULL_AUTO'
     ) {
       try {
-        await executionEngine.attemptAutoBuy(top);
+        await executionEngine.attemptAutoBuy(selectedRuntimeCandidate);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'unknown auto-buy failure';
 
         await journal.error('AUTO_BUY_FAILED', message, {
-          pair: top.pair,
-          action: top.recommendedAction,
+          pair: selectedRuntimeCandidate.pair,
+          action: selectedRuntimeCandidate.recommendedAction,
         });
       }
     }
