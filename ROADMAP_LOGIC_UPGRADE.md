@@ -1,461 +1,338 @@
-# Roadmap Final — Penutupan Roadmap Lama + Pembuka Upgrade Otak Bot Baru
-
-## Status dasar yang dikunci untuk dokumen ini
-- Sumber kebenaran utama tetap **source code repo aktual**.
-- Dokumen roadmap repo dipakai sebagai acuan urutan batch, tetapi jika nanti source code berbeda, maka **source code menang**.
-- Batch 1 sampai Batch 4 dianggap sudah berada di status selesai sesuai working context sesi ini.
-- Dokumen ini bertujuan untuk:
-  1. menutup roadmap lama secara rapi di **Batch 5** dan **Batch 6**,
-  2. mencegah scope bocor,
-  3. menyiapkan fase baru sesudah Batch 5 dan 6 merge.
-
+ROADMAP LOGIC UPGRADE FINAL — DENGAN DECISION POLICY LAYER
+1) Status dokumen ini
+Dokumen ini adalah versi final roadmap upgrade otak bot yang menambahkan Decision Policy Engine tanpa keluar dari jalur target roadmap baru yang sudah ada.
+Prinsip yang dikunci:
+source code repo aktual tetap sumber kebenaran utama
+ROADMAP-REFACTOR-LOGIC.md dianggap sudah selesai sebagai roadmap lama
+ROADMAP_LOGIC_UPGRADE.md adalah roadmap target upgrade saat ini
+target A–F tetap dipertahankan
+tidak ada ML baru yang disisipkan di layer policy ini
+tidak ada redesign besar
+perubahan harus bertahap, eksplisit, dan tetap realistis terhadap wiring repo saat ini
 ---
-
-# BAGIAN A — FINALISASI ROADMAP SAAT INI
-
-## Ringkasan keputusan final
-Roadmap lama **tidak diubah urutannya**.
-
-Urutan final:
-1. Batch 1 — Discovery & Score Pivot ✅
-2. Batch 2 — Opportunity & Risk Scout Lane ✅
-3. Batch 3 — Runtime Selection ✅
-4. Batch 4 — Exit Scalping Intelligence ✅
-5. Batch 5 — Telegram Settings + UX ⏳ finalisasi terakhir
-6. Batch 6 — Probes dan Validasi ⏳ finalisasi terakhir
-
-Setelah **Batch 5** dan **Batch 6** selesai lalu merge, roadmap lama dianggap **selesai**.
-
-Sesudah itu baru mulai roadmap baru untuk upgrade otak bot.
-
+2) Audit jujur kondisi sistem saat ini
+Pemetaan peran layer saat ini
+MarketWatcher + SignalEngine = sensor awal
+opportunityEngine = mata yang melihat peluang
+RiskEngine = penjaga / rem
+executionEngine = tangan / eksekutor order
+Gap inti yang teridentifikasi
+Sistem belum memiliki Decision Policy Layer eksplisit yang menjadi satu-satunya sumber keputusan final.
+Kondisi saat ini secara logika masih seperti ini:
+sensor menghasilkan snapshot dan score
+opportunity layer mengubahnya menjadi assessment + `recommendedAction`
+runtime memilih kandidat dari hasil opportunity
+execution langsung mencoba entry terhadap kandidat terpilih
+risk dipakai sebagai guard / rem, tetapi bukan sebagai otak keputusan tunggal
+Arti gap ini
+Saat ini:
+regime sudah ada, tetapi masih lebih banyak menjadi input konteks, belum menjadi pengendali keputusan final
+discovery sudah ada, tetapi belum dipaksa menjadi quality gate resmi terakhir
+risk sudah ada, tetapi belum diikat ke satu layer policy yang menjadi satu-satunya sumber keputusan entry / skip / sizing
+execution masih menerima kandidat hasil runtime selection, bukan hasil policy final yang eksplisit
+Kesimpulan audit
+Benar: sistem saat ini masih dominan scoring-based + runtime selection-based, belum context-aware decision engine penuh.
 ---
-
-## Kenapa Batch 5 dan 6 harus ditutup dulu
-Karena yang sudah dibangun di Batch 1–4 baru benar-benar berguna bila:
-- semua behavior baru bisa dioperasikan dari Telegram,
-- setting baru bisa diubah dengan aman dan persist,
-- ada probe yang membuktikan discovery, scout entry, hold winner, dump exit, emergency exit, dan wiring setting benar-benar jalan.
-
-Tanpa Batch 5 dan 6, roadmap lama masih belum rapi secara operasional walaupun logika inti sudah maju.
-
+3) Verdict final penambahan roadmap baru
+STATUS
+Saat ini sistem belum memiliki decision policy layer eksplisit.
+Regime, discovery, score, probability, dan risk masih berfungsi sebagai input yang tersebar, bukan sebagai pengendali keputusan utama yang tunggal.
+TARGET FINAL BARU
+Tambahkan Decision Policy Engine sebagai satu-satunya sumber keputusan entry / skip / sizing.
+Definisi tegas
+Decision Policy Engine adalah layer yang memutuskan:
+apakah pair boleh masuk atau tidak boleh masuk
+kapan pair harus WAIT
+seberapa besar sizeMultiplier yang dipakai
+seberapa agresif eksekusi boleh berjalan
+alasan keputusan apa saja yang melatarinya
+Dengan kata lain:
+`opportunityEngine` tidak lagi menjadi sumber keputusan final entry
+`RiskEngine` tetap menjadi rem / guardrail, tetapi bukan pengambil keputusan bisnis utama
+`executionEngine` hanya mengeksekusi output policy, bukan menafsirkan ulang peluang dari nol
 ---
-
-# BAGIAN B — BATCH FINAL 5
-
-## Nama batch
-**Batch 5 — Telegram Settings + UX**
-
-## Tujuan inti
-Semua behavior baru hasil Batch 1–4 harus bisa:
-- dilihat statusnya dari Telegram,
-- dioperasikan dari Telegram,
-- diubah setting pentingnya dari Telegram,
-- dipersist tanpa merusak kontrak runtime,
-- tetap jelas, tidak membingungkan, dan tidak menyalahi pola menu utama.
-
-## Scope final yang DIIZINKAN
-Fokus hanya pada:
-- telegram handlers,
-- telegram keyboards,
-- callback/menu wiring,
-- settings/state persistence yang memang dibutuhkan untuk mengoperasikan logika baru,
-- tampilan status/ringkasan agar perilaku discovery/scout/exit baru terlihat jelas.
-
-## Scope yang DILARANG
-Jangan masuk ke:
-- redesign engine discovery lagi,
-- redesign opportunity engine lagi,
-- redesign exit intelligence lagi,
-- real trade feed,
-- learning engine,
-- prediction engine baru,
-- portfolio engine baru,
-- perubahan besar di luar kebutuhan Telegram/settings.
-
-## Target hasil final Batch 5
-Batch 5 harus menghasilkan Telegram UX yang membuat logika baru benar-benar bisa dipakai, bukan hanya ada di code.
-
-Minimal hasil yang harus ada:
-1. **Menu / submenu rapi dan konsisten**
-   - Main menu tetap jelas.
-   - Tombol `Kembali` harus kembali ke parent yang benar.
-   - Tidak boleh ada callback buntu / menu nyasar / tombol mati.
-
-2. **Status runtime dan karakter bot terlihat jelas**
-   - User bisa melihat mode runtime.
-   - User bisa melihat karakter strategi aktif secara ringkas.
-   - User bisa melihat apakah pair dipilih lewat lane scout / add-on / normal.
-   - User bisa melihat ringkasan kenapa posisi ditahan / kenapa dijual bila informasinya memang tersedia.
-
-3. **Setting baru yang relevan dengan Batch 1–4 harus bisa dioperasikan**
-   Minimal yang harus dipertimbangkan untuk bisa ditampilkan/diubah dari Telegram bila memang sudah ada di runtime/settings:
-   - threshold discovery/scout yang memang sudah hidup,
-   - threshold probability/confidence yang memang dipakai runtime,
-   - cooldown / batas entry yang memang dipakai risk layer,
-   - buy slippage / max slippage,
-   - exit behavior yang memang sudah hidup pada Batch 4,
-   - mode auto/shadow bila memang sudah tersedia di app.
-
-4. **Persistence aman**
-   - Perubahan setting dari Telegram harus masuk ke persistence resmi.
-   - Setting harus tetap ada setelah restart.
-   - Tidak boleh ada mismatch antara tampilan Telegram vs nilai yang benar-benar dipakai runtime.
-
-5. **Ringkasan untuk operator lebih jujur**
-   - Jangan tampilkan klaim yang tidak benar-benar dihitung.
-   - Bedakan yang berupa score setup saat ini vs sinyal yang benar-benar sudah hidup.
-   - Jika suatu field masih proxy/heuristik, jangan disajikan seolah data truth baru.
-
-## File target minimal Batch 5
-Target file minimal yang boleh disentuh bila memang relevan:
-- `src/integrations/telegram/handlers.ts`
-- `src/integrations/telegram/keyboards.ts`
-- `src/integrations/telegram/bot.ts`
-- `src/integrations/telegram/uploadHandler.ts`
-- `src/domain/settings/settingsService.ts`
-- file persistence/state/settings lain yang memang TERPAKAI untuk menyimpan perubahan setting
-- file report/status text bila memang dipakai untuk menampilkan ringkasan ke Telegram
-
-## Acceptance criteria final Batch 5
-Batch 5 baru dianggap selesai bila seluruh poin ini terpenuhi:
-- semua menu dan callback yang disentuh benar-benar terhubung,
-- setting yang diubah dari Telegram benar-benar mengubah runtime/persistence yang dipakai,
-- nilai setting tidak hilang setelah restart,
-- tidak ada tombol yang hanya kosmetik,
-- tidak ada klaim palsu di status/report,
-- build/lint/typecheck untuk bagian yang disentuh tetap sehat,
-- perubahan tetap berada di jalur UX/settings, bukan menyelundupkan batch baru.
-
-## Residual risk yang masih boleh tersisa setelah Batch 5
-Yang boleh belum selesai sesudah Batch 5:
-- real exchange trade feed,
-- model prediksi masa depan yang benar-benar baru,
-- portfolio sizing adaptif penuh,
-- self-learning loop,
-- capital allocator baru.
-
-Itu semua sengaja dipindah ke roadmap baru.
-
+4) Requirement wajib Decision Policy Engine
+Requirement inti
+Semua keputusan entry wajib melalui `decisionPolicyEngine`.
+Rule wajib
+Semua keputusan entry harus melewati decisionPolicyEngine
+Regime harus bisa memblokir trade
+`DISTRIBUTION` = block / very defensive
+`TRAP_RISK` = block
+Regime harus bisa mengubah agresivitas
+`EXPANSION` = boleh lebih agresif
+`QUIET` = lebih sabar / defensif
+Discovery harus menjadi quality gate minimum
+kandidat discovery lemah tidak boleh langsung lolos hanya karena score tinggi
+Output keputusan wajib eksplisit
+`action` = `ENTER | SKIP | WAIT`
+`sizeMultiplier`
+`aggressiveness`
+`reasons`
+opportunityEngine tidak boleh langsung entry
+executionEngine hanya mengeksekusi hasil decision
+Larangan
+jangan ubah target logic Batch A–F
+jangan tambah ML di layer policy ini
+jangan redesign besar
+jangan memindahkan policy ke executionEngine
+jangan membiarkan `app.ts` tetap menjadi tempat utama logika keputusan final tersebar
 ---
-
-# BAGIAN C — PROMPT FINAL BATCH 5
-
-Gunakan repository source code aktual sebagai sumber kebenaran utama.
-
-Repository project GitHub:
-- https://github.com/masreykangtrade-oss/cukong-markets
-
-Dokumen roadmap acuan urutan batch:
-- ROADMAP-REFACTOR-LOGIC.md di repo yang sama
-
-WORKING CONTEXT YANG WAJIB DIPEGANG:
-- Batch 1 sampai Batch 4 dianggap sudah selesai.
-- Fokus sekarang HANYA Batch 5.
-- Batch 5 adalah penutupan operasional untuk behavior baru hasil Batch 1–4.
-- Jangan pindah ke Batch 6, jangan pindah ke roadmap baru, jangan menyelundupkan redesign engine lain.
-
-TUJUAN BATCH 5:
-Membuat semua behavior baru hasil Batch 1–4 benar-benar bisa dioperasikan dari Telegram dan setting-nya benar-benar persist serta sinkron dengan runtime nyata.
-
-ATURAN WAJIB:
-1. Audit keras source code aktual dulu sebelum mengubah apa pun.
-2. Jangan asumsi.
-3. Jangan overclaim.
-4. Jangan bilang sudah terhubung bila belum benar-benar terpakai di flow runtime nyata.
-5. Jika dokumen bertentangan dengan source code, menangkan source code.
-6. Fokus sempit hanya pada Telegram UX, settings, callback/menu wiring, dan persistence yang memang dibutuhkan.
-7. Jangan refactor besar keluar jalur.
-8. Jangan menambah fitur batch baru seperti real trade feed, learning engine, future prediction engine, atau portfolio engine.
-
-TARGET IMPLEMENTASI EKSPLISIT:
-- audit dan rapikan `src/integrations/telegram/handlers.ts`
-- audit dan rapikan `src/integrations/telegram/keyboards.ts`
-- audit `src/integrations/telegram/bot.ts` bila memang ada wiring yang perlu disesuaikan
-- audit `src/integrations/telegram/uploadHandler.ts` bila beririsan dengan Accounts/settings flow
-- audit `src/domain/settings/settingsService.ts`
-- audit layer persistence/state/settings lain yang benar-benar dipakai untuk menyimpan perubahan setting
-- pastikan semua behavior baru hasil Batch 1–4 yang memang relevan untuk operator bisa dilihat / dipicu / diatur dari Telegram
-- pastikan perubahan setting dari Telegram benar-benar persist dan terbaca runtime
-- pastikan tidak ada callback mati, tombol buntu, atau back navigation salah parent
-- pastikan tampilan status/report tetap jujur dan tidak mengklaim hal yang belum benar-benar dihitung
-
-HASIL YANG WAJIB ADA:
-- menu dan submenu rapi
-- callback/router valid
-- state/settings persistence sinkron
-- operator bisa mengakses kontrol yang memang relevan dengan Batch 1–4
-- build/lint/typecheck tetap sehat
-
-OUTPUT YANG WAJIB KAMU BERIKAN:
-1. Audit ringkas
-2. Temuan per file
-3. Implementasi yang dilakukan
-4. File yang diubah
-5. Bukti validasi
-6. Gap / residual risk
-7. Verdict final
-
-VERDICT WAJIB SALAH SATU:
-- SIAP MERGE
-- BELUM SIAP MERGE
-
-ATURAN VERDICT:
-- Jangan bilang SIAP MERGE hanya karena CI hijau kalau UX/settings yang ditargetkan belum benar-benar hidup.
-- Jangan bilang BELUM SIAP MERGE karena hal di luar scope Batch 5.
-- Jika belum siap merge, buatkan prompt lanjutan yang tetap sempit dan tetap di Batch 5.
-
+5) Prinsip desain baru: ubah dari scoring-based menjadi context-aware decision engine
+Sebelum
+`score -> recommendedAction -> runtime pilih kandidat -> execution coba entry`
+Sesudah
+`sensor -> opportunity context -> risk context -> decisionPolicyEngine -> execution`
+Prinsip utamanya
+Score tetap dipakai, tetapi bukan lagi sumber keputusan final tunggal.
+Yang menjadi keputusan final adalah policy berbasis konteks, minimal dari:
+market regime
+discovery quality
+opportunity quality
+risk block / warning
+trap / spoof / continuation context
+sizing policy
+aggressiveness policy
+Jadi score berubah fungsi menjadi:
+salah satu input penting,
+bukan penentu final tunggal.
 ---
-
-# BAGIAN D — BATCH FINAL 6
-
-## Nama batch
-**Batch 6 — Probes dan Validasi**
-
-## Tujuan inti
-Membuktikan secara otomatis bahwa perubahan hasil Batch 1–5 benar-benar hidup dan tidak cuma terlihat bagus di source code.
-
-## Scope final yang DIIZINKAN
-Fokus hanya pada:
-- penambahan atau penyempurnaan probes,
-- wiring registry probe,
-- validasi end-to-end,
-- validasi runtime contract,
-- validasi Telegram/settings flow bila memang bisa dibuktikan tanpa keluar jalur.
-
-## Scope yang DILARANG
-Jangan masuk ke:
-- redesign trading engine,
-- redesign Telegram UX lagi kecuali ada bug kecil agar probe bisa valid,
-- batch baru real feed / learning / portfolio / prediction,
-- refactor besar di luar kebutuhan validasi.
-
-## Target hasil final Batch 6
-Minimal harus ada pembuktian otomatis untuk jalur-jalur ini:
-1. discovery baru menghasilkan kandidat yang sesuai lane target,
-2. runtime selection benar-benar memilih scout candidate sesuai prioritas runtime,
-3. entry logic tetap realistis sesuai guard aktif,
-4. hold winner tidak menjual terlalu cepat saat kondisi sehat,
-5. dump exit berjalan saat struktur rusak,
-6. emergency exit berjalan saat kondisi darurat,
-7. settings/operasi Telegram yang disentuh Batch 5 tidak putus kontraknya,
-8. jalur validasi resmi repo tetap sehat.
-
-## File target minimal Batch 6
-Target file minimal yang boleh disentuh bila memang relevan:
-- file probe di `tests/` yang benar-benar diperlukan
-- registry probe / runner
-- `scripts/run-probes.mjs`
-- `package.json` hanya bila perlu untuk registry/script validasi
-- penyesuaian kecil pada helper test/probe bila memang wajib
-
-## Acceptance criteria final Batch 6
-Batch 6 baru dianggap selesai bila:
-- probe untuk jalur utama yang ditargetkan benar-benar ada dan relevan,
-- registry probe rapi,
-- jalur validasi resmi repo tetap masuk akal,
-- proof yang dihasilkan cukup untuk menyatakan Batch 1–5 benar-benar terhubung,
-- tidak ada probe kosmetik yang hanya memeriksa stub lemah,
-- tidak ada refactor liar di luar scope validasi.
-
-## Jalur validasi resmi yang harus tetap dihormati
-- `npm ci`
-- `npm run lint`
-- `npm run typecheck:probes`
-- `npm run build`
-- `npm run probe:list`
-- `npm run probe:audit`
-- `npm run test:probes`
-- `npm run verify`
-- `npm run runtime:contract`
-
-## Residual risk yang masih boleh tersisa setelah Batch 6
-Sesudah Batch 6 selesai, yang masih boleh belum ada adalah hal-hal di roadmap baru:
-- real feed trade aktual exchange,
-- future gainer/trending prediction engine,
-- portfolio/capital management adaptif penuh,
-- self-evaluation loop yang mengubah policy,
-- auto-learning nyata.
-
+6) Posisi Decision Policy Layer di roadmap baru
+Keputusan penting
+Batch Baru A–F tetap dipertahankan.
+Akan tetapi, roadmap baru sekarang wajib punya Decision Policy Layer sebagai layer lintas-batch yang mengikat seluruh jalur baru.
+Cara menempatkannya tanpa merusak A–F
+A tetap = Real Trade Feed Truth Layer
+B tetap = Future Gainer / Trending Prediction Engine
+C tetap = Portfolio & Capital Management
+D tetap = Self-Evaluation / Learning Loop
+E tetap = Execution Realism Upgrade
+F tetap = Validation & Shadow Live for New Brain
+Penambahan final yang dikunci
+Tambahkan satu bagian baru:
+Layer Wajib Baru — Decision Policy Engine
+Layer ini bukan pengganti A–F, tetapi pengunci keputusan yang harus:
+mulai didesain sejak roadmap baru dimulai,
+sudah punya bentuk stabil sebelum Batch C dan E dianggap benar-benar selesai, karena sizing dan execution realism tidak boleh berjalan tanpa policy final,
+menjadi penerima input dari A, B, C, dan D,
+menjadi pengirim keputusan resmi ke E,
+menjadi objek pembuktian di F.
+Urutan eksekusi praktis yang benar
+Batch A memperkuat truth layer pasar
+Decision Policy Engine v1 dibangun secara rule-based
+Batch B nanti boleh menambah input prediction ke policy
+Batch C sizing/capital wajib tunduk ke output policy
+Batch D learning hanya boleh menyesuaikan policy dengan guardrail
+Batch E execution wajib hanya mengeksekusi output policy
+Batch F wajib membuktikan policy layer ini benar-benar hidup
+Catatan penting:
+policy v1 tidak butuh ML
+policy v1 boleh dibangun lebih dulu memakai input yang sudah ada sekarang
+nanti saat Batch B jadi, prediction cukup menjadi input tambahan, bukan otak pengganti
 ---
-
-# BAGIAN E — PROMPT FINAL BATCH 6
-
-Gunakan repository source code aktual sebagai sumber kebenaran utama.
-
-Repository project GitHub:
-- https://github.com/masreykangtrade-oss/cukong-markets
-
-Dokumen roadmap acuan urutan batch:
-- ROADMAP-REFACTOR-LOGIC.md di repo yang sama
-
-WORKING CONTEXT YANG WAJIB DIPEGANG:
-- Batch 1 sampai Batch 5 dianggap sudah selesai / atau minimal perubahan Batch 5 sudah berada di branch aktif yang sedang diaudit.
-- Fokus sekarang HANYA Batch 6.
-- Batch 6 adalah penutupan validasi untuk seluruh roadmap lama.
-- Jangan menyelundupkan redesign engine baru.
-
-TUJUAN BATCH 6:
-Menambah dan merapikan probe/validasi agar discovery, runtime selection, entry realism dasar, hold winner, dump exit, emergency exit, dan wiring Telegram/settings yang relevan benar-benar terbukti hidup.
-
-ATURAN WAJIB:
-1. Audit keras source code aktual dulu sebelum mengubah apa pun.
-2. Jangan asumsi.
-3. Jangan overclaim.
-4. Probe harus membuktikan flow nyata, bukan hanya stub dangkal.
-5. Jika dokumen bertentangan dengan source code, menangkan source code.
-6. Fokus sempit hanya pada probe, validasi, registry, dan penyesuaian kecil yang memang dibutuhkan agar pembuktian valid.
-7. Jangan refactor logika trading besar di luar kebutuhan probe.
-8. Jangan masuk ke roadmap baru.
-
-TARGET IMPLEMENTASI EKSPLISIT:
-- audit registry probe yang sudah ada
-- audit jalur validasi resmi repo
-- tambah/rapikan probe end-to-end untuk:
-  - discovery lane yang relevan
-  - runtime selection `SCOUT_ENTER` / `ADD_ON_CONFIRM` bila memang itu yang hidup
-  - hold winner tidak auto-exit saat kondisi sehat
-  - dump exit saat struktur rusak
-  - emergency exit saat kondisi darurat
-  - wiring settings/Telegram penting dari Batch 5 bila memang bisa divalidasi secara masuk akal
-- rapikan `scripts/run-probes.mjs` bila registry atau klasifikasi official/manual perlu dibenahi
-- sentuh `package.json` hanya bila memang perlu untuk script validasi
-- pastikan jalur validasi resmi repo tetap sehat
-
-HASIL YANG WAJIB ADA:
-- probe relevan bertambah / membaik
-- registry probe rapi
-- validasi resmi tidak rusak
-- pembuktian cukup untuk menutup roadmap lama
-
-OUTPUT YANG WAJIB KAMU BERIKAN:
-1. Audit ringkas
-2. Temuan per file
-3. Implementasi yang dilakukan
-4. File yang diubah
-5. Bukti validasi
-6. Gap / residual risk
-7. Verdict final
-
-VERDICT WAJIB SALAH SATU:
-- SIAP MERGE
-- BELUM SIAP MERGE
-
-ATURAN VERDICT:
-- Jangan bilang SIAP MERGE hanya karena script jalan, kalau probe yang penting masih belum benar-benar membuktikan perilaku target.
-- Jangan bilang BELUM SIAP MERGE hanya karena roadmap baru belum dikerjakan.
-- Jika belum siap merge, buatkan prompt lanjutan yang tetap sempit dan tetap di Batch 6.
-
+7) Spesifikasi eksplisit Decision Policy Engine
+Nama layer
+`decisionPolicyEngine`
+Tanggung jawab tunggal
+Menjadi single source of final decision untuk:
+entry
+skip
+wait
+size multiplier
+aggressiveness level
+Input minimum v1
+`decisionPolicyEngine` minimal menerima input berikut:
+`OpportunityAssessment`
+`RiskCheckResult`
+`marketRegime`
+`discoveryBucket` / discovery quality
+`pumpProbability`
+`confidence`
+`trapProbability`
+`spoofRisk`
+`entryTiming`
+settings runtime / strategy / risk yang relevan
+Output minimum wajib
+```ts
+{
+  action: 'ENTER' | 'SKIP' | 'WAIT';
+  sizeMultiplier: number;
+  aggressiveness: 'LOW' | 'NORMAL' | 'HIGH';
+  reasons: string[];
+}
+```
+Aturan keputusan minimum
+Regime policy
+`TRAP_RISK` => `SKIP`
+`DISTRIBUTION` => `SKIP`
+`QUIET` => boleh `WAIT` atau `ENTER` kecil jika syarat scout sangat kuat
+`EXPANSION` => boleh naikkan aggressiveness bila risk tidak block
+`ACCUMULATION` / `BREAKOUT_SETUP` => boleh jadi lane entry yang valid bila discovery dan risk mendukung
+Discovery policy
+discovery quality rendah => `SKIP` atau `WAIT`
+discovery quality menengah => tidak boleh agresif penuh
+discovery quality tinggi => boleh lanjut ke sizing/aggressiveness lebih tinggi
+Risk policy
+jika `RiskEngine` block => policy tidak boleh override menjadi `ENTER`
+risk warning boleh menurunkan `sizeMultiplier`
+risk warning boleh menurunkan `aggressiveness`
+Sizing policy
+policy menentukan `sizeMultiplier`
+`RiskEngine` tetap menjaga cap final
+artinya policy mengatur niat sizing, risk menjaga batas keselamatan
+Aggressiveness policy
+`HIGH` hanya boleh saat konteks kuat, bukan cuma karena score tinggi
+`LOW` untuk quiet / uncertainty / thin-book belum matang
+`NORMAL` untuk setup valid tetapi belum ekspansif
 ---
-
-# BAGIAN F — SESUDAH BATCH 5 DAN 6 MERGE
-
-## Status roadmap lama
-Setelah Batch 5 dan Batch 6 merge, maka:
-- roadmap lama dianggap **SELESAI**,
-- diskusi lama tentang Discovery/Scout/Runtime/Exit tidak lagi jadi batch aktif,
-- peningkatan berikutnya masuk roadmap baru, bukan revisi liar ke roadmap lama.
-
+8) Dampak ke layer yang sudah ada
+MarketWatcher + SignalEngine
+Tetap jadi sensor awal.
+Tidak perlu diubah menjadi decision engine.
+Tugasnya tetap:
+menangkap market state
+membentuk score / feature / signal candidate
+opportunityEngine
+Tetap jadi mata.
+Tetapi outputnya harus diposisikan ulang menjadi:
+context assessment,
+bukan otak keputusan final.
+Artinya:
+`recommendedAction` yang sekarang ada harus diturunkan statusnya menjadi hint / pre-decision context
+keputusan final entry/skip/wait dipindah ke `decisionPolicyEngine`
+RiskEngine
+Tetap jadi penjaga / rem.
+Tidak dijadikan otak utama, tetapi wajib menjadi input keras bagi policy.
+Artinya:
+risk boleh block
+risk boleh batasi sizing
+risk boleh turunkan aggressiveness
+tetapi keputusan final formal tetap keluar dari `decisionPolicyEngine`
+executionEngine
+Tetap jadi tangan / eksekutor.
+Artinya:
+jangan lagi menafsirkan peluang sendiri
+jangan lagi menerima kandidat mentah dari runtime selection
+terima hasil decision yang sudah final
 ---
-
-# BAGIAN G — ROADMAP BARU: UPGRADE OTAK BOT
-
-## Prinsip utama roadmap baru
-Roadmap baru dibuat karena ada gap yang memang belum ditutup oleh roadmap lama:
-- trade flow masih banyak berbasis proxy/estimasi,
-- probability masih lebih dekat ke setup likelihood saat ini, belum benar-benar future prediction target,
-- sizing belum sepenuhnya adaptif berdasarkan kekuatan sinyal,
-- self-evaluation belum menjadi learning loop yang benar-benar mengubah policy,
-- capital/portfolio orchestration belum menjadi layer mandiri.
-
-## Urutan fase baru yang disarankan
-
-### Batch Baru A — Real Trade Feed Truth Layer
-Tujuan:
-- masuk ke data trade feed aktual exchange,
-- kurangi ketergantungan pada proxy/inferred trade flow,
-- bedakan jelas mana data truth vs mana fallback proxy.
-
-Hasil yang dicari:
-- layer market data baru,
-- adapter feed real-time,
-- fallback policy bila feed putus,
-- kontrak data trade truth yang jelas.
-
-### Batch Baru B — Future Gainer / Trending Prediction Engine
-Tujuan:
-- mengubah probability dari sekadar setup likelihood menjadi prediksi horizon yang jelas.
-
-Hasil yang dicari:
-- definisi target prediksi yang eksplisit,
-- labeling horizon yang jelas,
-- feature set yang sesuai,
-- score prediction yang jujur dan terkalibrasi.
-
-### Batch Baru C — Portfolio & Capital Management
-Tujuan:
-- sinyal kuat ukuran lebih besar,
-- sinyal lemah ukuran lebih kecil,
-- kontrol eksposur antar posisi,
-- alokasi modal tidak lagi semi-flat.
-
-Hasil yang dicari:
-- risk budget per posisi,
-- max exposure per cluster/pair class,
-- sizing adaptif berbasis kualitas setup,
-- cap agar tidak liar di thin-book.
-
-### Batch Baru D — Self-Evaluation / Learning Loop
-Tujuan:
-- sistem belajar dari hasil trade dan kualitas keputusan,
-- tapi tetap dijaga agar tidak drift liar.
-
-Hasil yang dicari:
-- evaluation store yang rapi,
-- feedback loop dari hasil nyata,
-- adaptive threshold / ranking adjustment yang aman,
-- guardrail agar learning tidak merusak kestabilan.
-
-### Batch Baru E — Execution Realism Upgrade
-Tujuan:
-- naikkan realisme eksekusi di thin-book,
-- masuk lebih realistis, keluar lebih realistis.
-
-Hasil yang dicari:
-- fill realism lebih baik,
-- partial fill realism,
-- queue/slippage behaviour lebih masuk akal,
-- stress handling saat likuiditas drop.
-
-### Batch Baru F — Validation & Shadow Live for New Brain
-Tujuan:
-- buktikan layer baru benar-benar valid sebelum dipercaya.
-
-Hasil yang dicari:
-- probe khusus trade feed truth,
-- probe prediction calibration,
-- probe portfolio sizing,
-- probe learning guardrail,
-- shadow-live validation baru.
-
+9) Integrasi final yang wajib
+Integrasi runtime
+`app.ts` tidak boleh lagi menjadi tempat keputusan entry final tersebar.
+Runtime flow target:
+market scan
+signal generation
+opportunity assessment
+risk check
+`decisionPolicyEngine.decide(...)`
+hanya jika action `ENTER`, runtime boleh kirim ke execution
+Integrasi candidate selection
+Seleksi kandidat runtime harus berpindah dari pola:
+filter `recommendedAction`
+sort score
+menjadi pola:
+policy decision per kandidat
+hanya kandidat `ENTER` yang eligible
+ranking final berdasarkan output decision + quality context yang sudah disahkan policy
+Integrasi execution
+`executionEngine` hanya boleh menerima objek keputusan final, misalnya:
+pair
+action
+sizeMultiplier
+aggressiveness
+reasons
+context ringkas untuk audit/log
+Integrasi observability
+Reason dari policy harus bisa muncul di:
+journal/log
+summary operator
+hotlist / ranking bila relevan
+probe validation
 ---
-
-# BAGIAN H — KEPUTUSAN FINAL YANG DIPEGANG
-
-## Final keputusan roadmap
-1. **Jangan campur roadmap baru ke Batch 5 atau 6.**
-2. **Tutup roadmap lama dulu dengan Batch 5 dan 6.**
-3. **Sesudah merge Batch 5 dan 6, baru mulai roadmap baru.**
-4. **Roadmap baru dimulai dari Real Trade Feed Truth Layer, bukan dari auto-learning dulu.**
-5. **Auto-learning tidak boleh jadi langkah pertama.**
-6. **Capital management adaptif dan prediction engine baru dikerjakan sesudah fondasi data truth lebih kuat.**
-
+10) File/area yang kemungkinan wajib disentuh saat implementasi
+Minimal
+`src/core/types.ts`
+`src/domain/intelligence/opportunityEngine.ts`
+`src/domain/trading/riskEngine.ts`
+`src/domain/trading/executionEngine.ts`
+`src/app.ts`
+`src/domain/decision/decisionPolicyEngine.ts` (baru)
+Mungkin ikut disentuh bila perlu sinkronisasi output
+`src/services/summaryService.ts`
+`src/services/reportService.ts`
+probe tests yang memverifikasi runtime selection / entry flow / decision reasons
+Batasan sentuhan
+hanya sentuh area yang memang dibutuhkan untuk wiring policy final
+jangan refactor liar ke modul yang tidak terkait
+jangan buka scope baru di luar jalur decision layer
 ---
-
-# BAGIAN I — VERDICT STRATEGIS
-
-## Verdict final dokumen ini
-**FINAL DAN TEGAS:**
-- Batch 5 dan 6 adalah penutupan roadmap saat ini.
-- Upgrade otak bot baru harus dibuka sebagai roadmap lanjutan terpisah.
-- Urutan yang benar: **selesaikan dan merge Batch 5 → selesaikan dan merge Batch 6 → baru mulai roadmap baru.**
-
+11) Acceptance criteria final untuk penambahan ini
+Decision Policy Layer baru dianggap benar bila semua ini terpenuhi:
+Tidak ada jalur auto-entry yang bypass policy
+Regime `DISTRIBUTION` dan `TRAP_RISK` benar-benar bisa block trade
+`EXPANSION` dan `QUIET` benar-benar mempengaruhi aggressiveness
+Discovery benar-benar menjadi minimum quality gate
+Output decision eksplisit ada:
+`action`
+`sizeMultiplier`
+`aggressiveness`
+`reasons`
+opportunityEngine tidak lagi menjadi pengambil keputusan final entry
+executionEngine hanya mengeksekusi hasil decision
+Log/journal dapat menjelaskan kenapa pair ENTER / WAIT / SKIP
+Probe dapat membuktikan flow ini benar-benar hidup
+---
+12) Dampak ke roadmap baru A–F
+Batch A — Real Trade Feed Truth Layer
+Tetap sama.
+Tambahan makna:
+hasil A akan menjadi input truth yang lebih kuat untuk policy
+Batch B — Future Gainer / Trending Prediction Engine
+Tetap sama.
+Tambahan makna:
+output prediction nanti masuk sebagai input tambahan policy, bukan pengganti policy
+Batch C — Portfolio & Capital Management
+Tetap sama.
+Tambahan makna:
+sizing adaptif wajib mengikuti decision policy, bukan berdiri sendiri
+Batch D — Self-Evaluation / Learning Loop
+Tetap sama.
+Tambahan makna:
+learning hanya boleh menyentuh parameter policy secara aman, bukan membuat sistem override guardrail secara liar
+Batch E — Execution Realism Upgrade
+Tetap sama.
+Tambahan makna:
+execution realism bekerja di bawah keputusan policy, bukan menjadi otak keputusan
+Batch F — Validation & Shadow Live for New Brain
+Tetap sama.
+Tambahan makna:
+Batch F wajib menambahkan pembuktian khusus bahwa decision policy layer benar-benar jadi sumber keputusan final
+---
+13) Final keputusan roadmap yang harus dipegang
+roadmap lama tetap dianggap selesai terpisah
+roadmap baru A–F tetap dipertahankan
+Decision Policy Engine wajib ditambahkan sebagai layer baru yang eksplisit
+policy ini tidak boleh memakai ML di versi awal
+policy ini harus menjadi penghubung resmi antara context, risk, sizing, dan execution
+sistem harus bergeser dari scoring-based selection menjadi context-aware decision engine
+`recommendedAction` existing tidak lagi diperlakukan sebagai keputusan final, melainkan context hint
+`executionEngine` tidak boleh menjadi tempat logika keputusan bisnis utama
+`app.ts` tidak boleh tetap menjadi pusat logika keputusan final yang tercecer
+---
+14) VERDICT FINAL PENAMBAHAN ROADMAP BARU
+FINAL DAN TEGAS
+Penambahan Decision Policy Engine memang perlu, valid, dan seharusnya dimasukkan ke roadmap baru sekarang.
+Alasan tegas
+Karena saat ini sistem:
+sudah punya sensor,
+sudah punya opportunity,
+sudah punya risk,
+sudah punya execution,
+tetapi belum punya brain layer final yang eksplisit dan tunggal.
+Keputusan akhir
+Roadmap upgrade otak bot yang baru harus diperbarui dari pola:
+scoring-heavy runtime selection
+menjadi:
+context-aware decision architecture
+Rumus final arsitektur target
+Sensor -> Opportunity Context -> Risk Context -> Decision Policy Engine -> Execution
+Itulah bentuk final yang harus dipegang untuk roadmap baru ini.
