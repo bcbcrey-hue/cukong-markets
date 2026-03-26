@@ -47,6 +47,7 @@ const officialProbes = [
   'tests/runtime_selector_prefers_add_on_after_scout_probe.ts',
   'tests/runtime_selector_pair_priority_probe.ts',
   'tests/runtime_selector_fallback_general_probe.ts',
+  'tests/runtime_selector_fallback_pair_priority_probe.ts',
   'tests/runtime_selector_monitoring_continuity_probe.ts',
   'tests/chasing_entry_rejected_probe.ts',
   'tests/normal_entry_other_account_same_pair_probe.ts',

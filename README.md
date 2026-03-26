@@ -140,6 +140,17 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
   - `tests/scout_lane_sizing_probe.ts` (size scout < size normal)
   - `tests/normal_entry_other_account_same_pair_probe.ts` (entry normal/scout tidak diblok posisi akun lain)
   - `tests/chasing_entry_rejected_probe.ts` (setup `CHASING` ditolak)
+- Jalur Batch 3 runtime selector sudah diprove di level app-runtime selector:
+  - prioritas lane `SCOUT_ENTER+ANOMALY` > `SCOUT_ENTER+STEALTH` > `ADD_ON_CONFIRM` > fallback umum
+  - prioritas pair class `MICRO > MID > MAJOR` berlaku pada lane scout/add-on **dan** fallback umum
+  - probe terkait:
+    - `tests/runtime_selector_prefers_scout_anomaly_probe.ts`
+    - `tests/runtime_selector_prefers_scout_stealth_probe.ts`
+    - `tests/runtime_selector_prefers_add_on_after_scout_probe.ts`
+    - `tests/runtime_selector_pair_priority_probe.ts`
+    - `tests/runtime_selector_fallback_general_probe.ts`
+    - `tests/runtime_selector_fallback_pair_priority_probe.ts`
+    - `tests/runtime_selector_monitoring_continuity_probe.ts`
 - `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
 
 ## Batas yang masih harus jujur
@@ -153,6 +164,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
+- Probe Batch 3 runtime selector saat ini fokus pada logika pemilihan kandidat di source/probe; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback di market nyata.
 - End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
 - Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.
 

@@ -4,12 +4,12 @@ import { selectRuntimeEntryCandidate } from '../src/app';
 import type { OpportunityAssessment } from '../src/core/types';
 import { createDefaultSettings } from '../src/services/persistenceService';
 
-function opp(pair: string, finalScore: number): OpportunityAssessment {
+function general(pair: string, pairClass: OpportunityAssessment['pairClass'], finalScore: number): OpportunityAssessment {
   const now = Date.now();
   return {
     pair,
     discoveryBucket: 'ROTATION',
-    pairClass: 'MID',
+    pairClass,
     rawScore: finalScore,
     finalScore,
     confidence: 0.9,
@@ -42,23 +42,14 @@ function opp(pair: string, finalScore: number): OpportunityAssessment {
 
 async function main() {
   const settings = createDefaultSettings();
-  const topGeneral = {
-    ...opp('general_top_major_idr', 90),
-    pairClass: 'MAJOR' as const,
-  };
-  const lowerGeneral = {
-    ...opp('general_lower_micro_idr', 70),
-    pairClass: 'MICRO' as const,
-  };
+  const major = general('fallback_major_idr', 'MAJOR', 95);
+  const mid = general('fallback_mid_idr', 'MID', 80);
+  const micro = general('fallback_micro_idr', 'MICRO', 65);
 
-  const selected = selectRuntimeEntryCandidate([lowerGeneral, topGeneral], settings);
-  assert.equal(
-    selected?.pair,
-    'general_lower_micro_idr',
-    'fallback umum wajib hormati pair priority, bukan finalScore murni',
-  );
+  const selected = selectRuntimeEntryCandidate([major, mid, micro], settings);
+  assert.equal(selected?.pair, 'fallback_micro_idr', 'fallback umum wajib MICRO > MID > MAJOR meski score lebih rendah');
 
-  console.log('runtime_selector_fallback_general_probe: ok');
+  console.log('runtime_selector_fallback_pair_priority_probe: ok');
 }
 
 main().catch((error) => {

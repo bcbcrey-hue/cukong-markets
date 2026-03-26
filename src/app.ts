@@ -103,7 +103,7 @@ export function selectRuntimeEntryCandidate(
     return addOn[0];
   }
 
-  return [...eligible].sort((a, b) => b.finalScore - a.finalScore)[0];
+  return [...eligible].sort(sortByPairClassThenScore)[0];
 }
 
 async function runStartupPhase<T>(phase: string, task: () => Promise<T>): Promise<T> {
