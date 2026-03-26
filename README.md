@@ -38,6 +38,8 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run verify`
 - `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch3_current.json`)
 
+Nama job/check resmi yang muncul di PR adalah `verify-runtime-contract`. Jika ingin menutup gap **combined status kosong** dan memblok merge saat gagal, jadikan check ini sebagai **required status check** di branch protection/ruleset GitHub (setting repository, bukan dari source code repo).
+
 Daftar probe official (yang benar-benar dipanggil runner) bisa dilihat via:
 
 ```bash
