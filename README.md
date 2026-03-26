@@ -136,7 +136,9 @@ Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold stra
 - Jalur Batch 2 scout/confirm sudah diprove di level engine melalui probe:
   - `tests/scout_enter_route_probe.ts` (route `SCOUT_ENTER`)
   - `tests/add_on_confirm_probe.ts` (route `ADD_ON_CONFIRM` + rejection saat continuation rusak)
+  - `tests/add_on_confirm_account_scope_probe.ts` (add-on pair sama di akun lain tetap ditolak)
   - `tests/scout_lane_sizing_probe.ts` (size scout < size normal)
+  - `tests/normal_entry_other_account_same_pair_probe.ts` (entry normal/scout tidak diblok posisi akun lain)
   - `tests/chasing_entry_rejected_probe.ts` (setup `CHASING` ditolak)
 - `.env.example` dan dokumentasi env sudah diselaraskan dengan kontrak env runtime yang dipakai source.
 

@@ -94,6 +94,9 @@ export class RiskEngine {
     const warnings: string[] = [];
     const plan = this.resolveLaneAdjustedAmountIdr(input);
     const signal = 'finalScore' in input.signal ? input.signal : null;
+    const accountScopedOpenPositions = input.openPositions.filter(
+      (item) => item.accountId === input.account.id,
+    );
     const laneSpreadTolerance = plan.lane === 'SCOUT' ? 1.35 : 1;
     const laneCooldownTolerance = plan.lane === 'SCOUT' ? 0.45 : 1;
     const laneSpoofTolerance =
@@ -127,11 +130,11 @@ export class RiskEngine {
       reasons.push('Ukuran posisi melebihi batas');
     }
 
-    if (input.openPositions.length >= input.settings.risk.maxOpenPositions) {
+    if (accountScopedOpenPositions.length >= input.settings.risk.maxOpenPositions) {
       reasons.push('Jumlah posisi terbuka mencapai batas');
     }
 
-    const openSamePairPositions = input.openPositions.filter(
+    const openSamePairPositions = accountScopedOpenPositions.filter(
       (item) => item.pair === this.getPair(input.signal),
     );
     const samePairOpen = openSamePairPositions.length > 0;

@@ -1692,11 +1692,15 @@ export class ExecutionEngine {
       throw new Error('Masih ada order BUY aktif pada pair/account yang sama');
     }
 
+    const accountOpenPositions = this.positions
+      .listOpen()
+      .filter((position) => position.accountId === account.id);
+
     const riskResult = this.risk.checkCanEnter({
       account,
       settings,
       signal,
-      openPositions: this.positions.listOpen(),
+      openPositions: accountOpenPositions,
       amountIdr,
       cooldownUntil: this.state.get().pairCooldowns[signal.pair] ?? null,
     });
