@@ -1,5 +1,4 @@
 Roadmap — Pembuka Upgrade Otak Bot Baru
----
 Prinsip utama roadmap baru
 Roadmap baru dibuat karena ada gap yang memang belum ditutup oleh roadmap lama:
 trade flow masih banyak berbasis proxy/estimasi,
@@ -64,7 +63,7 @@ probe prediction calibration,
 probe portfolio sizing,
 probe learning guardrail,
 shadow-live validation baru.
----
+
 
 ROADMAP LOGIC UPGRADE FINAL — DENGAN DECISION POLICY LAYER
 
