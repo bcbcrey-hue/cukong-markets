@@ -64,6 +64,7 @@ Probe official untuk historical context outcome-grounded:
 - `tests/state_replace_atomicity_probe.ts` (validasi `StateService.replace()` tidak commit state in-memory bila write persistence gagal)
 - `tests/scheduler_overlap_guard_probe.ts` (forced concurrent run untuk bukti overlap guard scheduler)
 - `tests/telegram_settings_persistence_probe.ts` (validasi flow Telegram `MIN_PUMP_PROBABILITY` + `MIN_CONFIDENCE` benar-benar tersimpan lewat `SettingsService` dan tetap terbaca setelah reload service baru dari persistence nyata)
+- `tests/telegram_strategy_mode_probe.ts` (validasi callback Telegram `SET|MODE` + `SET|EXECUTION_MODE` benar-benar mengubah runtime settings, memanggil sinkronisasi state runtime, dan tetap persist setelah reload service baru)
 
 `tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
 
