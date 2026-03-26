@@ -75,7 +75,11 @@ interface UserFlowState {
   pendingDeleteAccountId?: string;
   pendingBuyPair?: string;
   pendingBuyBackMenu?: TelegramMenuId;
-  pendingConfig?: 'BUY_SLIPPAGE_BPS' | 'TAKE_PROFIT_PCT';
+  pendingConfig?:
+    | 'BUY_SLIPPAGE_BPS'
+    | 'TAKE_PROFIT_PCT'
+    | 'MIN_PUMP_PROBABILITY'
+    | 'MIN_CONFIDENCE';
   pendingSlippageConfirmation?: {
     requestedBps: number;
     cappedBps: number;
@@ -300,6 +304,8 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
       return (
         parsed.action === 'BUY_SLIPPAGE' ||
         parsed.action === 'TAKE_PROFIT' ||
+        parsed.action === 'MIN_PUMP_PROBABILITY' ||
+        parsed.action === 'MIN_CONFIDENCE' ||
         (parsed.action === 'EXECUTION_MODE' && ['SIMULATED', 'LIVE'].includes(parsed.value ?? '')) ||
         (parsed.action === 'MODE' && isTradingModeValue(parsed.value))
       );
@@ -982,6 +988,48 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (parsed.namespace === 'SET' && parsed.action === 'MIN_PUMP_PROBABILITY') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MIN_PUMP_PROBABILITY';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        [
+          'Kirim nilai minimum pump probability.',
+          `Saat ini: ${(deps.settings.get().strategy.minPumpProbability * 100).toFixed(1)}%`,
+          'Bisa kirim format desimal (contoh: 0.65) atau persen (contoh: 65).',
+        ].join('\n'),
+        strategySettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'MIN_CONFIDENCE') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MIN_CONFIDENCE';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        [
+          'Kirim nilai minimum confidence.',
+          `Saat ini: ${(deps.settings.get().strategy.minConfidence * 100).toFixed(1)}%`,
+          'Bisa kirim format desimal (contoh: 0.60) atau persen (contoh: 60).',
+        ].join('\n'),
+        strategySettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
     if (parsed.namespace === 'SIG' && parsed.action === 'DETAIL' && parsed.pair) {
       const signal = getTopSignal(deps.state, parsed.pair);
       const backMenu = resolveHotlistBackMenu(parsed.value);
@@ -1380,6 +1428,39 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
         ctx,
         `Take profit diubah ke ${takeProfitPct}%.`,
         riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'MIN_PUMP_PROBABILITY' || userFlow.pendingConfig === 'MIN_CONFIDENCE') {
+      const rawValue = Number(text.replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(rawValue) || rawValue <= 0) {
+        await replyText(ctx, 'Nilai tidak valid. Kirim angka desimal 0..1 atau persen 1..100.');
+        return;
+      }
+
+      const normalized = rawValue > 1 ? rawValue / 100 : rawValue;
+      if (normalized <= 0 || normalized > 1) {
+        await replyText(ctx, 'Rentang nilai harus > 0 sampai <= 1 (atau 1..100%).');
+        return;
+      }
+
+      const patch =
+        userFlow.pendingConfig === 'MIN_PUMP_PROBABILITY'
+          ? { minPumpProbability: normalized }
+          : { minConfidence: normalized };
+      await deps.settings.patchStrategy(patch);
+
+      const label =
+        userFlow.pendingConfig === 'MIN_PUMP_PROBABILITY'
+          ? 'Minimum pump probability'
+          : 'Minimum confidence';
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `${label} diubah ke ${(normalized * 100).toFixed(1)}%.`,
+        strategySettingsKeyboard(deps.settings.get()),
       );
       return;
     }

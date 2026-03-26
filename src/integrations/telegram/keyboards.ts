@@ -94,6 +94,8 @@ export const TELEGRAM_ACTION = {
   MANUAL_BUY: '🟢 Manual Buy',
   MANUAL_SELL: '🔴 Manual Sell',
   BUY_SLIPPAGE: '🎯 Buy Slippage',
+  MIN_PUMP_PROBABILITY: '📈 Min Pump Probability',
+  MIN_CONFIDENCE: '🧪 Min Confidence',
   EXECUTION_SIMULATED: '🧪 Execution Simulated',
   EXECUTION_LIVE: '💸 Execution Live',
   STRATEGY: '⚙️ Strategy Settings',
@@ -217,6 +219,18 @@ export function strategySettingsKeyboard(settings: BotSettings) {
       Markup.button.callback(
         `${executionMode === 'LIVE' ? '✅ ' : ''}${TELEGRAM_ACTION.EXECUTION_LIVE}`,
         buildCallback({ namespace: 'SET', action: 'EXECUTION_MODE', value: 'LIVE' }),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        `${TELEGRAM_ACTION.MIN_PUMP_PROBABILITY} ${(settings.strategy.minPumpProbability * 100).toFixed(1)}%`,
+        buildCallback({ namespace: 'SET', action: 'MIN_PUMP_PROBABILITY' }),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        `${TELEGRAM_ACTION.MIN_CONFIDENCE} ${(settings.strategy.minConfidence * 100).toFixed(1)}%`,
+        buildCallback({ namespace: 'SET', action: 'MIN_CONFIDENCE' }),
       ),
     ],
     [backButton('SET')],
