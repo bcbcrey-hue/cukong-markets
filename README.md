@@ -39,6 +39,7 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch3_current.json`)
 
 Job/check utama workflow bernama `verify-runtime-contract`.
+Workflow juga mempublikasikan commit status context `verify-runtime-contract/combined` yang mengikuti hasil job utama (success/failure) agar status gabungan commit tidak kosong.
 
 ### Catatan penting soal status check PR
 
@@ -62,6 +63,7 @@ Probe official untuk historical context outcome-grounded:
 - `tests/state_atomicity_probe.ts` (validasi `StateService.patch()` tidak commit state in-memory bila write persistence gagal)
 - `tests/state_replace_atomicity_probe.ts` (validasi `StateService.replace()` tidak commit state in-memory bila write persistence gagal)
 - `tests/scheduler_overlap_guard_probe.ts` (forced concurrent run untuk bukti overlap guard scheduler)
+- `tests/telegram_settings_persistence_probe.ts` (validasi flow Telegram `MIN_PUMP_PROBABILITY` + `MIN_CONFIDENCE` benar-benar tersimpan lewat `SettingsService` dan tetap terbaca setelah reload service baru dari persistence nyata)
 
 `tests/real_exchange_shadow_run_probe.ts` adalah probe manual live exchange dan **tidak** dijalankan oleh `npm run verify`; jalur manual resminya adalah:
 
@@ -177,6 +179,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 ## Batas pengujian yang belum tercakup penuh (Incomplete testing)
 
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
+- Probe Telegram settings membuktikan persistence reload service-level, tetapi belum membuktikan interaksi operator pada chat Telegram production real network end-to-end.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
 - Probe Batch 3 runtime selector saat ini fokus pada logika pemilihan kandidat di source/probe; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback di market nyata.
 - Probe Batch 4 exit intelligence sudah menutup logika exit decision + wiring monitor, tetapi belum membuktikan slippage/partial-fill real exchange pada skenario dump ekstrem.
