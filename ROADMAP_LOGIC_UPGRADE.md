@@ -1,4 +1,75 @@
+
+Roadmap — Pembuka Upgrade Otak Bot Baru
+---
+Prinsip utama roadmap baru
+Roadmap baru dibuat karena ada gap yang memang belum ditutup oleh roadmap lama:
+trade flow masih banyak berbasis proxy/estimasi,
+probability masih lebih dekat ke setup likelihood saat ini, belum benar-benar future prediction target,
+sizing belum sepenuhnya adaptif berdasarkan kekuatan sinyal,
+self-evaluation belum menjadi learning loop yang benar-benar mengubah policy,
+capital/portfolio orchestration belum menjadi layer mandiri.
+Urutan fase baru yang disarankan
+Batch Baru A — Real Trade Feed Truth Layer
+Tujuan:
+masuk ke data trade feed aktual exchange,
+kurangi ketergantungan pada proxy/inferred trade flow,
+bedakan jelas mana data truth vs mana fallback proxy.
+Hasil yang dicari:
+layer market data baru,
+adapter feed real-time,
+fallback policy bila feed putus,
+kontrak data trade truth yang jelas.
+Batch Baru B — Future Gainer / Trending Prediction Engine
+Tujuan:
+mengubah probability dari sekadar setup likelihood menjadi prediksi horizon yang jelas.
+Hasil yang dicari:
+definisi target prediksi yang eksplisit,
+labeling horizon yang jelas,
+feature set yang sesuai,
+score prediction yang jujur dan terkalibrasi.
+Batch Baru C — Portfolio & Capital Management
+Tujuan:
+sinyal kuat ukuran lebih besar,
+sinyal lemah ukuran lebih kecil,
+kontrol eksposur antar posisi,
+alokasi modal tidak lagi semi-flat.
+Hasil yang dicari:
+risk budget per posisi,
+max exposure per cluster/pair class,
+sizing adaptif berbasis kualitas setup,
+cap agar tidak liar di thin-book.
+Batch Baru D — Self-Evaluation / Learning Loop
+Tujuan:
+sistem belajar dari hasil trade dan kualitas keputusan,
+tapi tetap dijaga agar tidak drift liar.
+Hasil yang dicari:
+evaluation store yang rapi,
+feedback loop dari hasil nyata,
+adaptive threshold / ranking adjustment yang aman,
+guardrail agar learning tidak merusak kestabilan.
+Batch Baru E — Execution Realism Upgrade
+Tujuan:
+naikkan realisme eksekusi di thin-book,
+masuk lebih realistis, keluar lebih realistis.
+Hasil yang dicari:
+fill realism lebih baik,
+partial fill realism,
+queue/slippage behaviour lebih masuk akal,
+stress handling saat likuiditas drop.
+Batch Baru F — Validation & Shadow Live for New Brain
+Tujuan:
+buktikan layer baru benar-benar valid sebelum dipercaya.
+Hasil yang dicari:
+probe khusus trade feed truth,
+probe prediction calibration,
+probe portfolio sizing,
+probe learning guardrail,
+shadow-live validation baru.
+---
+
 ROADMAP LOGIC UPGRADE FINAL — DENGAN DECISION POLICY LAYER
+
+
 1) Status dokumen ini
 Dokumen ini adalah versi final roadmap upgrade otak bot yang menambahkan Decision Policy Engine tanpa keluar dari jalur target roadmap baru yang sudah ada.
 Prinsip yang dikunci:
