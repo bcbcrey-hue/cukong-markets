@@ -45,6 +45,7 @@ function enter(
 }
 
 function resolveOpportunityLane(input: DecisionPolicyInput): DecisionPolicyOutput['entryLane'] {
+  // recommendedAction di sini diperlakukan sebagai hint lane context dari OpportunityEngine.
   if (input.recommendedAction === 'SCOUT_ENTER') {
     return 'SCOUT';
   }
@@ -126,7 +127,7 @@ export function evaluateDecisionPolicyV1(input: DecisionPolicyInput): DecisionPo
 
   if (input.source === 'OPPORTUNITY') {
     if (input.recommendedAction === 'AVOID') {
-      return skip(['Opportunity memberi sinyal avoid'], entryLane);
+      return skip(['Opportunity hint memberi sinyal avoid'], entryLane);
     }
 
     if (input.edgeValid === false) {
@@ -180,7 +181,7 @@ export function evaluateDecisionPolicyV1(input: DecisionPolicyInput): DecisionPo
     }
 
     if (input.recommendedAction !== 'ENTER') {
-      return wait(['Opportunity belum memberi sinyal entry final'], entryLane);
+      return wait(['Opportunity hint belum menguat ke entry final policy'], entryLane);
     }
   }
 

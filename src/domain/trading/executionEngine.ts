@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 import type {
-  AutoExecutionDecision,
   BotSettings,
   ManualOrderRequest,
   OpportunityAssessment,
@@ -37,7 +36,6 @@ import { AccountRegistry } from '../accounts/accountRegistry';
 import { OrderManager } from './orderManager';
 import { PositionManager } from './positionManager';
 import { RiskEngine } from './riskEngine';
-import { evaluateOpportunityPolicyV1, evaluateSignalPolicyV1 } from '../decision/decisionPolicyEngine';
 
 type ExecutionCandidate = SignalCandidate | OpportunityAssessment;
 
@@ -1569,27 +1567,25 @@ export class ExecutionEngine {
     return 'CONFIRM';
   }
 
-  decideAutoExecution(
-    candidate: ExecutionCandidate,
-    riskCheckResult?: RiskCheckResult,
-  ): AutoExecutionDecision {
-    const settings = this.settings.get();
-    return 'finalScore' in candidate
-      ? evaluateOpportunityPolicyV1(candidate, settings, riskCheckResult)
-      : evaluateSignalPolicyV1(candidate, settings, riskCheckResult);
-  }
-
   async attemptAutoBuy(runtimeCandidate: RuntimeEntryCandidate): Promise<string> {
     const settings = this.settings.get();
-    const preRiskDecision = runtimeCandidate.policyDecision;
+    const finalPolicyDecision = runtimeCandidate.policyDecision;
     const signal = runtimeCandidate.opportunity;
 
-    if (preRiskDecision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
-      return `skip auto-buy ${signal.pair}: ${preRiskDecision.reasons.join('; ')}`;
+    if (finalPolicyDecision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
+      return `skip auto-buy ${signal.pair}: ${finalPolicyDecision.reasons.join('; ')}`;
     }
 
     if (!runtimeCandidate.riskCheckResult.allowed) {
       return `skip auto-buy ${signal.pair}: ${runtimeCandidate.riskCheckResult.reasons.join('; ')}`;
+    }
+
+    if (runtimeCandidate.pair !== signal.pair) {
+      throw new Error('RuntimeEntryCandidate tidak valid: pair policy tidak sinkron dengan opportunity');
+    }
+
+    if (!Number.isFinite(runtimeCandidate.sizeMultiplier) || runtimeCandidate.sizeMultiplier <= 0) {
+      throw new Error('RuntimeEntryCandidate tidak valid: sizeMultiplier harus > 0');
     }
 
     const account = this.accounts.getDefault();
@@ -1601,7 +1597,23 @@ export class ExecutionEngine {
       return `skip auto-buy ${signal.pair}: active BUY order already exists`;
     }
 
-    return this.buy(account.id, signal, settings.risk.maxPositionSizeIdr, 'AUTO');
+    const executionAmountIdr = runtimeCandidate.riskCheckResult.adjustedAmountIdr
+      ?? (settings.risk.maxPositionSizeIdr * runtimeCandidate.sizeMultiplier);
+
+    if (!Number.isFinite(executionAmountIdr) || executionAmountIdr <= 0) {
+      throw new Error('RuntimeEntryCandidate tidak valid: adjustedAmountIdr tidak valid');
+    }
+
+    const executionSignal: OpportunityAssessment = {
+      ...signal,
+      recommendedAction: runtimeCandidate.policyDecision.entryLane === 'SCOUT'
+        ? 'SCOUT_ENTER'
+        : runtimeCandidate.policyDecision.entryLane === 'ADD_ON_CONFIRM'
+          ? 'ADD_ON_CONFIRM'
+          : signal.recommendedAction,
+    };
+
+    return this.buy(account.id, executionSignal, executionAmountIdr, 'AUTO');
   }
 
   async buy(
@@ -1621,29 +1633,27 @@ export class ExecutionEngine {
       throw new Error('Masih ada order BUY aktif pada pair/account yang sama');
     }
 
-    const accountOpenPositions = this.positions
-      .listOpen()
-      .filter((position) => position.accountId === account.id);
+    let executionAmountIdr = amountIdr;
+    if (source !== 'AUTO') {
+      const accountOpenPositions = this.positions
+        .listOpen()
+        .filter((position) => position.accountId === account.id);
 
-    const riskResult = this.risk.checkCanEnter({
-      account,
-      settings,
-      signal,
-      openPositions: accountOpenPositions,
-      amountIdr,
-      cooldownUntil: this.state.get().pairCooldowns[signal.pair] ?? null,
-      policyDecision: this.decideAutoExecution(signal),
-    });
+      const riskResult = this.risk.checkCanEnter({
+        account,
+        settings,
+        signal,
+        openPositions: accountOpenPositions,
+        amountIdr,
+        cooldownUntil: this.state.get().pairCooldowns[signal.pair] ?? null,
+      });
 
-    const finalDecision = this.decideAutoExecution(signal, riskResult);
-    if (finalDecision.action !== 'ENTER') {
-      throw new Error(finalDecision.reasons.join('; '));
+      if (!riskResult.allowed) {
+        throw new Error(riskResult.reasons.join('; '));
+      }
+
+      executionAmountIdr = riskResult.adjustedAmountIdr ?? amountIdr;
     }
-
-    if (!riskResult.allowed) {
-      throw new Error(riskResult.reasons.join('; '));
-    }
-    const executionAmountIdr = riskResult.adjustedAmountIdr ?? amountIdr;
 
     const { entryPrice, referencePrice, quantity } = this.validateBuyIntent(
       signal,
