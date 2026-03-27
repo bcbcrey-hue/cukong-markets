@@ -401,8 +401,8 @@ async function main() {
 
   // Live buy partial->filled sync should persist exchange order id and apply fill deltas.
   const partialOpportunity = makeOpportunity('doge_idr', 1000);
-  const aggressiveBuyPrice = partialOpportunity.bestAsk * (1 + settings.get().strategy.buySlippageBps / 10_000);
-  const orderQuantity = 100_000 / aggressiveBuyPrice;
+  const baselineAggressiveBuyPrice = partialOpportunity.bestAsk * (1 + settings.get().strategy.buySlippageBps / 10_000);
+  const orderQuantity = 100_000 / baselineAggressiveBuyPrice;
   const firstFilled = orderQuantity * 0.4;
 
   liveApi.queueTrade({ success: 1, return: { order_id: 'BUY-PARTIAL-1' } });
@@ -481,7 +481,12 @@ async function main() {
   const partialOrder = orderManager.list().find((o) => o.exchangeOrderId === 'BUY-PARTIAL-1');
   assert.ok(partialOrder, 'Live buy should persist exchange order id');
   assert.ok((partialOrder?.filledQuantity ?? 0) > 0, 'Initial live sync should capture partial fill quantity');
-  assert.equal(partialOrder?.price, aggressiveBuyPrice, 'Buy should use aggressive limit price from best ask + slippage');
+  assert.ok(partialOrder?.executionPlan, 'Live buy should persist execution plan');
+  const plan = partialOrder?.executionPlan;
+  const expectedDynamicPrice = partialOpportunity.bestAsk * (1 + (plan?.finalSlippageBps ?? 0) / 10_000);
+  assert.equal(partialOrder?.price, expectedDynamicPrice, 'Buy should follow execution plan dynamic slippage');
+  assert.ok((plan?.finalSlippageBps ?? 0) >= (plan?.baselineSlippageBps ?? 0), 'Dynamic slippage cannot be below baseline');
+  assert.ok((plan?.finalSlippageBps ?? 0) <= settings.get().strategy.maxBuySlippageBps, 'Dynamic slippage must be bounded by maxBuySlippageBps');
   assert.equal(partialOrder?.feeAmount, 10, 'Initial reconciliation should capture exchange fee');
 
   const beforeSyncTotal = positionManager
@@ -557,8 +562,15 @@ async function main() {
     .listOpen()
     .filter((position) => position.pair === 'doge_idr' && position.accountId === defaultAccount.id);
   assert.equal(dogePositions.length, 1, 'Repeated partial fills should remain one logical position per pair/account');
-  assert.equal(dogePositions[0]?.quantity, orderQuantity, 'Merged logical position should hold total executed quantity');
-  assert.equal(dogePositions[0]?.averageEntryPrice, 1006, 'Merged logical position should carry weighted average entry');
+  assert.equal(
+    dogePositions[0]?.quantity,
+    afterSyncOrder?.quantity,
+    'Merged logical position should hold total executed quantity',
+  );
+  assert.ok(
+    Math.abs((dogePositions[0]?.averageEntryPrice ?? 0) - 1006) < 1e-6,
+    'Merged logical position should carry weighted average entry',
+  );
   assert.equal(dogePositions[0]?.entryFeesPaid, 25, 'Merged logical position should accumulate entry fees');
   const buySummaries = await persistence.readExecutionSummaries();
   assert.ok(

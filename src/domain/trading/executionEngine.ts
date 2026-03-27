@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type {
   BotSettings,
+  ExecutionPlanReadModel,
   ManualOrderRequest,
   OpportunityAssessment,
   OrderRecord,
@@ -1440,25 +1441,20 @@ export class ExecutionEngine {
 
   private getAggressiveBuyLimitPrice(
     candidate: ExecutionCandidate,
-    settings: BotSettings,
+    executionPlan: ExecutionPlanReadModel,
   ): number {
     const referencePrice = this.getBuyReferencePrice(candidate);
     if (referencePrice <= 0) {
       return this.getExecutionPrice(candidate);
     }
 
-    const slippageBps = Math.max(
-      0,
-      Math.min(settings.strategy.buySlippageBps, settings.strategy.maxBuySlippageBps),
-    );
-
-    return referencePrice * (1 + slippageBps / 10_000);
+    return referencePrice * (1 + executionPlan.finalSlippageBps / 10_000);
   }
 
   private validateBuyIntent(
     candidate: ExecutionCandidate,
     amountIdr: number,
-    settings: BotSettings,
+    executionPlan: ExecutionPlanReadModel,
   ): { entryPrice: number; referencePrice: number; quantity: number } {
     if (!Number.isFinite(amountIdr) || amountIdr <= 0) {
       throw new Error(`Notional BUY tidak valid untuk ${candidate.pair}`);
@@ -1469,7 +1465,7 @@ export class ExecutionEngine {
       throw new Error(`Harga referensi BUY tidak valid untuk ${candidate.pair}`);
     }
 
-    const entryPrice = this.getAggressiveBuyLimitPrice(candidate, settings);
+    const entryPrice = this.getAggressiveBuyLimitPrice(candidate, executionPlan);
     if (!Number.isFinite(entryPrice) || entryPrice <= 0) {
       throw new Error(`Harga entry BUY tidak valid untuk ${candidate.pair}`);
     }
@@ -1483,6 +1479,111 @@ export class ExecutionEngine {
       entryPrice,
       referencePrice,
       quantity,
+    };
+  }
+
+  private toClampedBps(value: number, min = 0, max = 150): number {
+    return Math.max(min, Math.min(max, Math.round(value)));
+  }
+
+  private resolveExecutionPlan(
+    signal: ExecutionCandidate,
+    settings: BotSettings,
+    amountIdr: number,
+    runtimeCandidate?: RuntimeEntryCandidate,
+  ): ExecutionPlanReadModel {
+    const baselineSlippageBps = this.toClampedBps(
+      settings.strategy.buySlippageBps,
+      0,
+      Math.min(150, settings.strategy.maxBuySlippageBps),
+    );
+    const policyAction = runtimeCandidate?.policyDecision.action ?? 'ENTER';
+    const policyAggressiveness = runtimeCandidate?.policyDecision.aggressiveness ?? 'NORMAL';
+    const entryLane = runtimeCandidate?.policyDecision.entryLane ?? 'DEFAULT';
+    const spreadPct = Number.isFinite(signal.spreadPct) ? signal.spreadPct : null;
+    const depthScore =
+      'depthScore' in signal && typeof signal.depthScore === 'number' && Number.isFinite(signal.depthScore)
+        ? signal.depthScore
+        : null;
+    const liquidityScore =
+      'liquidityScore' in signal && Number.isFinite(signal.liquidityScore) ? signal.liquidityScore : null;
+    const quoteFlowAccelerationScore =
+      'quoteFlowAccelerationScore' in signal && Number.isFinite(signal.quoteFlowAccelerationScore)
+        ? signal.quoteFlowAccelerationScore
+        : null;
+    const thinBookStress = (depthScore !== null
+      && depthScore < settings.portfolio.thinBookDepthScoreThreshold)
+      || (liquidityScore !== null && liquidityScore < 52)
+      || (spreadPct !== null && spreadPct >= settings.risk.maxPairSpreadPct * 0.9);
+
+    let dynamicExtraBps = 0;
+    const slippageReasons: string[] = [];
+
+    if (policyAggressiveness === 'HIGH') {
+      dynamicExtraBps += 8;
+      slippageReasons.push('policy_aggressiveness_high');
+    } else if (policyAggressiveness === 'NORMAL') {
+      dynamicExtraBps += 2;
+      slippageReasons.push('policy_aggressiveness_normal');
+    }
+
+    if (entryLane === 'SCOUT') {
+      dynamicExtraBps += 8;
+      slippageReasons.push('entry_lane_scout');
+    } else if (entryLane === 'ADD_ON_CONFIRM') {
+      dynamicExtraBps += 6;
+      slippageReasons.push('entry_lane_add_on_confirm');
+    }
+
+    if (spreadPct !== null && spreadPct > 0) {
+      const spreadDrivenBps = Math.min(18, Math.max(0, spreadPct * 20));
+      if (spreadDrivenBps > 0) {
+        dynamicExtraBps += spreadDrivenBps;
+        slippageReasons.push('spread_guard');
+      }
+    }
+
+    if (quoteFlowAccelerationScore !== null && quoteFlowAccelerationScore >= 24) {
+      dynamicExtraBps += 9;
+      slippageReasons.push('quote_flow_urgency');
+    }
+
+    if (thinBookStress) {
+      dynamicExtraBps += 12;
+      slippageReasons.push('thin_book_stress');
+    }
+
+    const maxAllowedBps = this.toClampedBps(settings.strategy.maxBuySlippageBps, 0, 150);
+    const finalSlippageBps = this.toClampedBps(
+      baselineSlippageBps + dynamicExtraBps,
+      baselineSlippageBps,
+      maxAllowedBps,
+    );
+    const stressMode: ExecutionPlanReadModel['stressMode'] = thinBookStress ? 'THIN_BOOK_STRESS' : 'NORMAL';
+    const partialFillExpected = thinBookStress || (spreadPct !== null && spreadPct >= settings.risk.maxPairSpreadPct * 0.75);
+    const partialFillRatio = partialFillExpected ? (thinBookStress ? 0.42 : 0.7) : 1;
+
+    return {
+      pair: signal.pair,
+      policyAction,
+      policyAggressiveness,
+      entryLane,
+      allocatedNotionalIdr: Math.max(0, amountIdr),
+      orderStyle: 'LIMIT_MARKETABLE',
+      stressMode,
+      baselineSlippageBps,
+      finalSlippageBps,
+      slippageReasons: slippageReasons.length > 0 ? slippageReasons : ['baseline_only'],
+      partialFillExpected,
+      partialFillRatio,
+      keepRemainderOpen: partialFillExpected,
+      cancelAfterTimeoutMs: settings.strategy.buyOrderTimeoutMs,
+      marketContext: {
+        spreadPct,
+        depthScore,
+        liquidityScore: liquidityScore ?? null,
+        quoteFlowAccelerationScore,
+      },
     };
   }
 
@@ -1501,7 +1602,20 @@ export class ExecutionEngine {
 
   private async cancelStaleBuyOrder(order: OrderRecord): Promise<OrderRecord | undefined> {
     if (!order.exchangeOrderId) {
-      return order;
+      const canceledSimulatedOrder = await this.orders.update(order.id, {
+        status: 'CANCELED',
+        exchangeStatus: 'canceled_after_timeout',
+        exchangeUpdatedAt: nowIso(),
+        notes: this.appendNotes(order.notes, 'buy remainder canceled after timeout'),
+      });
+      if (canceledSimulatedOrder) {
+        await this.publishExecutionSummary(
+          canceledSimulatedOrder,
+          'SIMULATED',
+          'buy remainder canceled after timeout',
+        );
+      }
+      return canceledSimulatedOrder;
     }
 
     const api = this.getPrivateApi(order.accountId);
@@ -1527,6 +1641,78 @@ export class ExecutionEngine {
     }
 
     return canceledOrder;
+  }
+
+  private async syncSimulatedActiveOrders(): Promise<string[]> {
+    const activeOrders = this.orders
+      .listActive()
+      .filter((order) => !order.exchangeOrderId);
+    const messages: string[] = [];
+
+    for (const order of activeOrders) {
+      if (order.side === 'buy' && this.shouldCancelStaleBuyOrder(order)) {
+        const canceled = await this.cancelStaleBuyOrder(order);
+        if (canceled && canceled.status !== order.status) {
+          messages.push(`BUY simulated ${canceled.pair} status=${canceled.status}`);
+        }
+        continue;
+      }
+
+      const plan = order.executionPlan;
+      const ageMs = this.getOrderAgeMs(order) ?? 0;
+      const graceMs = Math.max(500, Math.min(5_000, Math.floor((plan?.cancelAfterTimeoutMs ?? 3_000) * 0.4)));
+      const shouldAttemptRemainderFill =
+        ageMs >= graceMs
+        && order.filledQuantity + 1e-8 < order.quantity
+        && (
+          !plan
+          || plan.stressMode === 'NORMAL'
+          || order.side === 'sell'
+        );
+
+      if (!shouldAttemptRemainderFill) {
+        continue;
+      }
+
+      const remainder = Math.max(0, order.quantity - order.filledQuantity);
+      if (remainder <= 1e-8) {
+        continue;
+      }
+
+      const finalFilled = Math.max(order.filledQuantity, Math.min(order.quantity, order.filledQuantity + remainder));
+      const filledOrder = await this.orders.markFilled(
+        order.id,
+        finalFilled,
+        order.averageFillPrice ?? order.price,
+      );
+
+      await this.applyFillDelta(
+        order,
+        finalFilled,
+        order.averageFillPrice ?? order.price,
+      );
+
+      if (filledOrder) {
+        await this.publishExecutionSummary(
+          filledOrder,
+          'SIMULATED',
+          order.side === 'buy'
+            ? 'simulated remainder filled from sync loop'
+            : `${filledOrder.closeReason ?? 'SELL'} remainder filled from sync loop`,
+        );
+        if (filledOrder.side === 'sell' && filledOrder.relatedPositionId) {
+          const position = this.positions.getById(filledOrder.relatedPositionId);
+          await this.publishTradeOutcomeSummary(
+            position,
+            'SIMULATED',
+            filledOrder.closeReason ?? 'AUTO_EXIT',
+          );
+        }
+        messages.push(`${filledOrder.side.toUpperCase()} simulated ${filledOrder.pair} status=FILLED`);
+      }
+    }
+
+    return messages;
   }
 
   private shouldSimulate(mode: TradingMode, settings: BotSettings): boolean {
@@ -1699,10 +1885,17 @@ export class ExecutionEngine {
       executionAmountIdr = riskResult.adjustedAmountIdr ?? amountIdr;
     }
 
+    const executionPlan = this.resolveExecutionPlan(
+      signal,
+      settings,
+      executionAmountIdr,
+      runtimeCandidate,
+    );
+
     const { entryPrice, referencePrice, quantity } = this.validateBuyIntent(
       signal,
       executionAmountIdr,
-      settings,
+      executionPlan,
     );
     const stops = this.risk.buildStops(entryPrice, settings);
 
@@ -1716,6 +1909,7 @@ export class ExecutionEngine {
       source,
       referencePrice,
       status: 'OPEN',
+      executionPlan,
       notes: this.getCandidateNotes(signal),
       entryStyle: this.resolveEntryStyle(signal),
     });
@@ -1727,29 +1921,32 @@ export class ExecutionEngine {
     if (this.shouldSimulate(settings.tradingMode, settings)) {
       await this.publishExecutionSummary(order, 'SIMULATED', 'simulated buy submitted');
 
-      const filledOrder = await this.orders.markFilled(order.id, quantity, entryPrice);
+      const initialFillQuantity = Math.max(
+        0,
+        Math.min(quantity, quantity * executionPlan.partialFillRatio),
+      );
+      const hasPartialRemainder = initialFillQuantity + 1e-8 < quantity;
+      const targetOrder = hasPartialRemainder
+        ? await this.orders.markPartiallyFilled(order.id, initialFillQuantity, entryPrice)
+        : await this.orders.markFilled(order.id, quantity, entryPrice);
+      const filledOrder = targetOrder ?? order;
 
-      const openedPosition = await this.positions.open({
-        accountId,
-        pair: signal.pair,
-        quantity,
+      const updatedPosition = await this.applyFillDelta(
+        order,
+        hasPartialRemainder ? initialFillQuantity : quantity,
         entryPrice,
-        stopLossPrice: stops.stopLossPrice,
-        takeProfitPrice: stops.takeProfitPrice,
-        sourceOrderId: order.id,
-        entryStyle: this.resolveEntryStyle(signal),
-        continuationScore: 'finalScore' in signal ? signal.continuationProbability : undefined,
-        dumpRisk: 'finalScore' in signal ? signal.trapProbability : undefined,
-        exposurePairClass: 'finalScore' in signal ? signal.pairClass : undefined,
-        exposureDiscoveryBucket: 'finalScore' in signal ? signal.discoveryBucket : undefined,
-        exposureSource: 'finalScore' in signal ? 'POSITION_METADATA' : 'LEGACY_FALLBACK',
-      });
-      await this.orders.update(order.id, {
-        relatedPositionId: openedPosition.id,
-      });
+      );
+      if (updatedPosition) {
+        await this.orders.update(order.id, {
+          relatedPositionId: updatedPosition.id,
+        });
+      }
 
       if (source === 'AUTO' && this.policyLearning) {
-        await this.policyLearning.markExecutionAnchoredByOrder(order.id, openedPosition.id);
+        const relatedPositionId = this.orders.getById(order.id)?.relatedPositionId;
+        if (relatedPositionId) {
+          await this.policyLearning.markExecutionAnchoredByOrder(order.id, relatedPositionId);
+        }
       }
 
       await this.journal.append({
@@ -1764,23 +1961,25 @@ export class ExecutionEngine {
           quantity,
           signalScore: this.getCandidateScore(signal),
           signalConfidence: signal.confidence,
-          buySlippageBps: Math.min(
-            settings.strategy.buySlippageBps,
-            settings.strategy.maxBuySlippageBps,
-          ),
+          executionPlan,
           source,
         },
         createdAt: nowIso(),
       });
 
       if (filledOrder) {
-        await this.publishExecutionSummary(filledOrder, 'SIMULATED', 'simulated buy filled');
+        await this.publishExecutionSummary(
+          filledOrder,
+          'SIMULATED',
+          hasPartialRemainder ? 'simulated buy partially filled; remainder kept open' : 'simulated buy filled',
+        );
       }
 
-      await this.state.markTrade();
       await this.state.setPairCooldown(signal.pair, Date.now() + settings.risk.cooldownMs);
 
-      return `BUY simulated ${signal.pair} qty=${quantity.toFixed(8)}`;
+      return hasPartialRemainder
+        ? `BUY simulated ${signal.pair} partial=${initialFillQuantity.toFixed(8)} remainder=${(quantity - initialFillQuantity).toFixed(8)}`
+        : `BUY simulated ${signal.pair} qty=${quantity.toFixed(8)}`;
     }
 
     try {
@@ -1939,14 +2138,46 @@ export class ExecutionEngine {
       referencePrice: exitPrice,
       relatedPositionId: position.id,
       closeReason,
+      executionPlan: {
+        pair: position.pair,
+        policyAction: source === 'AUTO' ? 'ENTER' : 'WAIT',
+        policyAggressiveness: 'NORMAL',
+        entryLane: 'DEFAULT',
+        allocatedNotionalIdr: closeQuantity * exitPrice,
+        orderStyle: 'LIMIT_MARKETABLE',
+        stressMode:
+          position.lastDumpRisk >= 0.55 || position.exposurePairClass === 'MICRO'
+            ? 'THIN_BOOK_STRESS'
+            : 'NORMAL',
+        baselineSlippageBps: 0,
+        finalSlippageBps: 0,
+        slippageReasons: ['sell_limit_reference'],
+        partialFillExpected: position.lastDumpRisk >= 0.55 || position.exposurePairClass === 'MICRO',
+        partialFillRatio: position.lastDumpRisk >= 0.55 || position.exposurePairClass === 'MICRO' ? 0.55 : 1,
+        keepRemainderOpen: position.lastDumpRisk >= 0.55 || position.exposurePairClass === 'MICRO',
+        cancelAfterTimeoutMs: settings.strategy.buyOrderTimeoutMs,
+        marketContext: {
+          spreadPct: null,
+          depthScore: null,
+          liquidityScore: null,
+          quoteFlowAccelerationScore: null,
+        },
+      },
       notes: 'manual/exit sell',
     });
 
     if (this.shouldSimulate(settings.tradingMode, settings)) {
       await this.publishExecutionSummary(order, 'SIMULATED', `${closeReason} submitted`);
 
-      const filledOrder = await this.orders.markFilled(order.id, closeQuantity, exitPrice);
-      const updated = await this.positions.closePartial(position.id, closeQuantity, exitPrice);
+      const sellPlan = order.executionPlan;
+      const simulatedFillQty = sellPlan?.partialFillExpected
+        ? Math.max(0, Math.min(closeQuantity, closeQuantity * sellPlan.partialFillRatio))
+        : closeQuantity;
+      const hasPartialRemainder = simulatedFillQty + 1e-8 < closeQuantity;
+      const filledOrder = hasPartialRemainder
+        ? await this.orders.markPartiallyFilled(order.id, simulatedFillQty, exitPrice)
+        : await this.orders.markFilled(order.id, closeQuantity, exitPrice);
+      const updated = await this.positions.closePartial(position.id, simulatedFillQty, exitPrice);
 
       await this.journal.append({
         id: order.id,
@@ -1957,22 +2188,29 @@ export class ExecutionEngine {
         payload: {
           accountId: position.accountId,
           exitPrice,
-          quantity: closeQuantity,
+          quantity: simulatedFillQty,
           realizedPnl: updated?.realizedPnl ?? 0,
           source,
+          executionPlan: sellPlan,
         },
         createdAt: nowIso(),
       });
 
       if (filledOrder) {
-        await this.publishExecutionSummary(filledOrder, 'SIMULATED', `${closeReason} filled`);
+        await this.publishExecutionSummary(
+          filledOrder,
+          'SIMULATED',
+          hasPartialRemainder ? `${closeReason} partially filled; remainder kept open` : `${closeReason} filled`,
+        );
       }
       await this.publishTradeOutcomeSummary(updated, 'SIMULATED', closeReason);
 
       await this.state.markTrade();
       await this.state.setPairCooldown(position.pair, Date.now() + settings.risk.cooldownMs);
 
-      return `SELL simulated ${position.pair} qty=${closeQuantity.toFixed(8)} selesai`;
+      return hasPartialRemainder
+        ? `SELL simulated ${position.pair} partial=${simulatedFillQty.toFixed(8)} remainder=${(closeQuantity - simulatedFillQty).toFixed(8)}`
+        : `SELL simulated ${position.pair} qty=${closeQuantity.toFixed(8)} selesai`;
     }
 
     try {
@@ -2390,7 +2628,7 @@ export class ExecutionEngine {
   async syncActiveOrders(): Promise<string[]> {
     const settings = this.settings.get();
     if (this.shouldSimulate(settings.tradingMode, settings)) {
-      return [];
+      return this.syncSimulatedActiveOrders();
     }
 
     const activeOrders = this.orders

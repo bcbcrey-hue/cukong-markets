@@ -57,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: runtime-contract
-          path: test_reports/runtime_contract_batch4_current.json
+          path: test_reports/runtime_contract_batch_e_current.json
           if-no-files-found: error
 
   publish-combined-status:

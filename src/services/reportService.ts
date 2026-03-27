@@ -608,6 +608,11 @@ export class ReportService {
       `fee=${asMaybeNum(summary.fee, 8)}${summary.feeAsset ? ` ${summary.feeAsset}` : ''}`,
       `exchangeOrderId=${summary.exchangeOrderId ?? '-'}`,
       `slippageVsRef=${summary.slippageVsReferencePricePct === null ? '-' : asPct(summary.slippageVsReferencePricePct)}`,
+      `execStress=${summary.executionPlan?.stressMode ?? '-'}`,
+      `execStyle=${summary.executionPlan?.orderStyle ?? '-'}`,
+      `slippagePlan=${summary.executionPlan ? `${asNum(summary.executionPlan.baselineSlippageBps, 0)}->${asNum(summary.executionPlan.finalSlippageBps, 0)} bps` : '-'}`,
+      `partialPlan=${summary.executionPlan ? `${summary.executionPlan.partialFillExpected ? 'yes' : 'no'} ratio=${asNum(summary.executionPlan.partialFillRatio, 2)}` : '-'}`,
+      `planReason=${summary.executionPlan ? truncate(summary.executionPlan.slippageReasons.join(',') || '-', 120) : '-'}`,
       `timestamp=${summary.timestamp}`,
       `reason=${truncate(summary.reason || '-', 180)}`,
     ];

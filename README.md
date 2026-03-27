@@ -36,7 +36,7 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run probe:audit`
 - `npm run test:probes`
 - `npm run verify`
-- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch4_current.json`)
+- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch_e_current.json`)
 
 Job/check utama workflow bernama `verify-runtime-contract`.
 Workflow juga mempublikasikan commit status context `verify-runtime-contract/combined` yang mengikuti hasil job utama (success/failure) agar status gabungan commit tidak kosong.
@@ -217,6 +217,36 @@ Probe resmi Batch D:
   - bukti tuning persist setelah reload service settings,
   - bukti observability operator menampilkan status learning.
 
+## Batch E — Execution Realism Upgrade (aktif di runtime)
+
+Batch E menjaga kontrak bahwa execution tetap **tangan**, bukan **otak**:
+
+1. `DecisionPolicyEngine` tetap final source `ENTER/WAIT/SKIP`.
+2. `RiskEngine` + `PortfolioCapitalEngine` tetap guardrail/allocator final upstream.
+3. `ExecutionEngine` hanya menerjemahkan keputusan final itu ke taktik eksekusi lebih realistis.
+
+Perubahan runtime yang hidup:
+
+- BUY auto/manual sekarang membuat `executionPlan` eksplisit pada order (order style `LIMIT_MARKETABLE`, baseline vs final slippage bps, alasan slippage, stress mode, dan rencana partial/remainder).
+- Slippage BUY tidak lagi fixed murni dari `buySlippageBps`: plan menghitung dynamic extra bps secara deterministik dari policy aggressiveness/lane + microstructure context yang memang sudah ada (`spreadPct`, `depthScore`, `liquidityScore`, `quoteFlowAccelerationScore`) dengan batas ketat:
+  - minimal baseline operator,
+  - maksimal `maxBuySlippageBps`,
+  - hard cap 150 bps.
+- Mode simulated/paper/uiOnly tidak lagi selalu full-fill instan:
+  - kondisi thin-book stress bisa partial fill,
+  - remainder tetap open,
+  - loop sync simulated memproses remainder (fill lanjutan normal lane) atau cancel timeout buy remainder.
+- Observability operator eksekusi diperluas di execution summary/report (`execStress`, `slippagePlan`, `partialPlan`, `planReason`).
+
+Probe resmi Batch E:
+
+- `tests/batch_e_execution_realism_probe.ts`
+  - membuktikan execution tetap patuh pada action final policy (WAIT tetap skip),
+  - membuktikan aggressiveness mempengaruhi taktik execution (slippage plan), bukan keputusan final,
+  - membuktikan dynamic slippage bounded (baseline <= final <= maxBuySlippageBps <= 150),
+  - membuktikan thin-book stress dapat memicu partial fill + remainder + timeout cancel,
+  - membuktikan execution observability baru muncul di summary/report.
+
 ## Bukti runtime worker production/build
 
 Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:
@@ -228,7 +258,7 @@ Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_
 Probe ini ikut di jalur `npm run verify`.
 
 
-## Runtime verifier contract (Phase 2 Batch 3)
+## Runtime verifier contract (Phase 2 Batch E)
 
 Untuk membekukan target proof runtime VPS, gunakan:
 
@@ -236,7 +266,7 @@ Untuk membekukan target proof runtime VPS, gunakan:
 npm run runtime:contract
 ```
 
-Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch4_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch_e_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
 
 Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
 
