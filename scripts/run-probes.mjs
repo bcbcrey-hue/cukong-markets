@@ -71,6 +71,7 @@ const officialProbes = [
   'tests/runtime_selector_fallback_general_probe.ts',
   'tests/runtime_selector_fallback_pair_priority_probe.ts',
   'tests/runtime_selector_monitoring_continuity_probe.ts',
+  'tests/batch_d_learning_loop_probe.ts',
   'tests/chasing_entry_rejected_probe.ts',
   'tests/normal_entry_other_account_same_pair_probe.ts',
   'tests/hold_winner_while_pump_healthy_probe.ts',

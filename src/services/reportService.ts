@@ -8,6 +8,7 @@ import type {
   OrderRecord,
   PositionRecord,
   RuntimePolicyReadModel,
+  PolicyLearningReadModel,
   SignalCandidate,
   ShadowRunTelegramSummary,
   StoredAccount,
@@ -354,6 +355,7 @@ export class ReportService {
     topSignal?: HotlistEntry | SignalCandidate;
     topOpportunity?: OpportunityAssessment;
     runtimePolicyDecision?: RuntimePolicyReadModel | null;
+    runtimePolicyLearning?: PolicyLearningReadModel | null;
   }): string {
     const lines = [
       '🤖 BOT STATUS',
@@ -413,6 +415,26 @@ export class ReportService {
       lines.push(`runtimePolicyReasons=${truncate(policy.reasons.join('; ') || '-', 220)}`);
       lines.push(`runtimePolicyRiskReasons=${truncate(policy.riskReasons.join('; ') || '-', 220)}`);
       lines.push(`runtimePolicyUpdatedAt=${policy.updatedAt}`);
+    }
+
+    if (params.runtimePolicyLearning) {
+      const learning = params.runtimePolicyLearning;
+      lines.push(
+        `policyLearning status=${learning.tuned ? 'TUNED' : 'NO_OP'} eligible=${learning.eligibleSamples} resolved=${learning.resolvedSamples} total=${learning.totalRecords}`,
+      );
+      lines.push(
+        `policyLearningLaneSample default=${learning.laneSample.DEFAULT} scout=${learning.laneSample.SCOUT} addOn=${learning.laneSample.ADD_ON_CONFIRM}`,
+      );
+      lines.push(`policyLearningReasons=${truncate(learning.reasons.join('; ') || '-', 220)}`);
+      if (learning.noOpReason) {
+        lines.push(`policyLearningNoOp=${truncate(learning.noOpReason, 220)}`);
+      }
+      if (learning.changes.length > 0) {
+        lines.push(
+          `policyLearningChanges=${truncate(learning.changes.map((item) => `${item.key}:${asNum(item.before, 2)}->${asNum(item.after, 2)} (d=${asNum(item.delta, 2)})`).join('; '), 220)}`,
+        );
+      }
+      lines.push(`policyLearningUpdatedAt=${learning.lastEvaluatedAt}`);
     }
 
     lines.push(`notes=${truncate((params.health.notes ?? []).join('; ') || '-', 220)}`);

@@ -11,7 +11,7 @@ if (!env) {
 
 const CONTRACT_OUTPUT_PATH = path.resolve(
   process.cwd(),
-  'test_reports/runtime_contract_batch3_current.json',
+  'test_reports/runtime_contract_batch4_current.json',
 );
 
 function maskSecret(raw) {
@@ -28,11 +28,11 @@ function maskSecret(raw) {
 
 const runtimeContract = {
   generatedAtUtc: new Date().toISOString(),
-  verifierContractVersion: 'phase2-batch3-v2',
+  verifierContractVersion: 'phase2-batch4-v1',
   sourceOfTruth: {
     repository: 'https://github.com/masreykangtrade-oss/cukong-markets',
     roadmap:
-      'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP-REFACTOR-LOGIC.md',
+      'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP_LOGIC_UPGRADE.md',
     runtimeEnvModule: 'src/config/env.ts',
   },
   processStart: {

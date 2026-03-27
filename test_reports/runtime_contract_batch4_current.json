@@ -1,0 +1,87 @@
+{
+  "generatedAtUtc": "2026-03-27T16:29:12.959Z",
+  "verifierContractVersion": "phase2-batch4-v1",
+  "sourceOfTruth": {
+    "repository": "https://github.com/masreykangtrade-oss/cukong-markets",
+    "roadmap": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP_LOGIC_UPGRADE.md",
+    "runtimeEnvModule": "src/config/env.ts"
+  },
+  "processStart": {
+    "startCommand": "npm run start",
+    "runtimeEntrypoint": "dist/bootstrap.js",
+    "bootstrapPhasesExpected": [
+      "load-runtime-modules",
+      "ensure-runtime-dirs",
+      "create-app",
+      "start-app"
+    ],
+    "appStartupPhasesExpected": [
+      "persistence.bootstrap",
+      "runtime.state.load",
+      "worker-pool.start",
+      "app-server.start",
+      "callback-server.start",
+      "execution.recover-live-orders",
+      "execution.evaluate-open-positions",
+      "telegram.start",
+      "polling.start"
+    ]
+  },
+  "httpProbeTargets": {
+    "appServer": {
+      "bindHost": "0.0.0.0",
+      "port": 3000,
+      "baseUrlFromVps": "http://127.0.0.1:3000",
+      "endpoints": [
+        "/",
+        "/healthz",
+        "/livez"
+      ]
+    },
+    "callbackServer": {
+      "enabled": false,
+      "bindHost": "0.0.0.0",
+      "port": 3001,
+      "healthzPath": "/healthz",
+      "callbackPath": "/indodax/callback",
+      "callbackAllowedHost": "",
+      "callbackAuthMode": "required",
+      "callbackUrl": null
+    }
+  },
+  "runtimeDirectories": {
+    "dataDir": "/workspace/cukong-markets/data",
+    "logDir": "/workspace/cukong-markets/logs",
+    "tempDir": "/workspace/cukong-markets/tmp"
+  },
+  "telegramRuntimeTarget": {
+    "configuredByToken": false,
+    "allowedUsersCount": 0,
+    "tokenMasked": null,
+    "startupEvidenceMarker": "telegram bot launched and connected",
+    "note": "Status connected hanya bisa dibuktikan dari runtime VPS nyata."
+  },
+  "workerBuildPathTarget": {
+    "expectedFeatureWorkerPathSuffix": "dist/workers/featureWorker.js",
+    "expectedPatternWorkerPathSuffix": "dist/workers/patternWorker.js",
+    "expectedBacktestWorkerPathSuffix": "dist/workers/backtestWorker.js",
+    "recommendedEnv": {
+      "CUKONG_PREFER_DIST_WORKERS": "1"
+    }
+  },
+  "repoVsVpsProofBoundary": {
+    "provableFromRepo": [
+      "Kontrak env canonical dari src/config/env.ts + target probe endpoint + target startup phase log",
+      "Worker build path target pada artifact dist"
+    ],
+    "notProvableFromRepoOnly": [
+      "Telegram live connected ke server Telegram pada VPS nyata",
+      "Bind/listen aktual process di host VPS setelah deploy",
+      "Endpoint probe dari jaringan VPS target (post-deploy runtime)"
+    ]
+  },
+  "artifact": {
+    "path": "/workspace/cukong-markets/test_reports/runtime_contract_batch4_current.json",
+    "generatedByCommand": "npm run runtime:contract"
+  }
+}
