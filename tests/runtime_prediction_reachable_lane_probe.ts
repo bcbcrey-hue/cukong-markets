@@ -11,6 +11,7 @@ import type {
   StoredAccount,
 } from '../src/core/types';
 import { OpportunityEngine } from '../src/domain/intelligence/opportunityEngine';
+import { PortfolioCapitalEngine } from '../src/domain/portfolio/portfolioCapitalEngine';
 import { RiskEngine } from '../src/domain/trading/riskEngine';
 import { createDefaultSettings } from '../src/services/persistenceService';
 
@@ -223,6 +224,7 @@ async function main() {
     [strongOpportunity, weakOpportunity],
     settings,
     new RiskEngine(),
+    new PortfolioCapitalEngine(),
     account,
     [],
     {},

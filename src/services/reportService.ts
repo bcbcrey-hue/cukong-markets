@@ -399,6 +399,12 @@ export class ReportService {
       lines.push(
         `runtimePolicy pair=${policy.pair} action=${policy.action} lane=${policy.entryLane} size=${asNum(policy.sizeMultiplier, 2)} aggressiveness=${policy.aggressiveness} risk=${policy.riskAllowed ? 'ALLOWED' : 'BLOCKED'}`,
       );
+      if (policy.capital) {
+        lines.push(
+          `runtimePolicyCapital intent=${asNum(policy.capital.policyIntentNotionalIdr, 0)} allocated=${asNum(policy.capital.allocatedNotionalIdr, 0)} capped=${asNum(policy.capital.cappedNotionalIdr, 0)} blocked=${policy.capital.blocked} pairClass=${policy.capital.pairClassBucket} bucket=${policy.capital.discoveryBucket}`,
+        );
+        lines.push(`runtimePolicyCapitalReasons=${truncate(policy.capital.reasons.join('; ') || '-', 220)}`);
+      }
       if (policy.predictionContext) {
         lines.push(
           `runtimePolicyPrediction target=${policy.predictionContext.target} horizon=${policy.predictionContext.horizonLabel} strength=${policy.predictionContext.strength} confidence=${asNum(policy.predictionContext.confidence, 2)} direction=${policy.predictionContext.direction} calibration=${policy.predictionContext.calibrationTag}`,

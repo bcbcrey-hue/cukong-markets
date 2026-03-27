@@ -1254,6 +1254,7 @@ export class ExecutionEngine {
         takeProfitPrice: stops.takeProfitPrice,
         sourceOrderId: order.id,
         entryStyle: order.entryStyle,
+        exposureSource: 'LEGACY_FALLBACK',
       });
     } else {
       const targetPosition =
@@ -1578,6 +1579,8 @@ export class ExecutionEngine {
       riskAllowed: runtimeCandidate.riskCheckResult.allowed,
       riskReasons: runtimeCandidate.riskCheckResult.reasons,
       riskWarnings: runtimeCandidate.riskCheckResult.warnings,
+      capitalPlan: runtimeCandidate.capitalPlan,
+      capitalContext: runtimeCandidate.capitalContext,
       discoveryBucket: runtimeCandidate.opportunity.discoveryBucket,
       marketRegime: runtimeCandidate.opportunity.marketRegime,
       timingState: runtimeCandidate.opportunity.entryTiming.state,
@@ -1625,12 +1628,11 @@ export class ExecutionEngine {
       return `skip auto-buy ${signal.pair}: active BUY order already exists`;
     }
 
-    const executionAmountIdr = runtimeCandidate.riskCheckResult.adjustedAmountIdr
-      ?? (settings.risk.maxPositionSizeIdr * runtimeCandidate.sizeMultiplier);
-
-    if (!Number.isFinite(executionAmountIdr) || executionAmountIdr <= 0) {
+    const executionAmountIdrRaw = runtimeCandidate.riskCheckResult.adjustedAmountIdr;
+    if (typeof executionAmountIdrRaw !== 'number' || !Number.isFinite(executionAmountIdrRaw) || executionAmountIdrRaw <= 0) {
       throw new Error('RuntimeEntryCandidate tidak valid: adjustedAmountIdr tidak valid');
     }
+    const executionAmountIdr = executionAmountIdrRaw;
 
     await this.journal.info(
       'AUTO_ENTRY_POLICY_DECISION',
@@ -1726,6 +1728,9 @@ export class ExecutionEngine {
         entryStyle: this.resolveEntryStyle(signal),
         continuationScore: 'finalScore' in signal ? signal.continuationProbability : undefined,
         dumpRisk: 'finalScore' in signal ? signal.trapProbability : undefined,
+        exposurePairClass: 'finalScore' in signal ? signal.pairClass : undefined,
+        exposureDiscoveryBucket: 'finalScore' in signal ? signal.discoveryBucket : undefined,
+        exposureSource: 'finalScore' in signal ? 'POSITION_METADATA' : 'LEGACY_FALLBACK',
       });
 
       await this.journal.append({

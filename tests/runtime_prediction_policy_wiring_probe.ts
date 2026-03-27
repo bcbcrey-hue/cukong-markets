@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { buildRuntimeEntryCandidates, selectRuntimeEntryCandidate } from '../src/app';
 import type { FutureTrendingPrediction, OpportunityAssessment, StoredAccount } from '../src/core/types';
+import { PortfolioCapitalEngine } from '../src/domain/portfolio/portfolioCapitalEngine';
 import { RiskEngine } from '../src/domain/trading/riskEngine';
 import { ReportService } from '../src/services/reportService';
 import { createDefaultHealth, createDefaultSettings } from '../src/services/persistenceService';
@@ -94,6 +95,7 @@ async function main() {
     [strong, weak, blocked],
     settings,
     riskEngine,
+    new PortfolioCapitalEngine(),
     account,
     [],
     { blocked_idr: Date.now() + settings.risk.cooldownMs + 5_000 },

@@ -22,6 +22,7 @@ import { OrderManager } from './domain/trading/orderManager';
 import { PositionManager } from './domain/trading/positionManager';
 import { RiskEngine } from './domain/trading/riskEngine';
 import { evaluateOpportunityPolicyV1 } from './domain/decision/decisionPolicyEngine';
+import { PortfolioCapitalEngine } from './domain/portfolio/portfolioCapitalEngine';
 
 import { IndodaxClient } from './integrations/indodax/client';
 import { IndodaxCallbackServer } from './integrations/indodax/callbackServer';
@@ -115,6 +116,7 @@ export interface RuntimePolicyDecisionEvidence {
   timingState: OpportunityAssessment['entryTiming']['state'];
   recommendedAction: OpportunityAssessment['recommendedAction'];
   predictionContext?: RuntimePolicyReadModel['predictionContext'];
+  capitalContext: RuntimePolicyReadModel['capital'];
 }
 
 function toRuntimePolicyReadModel(
@@ -133,6 +135,7 @@ function toRuntimePolicyReadModel(
     aggressiveness: evidence.aggressiveness,
     riskAllowed: evidence.riskAllowed,
     riskReasons: evidence.riskReasons,
+    capital: evidence.capitalContext,
     predictionContext: evidence.predictionContext,
     updatedAt: new Date().toISOString(),
   };
@@ -167,6 +170,7 @@ export function buildRuntimePolicyDecisionEvidence(
         direction: candidate.opportunity.prediction.direction,
       }
       : undefined,
+    capitalContext: candidate.capitalContext,
   }));
 }
 
@@ -174,28 +178,46 @@ export function buildRuntimeEntryCandidates(
   opportunities: OpportunityAssessment[],
   settings: BotSettings,
   riskEngine: RiskEngine,
+  capitalEngine: PortfolioCapitalEngine,
   defaultAccount: StoredAccount,
   accountOpenPositions: PositionRecord[],
   pairCooldowns: Record<string, number>,
 ): RuntimeEntryCandidate[] {
   return opportunities.map((opportunity) => {
     const preRiskDecision = evaluateOpportunityPolicyV1(opportunity, settings);
+    const { capitalPlan, capitalContext } = capitalEngine.plan({
+      settings,
+      opportunity,
+      policyDecision: preRiskDecision,
+      openPositions: accountOpenPositions,
+    });
     const riskCheckResult = riskEngine.checkCanEnter({
       account: defaultAccount,
       settings,
       signal: opportunity,
       openPositions: accountOpenPositions,
-      amountIdr: settings.risk.maxPositionSizeIdr,
+      amountIdr: capitalPlan.baseEntryCapitalIdr,
+      capitalAllocatedNotionalIdr: capitalPlan.allocatedNotionalIdr,
       cooldownUntil: pairCooldowns[opportunity.pair] ?? null,
       policyDecision: preRiskDecision,
     });
     const policyDecision = evaluateOpportunityPolicyV1(opportunity, settings, riskCheckResult);
+    const finalizedCapital = capitalEngine.finalizeRuntimeCapital({
+      initialPlan: capitalPlan,
+      initialContext: capitalContext,
+      finalPolicyAction: policyDecision.action,
+      riskAllowed: riskCheckResult.allowed,
+      riskReasons: riskCheckResult.reasons,
+      finalAllocatedNotionalIdr: riskCheckResult.adjustedAmountIdr,
+    });
 
     return {
       pair: opportunity.pair,
       opportunity,
       riskCheckResult,
       policyDecision,
+      capitalPlan: finalizedCapital.capitalPlan,
+      capitalContext: finalizedCapital.capitalContext,
       policyReasons: policyDecision.reasons,
       sizeMultiplier: policyDecision.sizeMultiplier,
       aggressiveness: policyDecision.aggressiveness,
@@ -227,6 +249,33 @@ export function selectRuntimeEntryCandidate(
           entryLane: policyDecision.entryLane,
         },
         policyDecision,
+        capitalPlan: {
+          policySizeIntentMultiplier: policyDecision.sizeMultiplier,
+          baseEntryCapitalIdr: settings.risk.maxPositionSizeIdr,
+          policyIntentNotionalIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          riskBudgetCapIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          thinBookCapIdr: null,
+          allowedNotionalIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          cappedNotionalIdr: 0,
+          allocatedNotionalIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          blocked: policyDecision.action !== 'ENTER',
+          reasons: [],
+          exposure: {
+            totalDeployedCapitalIdr: 0,
+            totalRemainingCapitalIdr: settings.risk.maxPositionSizeIdr,
+            pairClass: { key: opportunity.pairClass ?? 'MAJOR', usedNotionalIdr: 0, capNotionalIdr: settings.risk.maxPositionSizeIdr, remainingNotionalIdr: settings.risk.maxPositionSizeIdr },
+            discoveryBucket: { key: opportunity.discoveryBucket ?? 'LIQUID_LEADER', usedNotionalIdr: 0, capNotionalIdr: settings.risk.maxPositionSizeIdr, remainingNotionalIdr: settings.risk.maxPositionSizeIdr },
+          },
+        },
+        capitalContext: {
+          policyIntentNotionalIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          allocatedNotionalIdr: settings.risk.maxPositionSizeIdr * policyDecision.sizeMultiplier,
+          cappedNotionalIdr: 0,
+          blocked: policyDecision.action !== 'ENTER',
+          reasons: [],
+          pairClassBucket: opportunity.pairClass ?? 'MAJOR',
+          discoveryBucket: opportunity.discoveryBucket ?? 'LIQUID_LEADER',
+        },
         policyReasons: policyDecision.reasons,
         sizeMultiplier: policyDecision.sizeMultiplier,
         aggressiveness: policyDecision.aggressiveness,
@@ -323,6 +372,7 @@ export async function createApp(): Promise<AppRuntime> {
   hotlistService.rehydrate(state.get().lastHotlist);
   const pumpCandidateWatch = new PumpCandidateWatch();
   const riskEngine = new RiskEngine();
+  const capitalEngine = new PortfolioCapitalEngine();
   const backtest = new BacktestEngine(persistence, workerPool);
 
   const executionEngine = new ExecutionEngine(
@@ -557,6 +607,7 @@ export async function createApp(): Promise<AppRuntime> {
         opportunities,
         currentSettings,
         riskEngine,
+        capitalEngine,
         defaultAccount,
         positionManager.listOpen().filter((position) => position.accountId === defaultAccount.id),
         state.get().pairCooldowns,

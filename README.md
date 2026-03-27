@@ -154,6 +154,32 @@ Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + 
 - `test_reports/verify_final.txt`
 - ringkasan sinkronisasi akhir: `test_reports/final_verification_sync.json`
 
+## Batch C — Portfolio & Capital Management (aktif terbatas di runtime)
+
+Batch C menambah layer `PortfolioCapitalEngine` di flow runtime auto-entry:
+
+1. `DecisionPolicyEngine` tetap sumber keputusan final (`ENTER | WAIT | SKIP`) dan niat sizing (`sizeMultiplier`).
+2. `PortfolioCapitalEngine` menerjemahkan niat policy ke budget/notional riil (`allocatedNotionalIdr`) dengan batas:
+   - risk budget per posisi,
+   - max total deployed capital,
+   - max exposure per pair class,
+   - max exposure per discovery bucket,
+   - thin-book cap berbasis `depthScore`.
+3. `RiskEngine` tetap hard guardrail final (boleh block/cap/veto).
+4. `ExecutionEngine` hanya memakai amount final upstream (capital + risk), tanpa fallback liar ke nominal flat.
+
+Probe resmi Batch C:
+
+- `tests/portfolio_capital_contract_probe.ts`
+- `tests/policy_to_capital_sizing_probe.ts`
+- `tests/portfolio_exposure_cap_probe.ts`
+- `tests/thin_book_cap_probe.ts`
+- `tests/runtime_capital_policy_wiring_probe.ts`
+- `tests/execution_uses_final_allocated_notional_probe.ts`
+- `tests/operator_capital_observability_probe.ts`
+
+Catatan jujur: bukti saat ini masih source/probe-level. Belum ada shadow-live atau real-exchange evidence khusus Batch C.
+
 ## Bukti runtime worker production/build
 
 Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:
@@ -350,6 +376,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 
 - Belum ada backtest kuantitatif horizon Batch B lintas dataset historis panjang (multi-regime, multi-pair class).
 - Belum ada shadow-live khusus kalibrasi prediction Batch B yang membandingkan expected-move vs real outcome per horizon.
+- Belum ada shadow-live khusus Batch C untuk memvalidasi perilaku exposure/capital cap pada market real exchange.
 - Belum ada branch protection/ruleset GitHub yang bisa dibuktikan dari source saja untuk hard-enforce “PR tidak boleh merge jika CI gagal” (ini tetap butuh setting repo GitHub).
 
 ## Batas pengujian yang belum tercakup penuh (Incomplete testing)

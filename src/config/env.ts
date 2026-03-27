@@ -90,6 +90,18 @@ export interface EnvConfig {
   riskMaxPositionSizeIdr: number;
   riskMaxPairSpreadPct: number;
   riskCooldownMs: number;
+  portfolioBaseEntryCapitalIdr: number;
+  portfolioMaxTotalDeployedCapitalIdr: number;
+  portfolioRiskBudgetPerPositionPct: number;
+  portfolioMaxExposureMajorPct: number;
+  portfolioMaxExposureMidPct: number;
+  portfolioMaxExposureMicroPct: number;
+  portfolioMaxExposureAnomalyPct: number;
+  portfolioMaxExposureRotationPct: number;
+  portfolioMaxExposureStealthPct: number;
+  portfolioMaxExposureLiquidLeaderPct: number;
+  portfolioThinBookDepthScoreThreshold: number;
+  portfolioThinBookCapMultiplier: number;
 
   workerEnabled: boolean;
   workerPoolSize: number;
@@ -444,6 +456,18 @@ export const env: EnvConfig = {
   riskMaxPositionSizeIdr: readNumber('RISK_MAX_POSITION_SIZE_IDR', 100_000),
   riskMaxPairSpreadPct: readNumber('RISK_MAX_PAIR_SPREAD_PCT', 1.25),
   riskCooldownMs: readNumber('RISK_COOLDOWN_MS', 15 * 60 * 1000),
+  portfolioBaseEntryCapitalIdr: readNumberInRange('PORTFOLIO_BASE_ENTRY_CAPITAL_IDR', 100_000, 1, Number.MAX_SAFE_INTEGER),
+  portfolioMaxTotalDeployedCapitalIdr: readNumberInRange('PORTFOLIO_MAX_TOTAL_DEPLOYED_CAPITAL_IDR', 400_000, 1, Number.MAX_SAFE_INTEGER),
+  portfolioRiskBudgetPerPositionPct: readNumberInRange('PORTFOLIO_RISK_BUDGET_PER_POSITION_PCT', 0.35, 0.01, 1),
+  portfolioMaxExposureMajorPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_MAJOR_PCT', 0.6, 0.01, 1),
+  portfolioMaxExposureMidPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_MID_PCT', 0.5, 0.01, 1),
+  portfolioMaxExposureMicroPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_MICRO_PCT', 0.45, 0.01, 1),
+  portfolioMaxExposureAnomalyPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_ANOMALY_PCT', 0.5, 0.01, 1),
+  portfolioMaxExposureRotationPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_ROTATION_PCT', 0.35, 0.01, 1),
+  portfolioMaxExposureStealthPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_STEALTH_PCT', 0.4, 0.01, 1),
+  portfolioMaxExposureLiquidLeaderPct: readNumberInRange('PORTFOLIO_MAX_EXPOSURE_LIQUID_LEADER_PCT', 0.3, 0.01, 1),
+  portfolioThinBookDepthScoreThreshold: readNumberInRange('PORTFOLIO_THIN_BOOK_DEPTH_SCORE_THRESHOLD', 28, 0, 100),
+  portfolioThinBookCapMultiplier: readNumberInRange('PORTFOLIO_THIN_BOOK_CAP_MULTIPLIER', 0.55, 0.05, 1),
 
   workerEnabled: readBoolean('WORKER_ENABLED', true),
   workerPoolSize: readNumber('WORKER_POOL_SIZE', 2),

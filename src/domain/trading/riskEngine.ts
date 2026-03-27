@@ -17,6 +17,7 @@ export interface RiskEntryCheckInput {
   signal: SignalCandidate | OpportunityAssessment;
   openPositions: PositionRecord[];
   amountIdr: number;
+  capitalAllocatedNotionalIdr?: number;
   cooldownUntil?: number | null;
   policyDecision?: DecisionPolicyOutput;
 }
@@ -43,11 +44,15 @@ export class RiskEngine {
     const policy = input.policyDecision ?? this.resolvePolicyDecision(input);
     const lane: EntryLane = policy.entryLane;
     const multiplier = policy.sizeMultiplier;
+    const capitalAllocated = input.capitalAllocatedNotionalIdr;
+    const adjustedAmountIdr = Number.isFinite(capitalAllocated)
+      ? Math.max(0, capitalAllocated ?? 0)
+      : Math.max(0, baseAmountIdr * multiplier);
 
     return {
       lane,
       baseAmountIdr,
-      adjustedAmountIdr: Math.max(0, baseAmountIdr * multiplier),
+      adjustedAmountIdr,
     };
   }
 
