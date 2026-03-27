@@ -61,6 +61,20 @@ async function main() {
     accountRegistry.initialize(),
   ]);
 
+  if (accountRegistry.listEnabled().length === 0) {
+    const apiKey = process.env.API_KEY ?? process.env.INDODAX_API_KEY;
+    const apiSecret = process.env.API_SECRET ?? process.env.INDODAX_API_SECRET;
+    if (apiKey && apiSecret) {
+      await accountRegistry.saveLegacyUpload([
+        {
+          name: process.env.SHADOW_RUN_ACCOUNT_NAME ?? 'SHADOW_RUNTIME_ACCOUNT',
+          apiKey,
+          apiSecret,
+        },
+      ]);
+    }
+  }
+
   const execution = new ExecutionEngine(
     accountRegistry,
     settings,
