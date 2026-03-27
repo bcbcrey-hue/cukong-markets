@@ -36,7 +36,7 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run probe:audit`
 - `npm run test:probes`
 - `npm run verify`
-- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch3_current.json`)
+- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch4_current.json`)
 
 Job/check utama workflow bernama `verify-runtime-contract`.
 Workflow juga mempublikasikan commit status context `verify-runtime-contract/combined` yang mengikuti hasil job utama (success/failure) agar status gabungan commit tidak kosong.
@@ -180,6 +180,43 @@ Probe resmi Batch C:
 
 Catatan jujur: bukti saat ini masih source/probe-level. Belum ada shadow-live atau real-exchange evidence khusus Batch C.
 
+## Batch D — Self-Evaluation / Learning Loop (aktif konservatif di runtime)
+
+Batch D sekarang hidup sebagai loop evaluasi policy yang **tetap tunduk penuh pada guardrail risk/capital/execution**.
+
+Wiring runtime end-to-end:
+
+1. Saat runtime kandidat final policy `ENTER` dipilih untuk auto-entry, sistem membuat `PolicyEvaluationRecord` ke store persisten (`history/policy-evaluations.json`) dengan isi:
+   - pair + account + timestamp keputusan entry,
+   - snapshot context ringkas yang dipakai policy,
+   - final policy decision (`action/entryLane/size/aggressiveness/reasons`),
+   - parameter policy aktif saat keputusan dibuat (`minScoreToBuy`, `minConfidence`, `minPumpProbability`, `spoofRiskBlockThreshold`).
+2. Saat trade outcome final tersedia, record evaluasi di-link ke outcome nyata (prioritas data outcome `CONFIRMED_LIVE` / `PARTIAL_LIVE`).
+   - outcome non-live (`SIMULATED`, dst) tetap dicatat untuk observability, tetapi ditandai **ineligible** untuk tuning aktif.
+3. Runtime menjalankan evaluator konservatif berkala:
+   - ada minimum sample gate,
+   - ada no-op reason eksplisit bila sample/sinyal tidak cukup,
+   - tuning dibatasi whitelist sempit (hanya `strategy.minScoreToBuy`, `strategy.minConfidence`, `strategy.minPumpProbability`),
+   - perubahan kecil per cycle + floor/ceiling + drift cap dari baseline default.
+4. Hasil learning dipublish ke:
+   - runtime state (`lastPolicyLearning`),
+   - journal (`POLICY_LEARNING_CYCLE`),
+   - status operator (`/status`) agar terlihat jelas kapan tuning/no-op terjadi dan alasannya.
+
+Batas tegas Batch D:
+
+- Learning **tidak** mengubah `risk.maxOpenPositions`, `risk.maxPositionSizeIdr`, `risk.maxPairSpreadPct`, hard stop/take-profit, exposure cap portfolio, execution mode, maupun callback/security exchange.
+- Learning **tidak** bisa bypass regime block (`TRAP_RISK`, `DISTRIBUTION`), risk block, capital block, atau execution safety guard.
+
+Probe resmi Batch D:
+
+- `tests/batch_d_learning_loop_probe.ts`
+  - bukti record evaluasi tercipta dari final policy entry runtime,
+  - bukti outcome linkage + gating eligible outcome,
+  - bukti whitelist tuning & no-op saat sample belum cukup,
+  - bukti tuning persist setelah reload service settings,
+  - bukti observability operator menampilkan status learning.
+
 ## Bukti runtime worker production/build
 
 Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:
@@ -199,7 +236,7 @@ Untuk membekukan target proof runtime VPS, gunakan:
 npm run runtime:contract
 ```
 
-Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch3_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch4_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
 
 Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
 

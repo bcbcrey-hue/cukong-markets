@@ -12,6 +12,7 @@ import type {
   JournalEntry,
   OpportunityAssessment,
   OrderRecord,
+  PolicyEvaluationRecord,
   PositionRecord,
   RuntimeState,
   ShadowRunEvidence,
@@ -45,6 +46,7 @@ export function createDefaultRuntimeState(): RuntimeState {
     lastSignals: [],
     lastOpportunities: [],
     lastRuntimePolicyDecision: null,
+    lastPolicyLearning: null,
     tradeCount: 0,
     lastTradeAt: null,
     pollingStats: {
@@ -238,6 +240,10 @@ export class PersistenceService {
   private readonly tradeOutcomeStore = new JsonLinesStore<TradeOutcomeSummary>(
     env.tradeOutcomeFile,
   );
+  private readonly policyEvaluationStore = new JsonStore<PolicyEvaluationRecord[]>({
+    filePath: env.policyEvaluationFile,
+    fallback: [],
+  });
   private readonly callbackEventsStore = new JsonLinesStore<IndodaxCallbackEvent>(
     env.callbackEventsFile,
   );
@@ -260,6 +266,7 @@ export class PersistenceService {
       this.patternOutcomesStore.ensureDir(),
       this.executionSummaryStore.ensureDir(),
       this.tradeOutcomeStore.ensureDir(),
+      this.policyEvaluationStore.read(),
       this.callbackEventsStore.ensureDir(),
       this.shadowRunEvidenceStore.ensureDir(),
     ]);
@@ -393,6 +400,14 @@ export class PersistenceService {
 
   readTradeOutcomes(): Promise<TradeOutcomeSummary[]> {
     return this.tradeOutcomeStore.readAll();
+  }
+
+  readPolicyEvaluations(): Promise<PolicyEvaluationRecord[]> {
+    return this.policyEvaluationStore.read();
+  }
+
+  savePolicyEvaluations(records: PolicyEvaluationRecord[]): Promise<void> {
+    return this.policyEvaluationStore.write(records);
   }
 
   appendIndodaxCallbackEvent(entry: IndodaxCallbackEvent): Promise<void> {

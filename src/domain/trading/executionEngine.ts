@@ -33,6 +33,7 @@ import { StateService } from '../../services/stateService';
 import { SummaryService } from '../../services/summaryService';
 import { SettingsService } from '../settings/settingsService';
 import { AccountRegistry } from '../accounts/accountRegistry';
+import { PolicyLearningService } from '../learning/policyLearningService';
 import { OrderManager } from './orderManager';
 import { PositionManager } from './positionManager';
 import { RiskEngine } from './riskEngine';
@@ -120,6 +121,7 @@ export class ExecutionEngine {
     private readonly orders: OrderManager,
     private readonly journal: JournalService,
     private readonly summary: SummaryService,
+    private readonly policyLearning?: PolicyLearningService,
   ) {}
 
   private toFiniteNumber(value: unknown): number | null {
@@ -1175,6 +1177,7 @@ export class ExecutionEngine {
       status: nextStatus,
       filledQuantity: nextFilledQuantity,
       averageFillPrice,
+      relatedPositionId: affectedPosition?.id ?? order.relatedPositionId,
       exchangeStatus: snapshot.exchangeStatus,
       exchangeUpdatedAt: nowIso(),
       feeAmount,
@@ -1189,6 +1192,10 @@ export class ExecutionEngine {
 
     if (!updatedOrder) {
       return updatedOrder;
+    }
+
+    if (updatedOrder.side === 'buy' && updatedOrder.relatedPositionId && this.policyLearning) {
+      await this.policyLearning.markExecutionAnchoredByOrder(updatedOrder.id, updatedOrder.relatedPositionId);
     }
 
     const shouldPublishExecutionSummary =
@@ -1649,7 +1656,7 @@ export class ExecutionEngine {
           : signal.recommendedAction,
     };
 
-    return this.buy(account.id, executionSignal, executionAmountIdr, 'AUTO');
+    return this.buy(account.id, executionSignal, executionAmountIdr, 'AUTO', runtimeCandidate);
   }
 
   async buy(
@@ -1657,6 +1664,7 @@ export class ExecutionEngine {
     signal: ExecutionCandidate,
     amountIdr: number,
     source: 'MANUAL' | 'SEMI_AUTO' | 'AUTO' = 'MANUAL',
+    runtimeCandidate?: RuntimeEntryCandidate,
   ): Promise<string> {
     const settings = this.settings.get();
     const account = this.accounts.getById(accountId);
@@ -1712,12 +1720,16 @@ export class ExecutionEngine {
       entryStyle: this.resolveEntryStyle(signal),
     });
 
+    if (source === 'AUTO' && runtimeCandidate && this.policyLearning) {
+      await this.policyLearning.recordAutoEntryExecution(runtimeCandidate, settings, accountId, order.id);
+    }
+
     if (this.shouldSimulate(settings.tradingMode, settings)) {
       await this.publishExecutionSummary(order, 'SIMULATED', 'simulated buy submitted');
 
       const filledOrder = await this.orders.markFilled(order.id, quantity, entryPrice);
 
-      await this.positions.open({
+      const openedPosition = await this.positions.open({
         accountId,
         pair: signal.pair,
         quantity,
@@ -1732,6 +1744,13 @@ export class ExecutionEngine {
         exposureDiscoveryBucket: 'finalScore' in signal ? signal.discoveryBucket : undefined,
         exposureSource: 'finalScore' in signal ? 'POSITION_METADATA' : 'LEGACY_FALLBACK',
       });
+      await this.orders.update(order.id, {
+        relatedPositionId: openedPosition.id,
+      });
+
+      if (source === 'AUTO' && this.policyLearning) {
+        await this.policyLearning.markExecutionAnchoredByOrder(order.id, openedPosition.id);
+      }
 
       await this.journal.append({
         id: order.id,
@@ -1795,6 +1814,12 @@ export class ExecutionEngine {
       return this.formatLiveOrderMessage('BUY', synced ?? order);
     } catch (error) {
       if (this.isAmbiguousSubmissionError(error)) {
+        if (source === 'AUTO' && this.policyLearning) {
+          await this.policyLearning.markExecutionSkippedByOrder(
+            order.id,
+            'submission uncertain; menunggu reconciliation live',
+          );
+        }
         const uncertainOrder = await this.markSubmissionUncertain(order, 'buy', error);
         const reconciledOrder = uncertainOrder
           ? await this.resolveSubmissionUncertainOrder(uncertainOrder)
@@ -1811,6 +1836,12 @@ export class ExecutionEngine {
         order.id,
         error instanceof Error ? error.message : 'live buy failed',
       );
+      if (source === 'AUTO' && this.policyLearning) {
+        await this.policyLearning.markExecutionFailedByOrder(
+          order.id,
+          error instanceof Error ? error.message : 'live buy failed',
+        );
+      }
       if (rejectedOrder) {
         await this.publishExecutionSummary(
           rejectedOrder,

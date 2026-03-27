@@ -563,6 +563,74 @@ export interface RuntimePolicyReadModel {
   updatedAt: string;
 }
 
+export interface PolicyEvaluationContextSnapshot {
+  score: number;
+  confidence: number;
+  marketRegime?: MarketRegime;
+  discoveryBucket?: DiscoveryBucketType;
+  recommendedAction?: OpportunityAction;
+  entryTimingState?: EntryTimingState;
+  pumpProbability?: number;
+  trapProbability?: number;
+  spoofRisk?: number;
+  riskAllowed: boolean;
+  riskReasonCount: number;
+}
+
+export interface PolicyEvaluationRecord {
+  id: string;
+  pair: string;
+  accountId: string;
+  entryDecisionAt: string;
+  context: PolicyEvaluationContextSnapshot;
+  finalDecision: DecisionPolicyOutput;
+  policyParams: Pick<
+    StrategySettings,
+    'minScoreToBuy' | 'minConfidence' | 'minPumpProbability' | 'spoofRiskBlockThreshold'
+  >;
+  executionAnchor?: {
+    orderId: string;
+    positionId?: string;
+    source: 'AUTO_RUNTIME_POLICY';
+  };
+  status: 'PENDING_EXECUTION' | 'EXECUTION_SKIPPED' | 'EXECUTION_FAILED' | 'PENDING_OUTCOME' | 'RESOLVED';
+  statusReason?: string;
+  resolution?: {
+    outcomeId: string;
+    positionId: string;
+    outcomeAccuracy: SummaryAccuracy;
+    outcomeNetPnl: number | null;
+    outcomeReturnPct: number | null;
+    closeReason: string;
+    resolvedAt: string;
+    eligibleForTuning: boolean;
+    ineligibleReason?: string;
+    sharedPositionLifecycle: boolean;
+  };
+}
+
+export interface PolicyLearningTuningChange {
+  key: 'minScoreToBuy' | 'minConfidence' | 'minPumpProbability';
+  before: number;
+  after: number;
+  delta: number;
+}
+
+export interface PolicyLearningReadModel {
+  lastEvaluatedAt: string;
+  eligibleSamples: number;
+  resolvedSamples: number;
+  totalRecords: number;
+  tuned: boolean;
+  noOpReason?: string;
+  reasons: string[];
+  changes: PolicyLearningTuningChange[];
+  laneSample: Record<DecisionPolicyEntryLane, number>;
+  eligibleOutcomeIdsFingerprint: string;
+  lastAppliedLearningSignature?: string;
+  appliedEligibleOutcomeIds: string[];
+}
+
 export interface OrderRecord {
   id: string;
   pair: string;
@@ -818,6 +886,7 @@ export interface RuntimeState {
   lastSignals: SignalCandidate[];
   lastOpportunities: OpportunityAssessment[];
   lastRuntimePolicyDecision: RuntimePolicyReadModel | null;
+  lastPolicyLearning?: PolicyLearningReadModel | null;
   tradeCount: number;
   lastTradeAt: string | null;
   pollingStats: {

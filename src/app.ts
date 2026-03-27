@@ -7,6 +7,7 @@ import { toError } from './core/error-utils';
 import { AccountRegistry } from './domain/accounts/accountRegistry';
 import { PairHistoryStore } from './domain/history/pairHistoryStore';
 import { OpportunityEngine } from './domain/intelligence/opportunityEngine';
+import { PolicyLearningService } from './domain/learning/policyLearningService';
 import { BacktestEngine } from './domain/backtest/backtestEngine';
 import { WorkerPoolService } from './services/workerPoolService';
 import { AccountStore } from './domain/accounts/accountStore';
@@ -374,6 +375,7 @@ export async function createApp(): Promise<AppRuntime> {
   const riskEngine = new RiskEngine();
   const capitalEngine = new PortfolioCapitalEngine();
   const backtest = new BacktestEngine(persistence, workerPool);
+  const policyLearning = new PolicyLearningService(persistence);
 
   const executionEngine = new ExecutionEngine(
     accountRegistry,
@@ -385,6 +387,7 @@ export async function createApp(): Promise<AppRuntime> {
     orderManager,
     journal,
     summary,
+    policyLearning,
   );
 
   const callbackServer = new IndodaxCallbackServer(
@@ -688,6 +691,40 @@ export async function createApp(): Promise<AppRuntime> {
 
     await executionEngine.syncActiveOrders();
     await executionEngine.evaluateOpenPositions();
+
+    const linkage = await policyLearning.resolveOutcomesWithEvaluations();
+    const learningDecision = await policyLearning.runConservativeLearningCycle(
+      settings.get(),
+      state.get().lastPolicyLearning ?? null,
+    );
+
+    if (learningDecision.tuned && learningDecision.changes.length > 0) {
+      const patch: Partial<BotSettings['strategy']> = {};
+      for (const change of learningDecision.changes) {
+        patch[change.key] = change.after;
+      }
+      await settings.patchStrategy(patch);
+    }
+
+    await state.setPolicyLearning({
+      ...learningDecision,
+      reasons: [
+        ...learningDecision.reasons,
+        `linkedOutcomes=${linkage.linked}`,
+        `pending=${linkage.pendingSamples}`,
+      ],
+    });
+
+    await journal.info(
+      'POLICY_LEARNING_CYCLE',
+      learningDecision.tuned
+        ? `policy learning tuned ${learningDecision.changes.length} parameter`
+        : `policy learning no-op: ${learningDecision.noOpReason ?? 'tanpa perubahan'}`,
+      {
+        linkage,
+        decision: learningDecision,
+      },
+    );
   });
 
   polling.register('health-heartbeat', runtimePollingIntervalMs, async () => {
@@ -728,6 +765,10 @@ export async function createApp(): Promise<AppRuntime> {
         `workersEnabled=${settings.get().workers.enabled}`,
         `marketScanIntervalMs=${marketScanIntervalMs}`,
         `runtimePollingIntervalMs=${runtimePollingIntervalMs}`,
+        `learningLastAt=${state.get().lastPolicyLearning?.lastEvaluatedAt ?? '-'}`,
+        `learningEligible=${state.get().lastPolicyLearning?.eligibleSamples ?? 0}`,
+        `learningMode=${state.get().lastPolicyLearning?.tuned ? 'TUNED' : 'NO_OP'}`,
+        `learningReason=${state.get().lastPolicyLearning?.noOpReason ?? state.get().lastPolicyLearning?.reasons[0] ?? '-'}`,
         ...buildDiscoveryObservabilityNotes(
           marketWatcher.getLastDiscoverySummary(),
           settings.get().scanner.discovery,
