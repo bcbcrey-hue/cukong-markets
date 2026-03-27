@@ -1,4 +1,4 @@
-timestamp_utc: 2026-03-22T20:33:37Z
+timestamp_utc: 2026-03-27T21:30:55Z
 command: npm run probe:list
 exit_code: 0
 --- stdout ---
@@ -11,12 +11,73 @@ Official probes:
 - tests/nginx_renderer_probe.ts
 - tests/http_servers_probe.ts
 - tests/telegram_menu_navigation_probe.ts
+- tests/telegram_message_chunking_probe.ts
+- tests/telegram_monitoring_state_sync_probe.ts
 - tests/telegram_slippage_confirmation_probe.ts
+- tests/telegram_settings_persistence_probe.ts
+- tests/telegram_strategy_mode_probe.ts
 - tests/telegram_manual_accounts_probe.ts
+- tests/telegram_manual_buy_flow_probe.ts
+- tests/telegram_manual_sell_flow_probe.ts
+- tests/market_watcher_selection_probe.ts
+- tests/batch_a_trade_truth_layer_probe.ts
+- tests/discovery_anomaly_priority_probe.ts
+- tests/discovery_bucket_allocation_probe.ts
+- tests/discovery_major_pair_cap_probe.ts
+- tests/discovery_market_watch_split_probe.ts
+- tests/discovery_rejection_gate_probe.ts
+- tests/discovery_settings_runtime_probe.ts
+- tests/settings_discovery_normalization_probe.ts
+- tests/discovery_scanner_settings_probe.ts
+- tests/discovery_runtime_consumer_canonical_probe.ts
+- tests/discovery_health_observability_probe.ts
+- tests/discovery_score_confidence_pivot_probe.ts
+- tests/history_outcome_grounding_probe.ts
+- tests/prediction_contract_probe.ts
+- tests/prediction_horizon_calibration_probe.ts
+- tests/prediction_policy_input_probe.ts
+- tests/runtime_prediction_policy_wiring_probe.ts
+- tests/runtime_prediction_reachable_lane_probe.ts
+- tests/ticker_quote_flow_features_probe.ts
 - tests/runtime_backend_regression.ts
+- tests/last_signals_contract_probe.ts
 - tests/live_execution_hardening_probe.ts
 - tests/execution_summary_failed_probe.ts
 - tests/buy_entry_price_guard_probe.ts
+- tests/scout_enter_route_probe.ts
+- tests/add_on_confirm_probe.ts
+- tests/add_on_confirm_account_scope_probe.ts
+- tests/scout_lane_sizing_probe.ts
+- tests/portfolio_capital_contract_probe.ts
+- tests/policy_to_capital_sizing_probe.ts
+- tests/portfolio_exposure_cap_probe.ts
+- tests/portfolio_exposure_truth_persistence_probe.ts
+- tests/thin_book_cap_probe.ts
+- tests/runtime_capital_policy_wiring_probe.ts
+- tests/runtime_capital_final_sync_probe.ts
+- tests/execution_uses_final_allocated_notional_probe.ts
+- tests/operator_capital_observability_probe.ts
+- tests/decision_policy_semantic_sync_probe.ts
+- tests/runtime_policy_wiring_probe.ts
+- tests/runtime_policy_observability_probe.ts
+- tests/runtime_policy_operator_summary_probe.ts
+- tests/execution_runtime_final_decision_probe.ts
+- tests/batch_e_execution_realism_probe.ts
+- tests/batch_f_new_brain_validation_probe.ts
+- tests/runtime_selector_prefers_scout_anomaly_probe.ts
+- tests/runtime_selector_prefers_scout_stealth_probe.ts
+- tests/runtime_selector_prefers_add_on_after_scout_probe.ts
+- tests/runtime_selector_pair_priority_probe.ts
+- tests/runtime_selector_fallback_general_probe.ts
+- tests/runtime_selector_fallback_pair_priority_probe.ts
+- tests/runtime_selector_monitoring_continuity_probe.ts
+- tests/batch_d_learning_loop_probe.ts
+- tests/chasing_entry_rejected_probe.ts
+- tests/normal_entry_other_account_same_pair_probe.ts
+- tests/hold_winner_while_pump_healthy_probe.ts
+- tests/dump_exit_trigger_probe.ts
+- tests/emergency_exit_override_probe.ts
+- tests/runtime_exit_wiring_probe.ts
 - tests/position_mark_pnl_correctness_probe.ts
 - tests/live_submission_uncertain_probe.ts
 - tests/cancel_submission_uncertain_probe.ts
@@ -26,6 +87,11 @@ Official probes:
 - tests/app_lifecycle_servers_probe.ts
 - tests/bootstrap_observability_probe.ts
 - tests/startup_health_honesty_probe.ts
+- tests/startup_hotlist_rehydrate_probe.ts
+- tests/startup_corrupted_state_probe.ts
+- tests/state_atomicity_probe.ts
+- tests/state_replace_atomicity_probe.ts
+- tests/scheduler_overlap_guard_probe.ts
 - tests/callback_reconciliation_probe.ts
 - tests/callback_security_probe.ts
 - tests/worker_timeout_probe.ts
@@ -33,6 +99,5 @@ Official probes:
 
 Manual probes (not in npm run verify):
 - tests/real_exchange_shadow_run_probe.ts
-
 --- stderr ---
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.

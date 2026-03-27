@@ -1,0 +1,27 @@
+timestamp_utc: 2026-03-28T02:10:00Z
+command: npm run verify:shadow-live
+exit_code: 0
+execution_context: VPS runtime proof (latest)
+source_head_commit: 93a3c47
+note: source head tetap sama; hasil strict berubah karena precondition environment/account/auth di VPS sudah terpenuhi.
+--- stdout ---
+
+> cukong-markets@1.0.0 verify:shadow-live
+> RUN_REAL_EXCHANGE_SHADOW=1 npm run probe:shadow-live
+
+
+> cukong-markets@1.0.0 probe:shadow-live
+> tsx tests/real_exchange_shadow_run_probe.ts
+
+{
+  "probe": "real_exchange_shadow_run_probe",
+  "pair": "btc_idr",
+  "runId": "shadow-vps-latest-pass",
+  "accountCount": 1,
+  "archivedEntries": 1,
+  "allowFailedChecks": false,
+  "failedChecks": []
+}
+PASS real_exchange_shadow_run_probe
+--- stderr ---
+

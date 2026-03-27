@@ -1,11 +1,10 @@
-timestamp_utc: 2026-03-22T20:33:30Z
+timestamp_utc: 2026-03-27T21:30:46Z
 command: npm run typecheck:probes
 exit_code: 0
 --- stdout ---
 
 > cukong-markets@1.0.0 typecheck:probes
 > tsc -p tsconfig.probes.json --noEmit
-
 
 --- stderr ---
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
