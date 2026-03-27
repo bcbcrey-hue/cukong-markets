@@ -418,12 +418,19 @@ export interface DecisionPolicyInput {
   confidence: number;
   recommendedAction?: OpportunityAction;
   edgeValid?: boolean;
+  marketRegime?: MarketRegime;
+  discoveryBucket?: DiscoveryBucketType;
   pumpProbability?: number;
+  trapProbability?: number;
+  spoofRisk?: number;
+  entryTimingState?: EntryTimingState;
   minScoreToAlert: number;
   minScoreToBuy: number;
   minConfidence: number;
   minPumpProbability?: number;
+  spoofRiskBlockThreshold?: number;
   tradingMode: TradingMode;
+  riskCheckResult?: RiskCheckResult;
 }
 
 export interface DecisionPolicyOutput {

@@ -148,26 +148,40 @@ Audit permanen untuk pemetaan jalur keputusan runtime aktual disimpan di:
 
 Dokumen ini khusus Tahap 0A: memetakan keputusan yang saat ini masih tersebar (`opportunityEngine`/`app.ts`/`executionEngine`/`riskEngine`) tanpa mengklaim DecisionPolicyEngine final sudah terimplementasi.
 
-## Tahap 0B — Kunci kontrak Decision Policy (aktif)
+## Tahap 0C — Decision Policy Engine final auto-entry (aktif)
 
-Tahap 0B mengunci **kontrak keputusan tunggal** untuk downstream, bukan implementasi policy engine penuh:
+Tahap 0C menghidupkan `decisionPolicyEngine` sebagai **single source of final decision auto-entry** berbasis context opportunity + risk check hasil `RiskEngine`.
 
-- `DecisionPolicyInput`
-- `DecisionPolicyOutput` (minimal wajib: `action`, `sizeMultiplier`, `aggressiveness`, `reasons`)
+Kontrak keputusan tetap: 
 
-Implementasi `decision policy v1` saat ini bersifat **rule-based** (tanpa ML, tanpa model prediksi baru, tanpa learning loop baru), dan dipakai sinkronisasi minimum di runtime selector / execution / risk.
-Evaluator policy untuk opportunity sekarang dipakai bersama (selector app + execution + risk) agar semantik keputusan final tidak bercabang.
+- `DecisionPolicyOutput.action` (`ENTER | SKIP | WAIT`)
+- `DecisionPolicyOutput.sizeMultiplier`
+- `DecisionPolicyOutput.aggressiveness`
+- `DecisionPolicyOutput.reasons`
 
-Status jujur Tahap 0B:
+Implementasi tetap **rule-based** (tanpa ML, tanpa model prediksi baru, tanpa learning loop baru).
 
-- yang sudah dikerjakan: kontrak type resmi + adapter/sinkronisasi downstream minimum;
-- yang belum dikerjakan: policy engine final lintas seluruh business flow.
+Rule minimum Tahap 0C yang sudah dipaksa hidup di engine policy:
+
+- `TRAP_RISK` => `SKIP`
+- `DISTRIBUTION` => `SKIP`
+- `QUIET` => defensif (aggressiveness rendah, sizing kecil / wait bila setup kurang)
+- `EXPANSION` => bisa lebih agresif saat konteks aman
+- discovery bucket lemah tidak lolos mudah
+- risk block dari `RiskEngine` jadi hard block final (tidak bisa dioverride menjadi `ENTER`)
 
 ## Yang sudah terbukti dari source/probe
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
 - Guard BUY untuk harga/reference/quantity invalid sudah dibuktikan ditolak sebelum persist lewat probe (`tests/buy_entry_price_guard_probe.ts`).
 - Jalur Batch 2 scout/confirm sudah diprove di level engine melalui probe:
+- Tahap 0C final policy untuk auto-entry diprove lewat `tests/decision_policy_semantic_sync_probe.ts`:
+  - blokir regime `TRAP_RISK` dan `DISTRIBUTION`
+  - mode defensif saat `QUIET`
+  - mode agresif terkontrol saat `EXPANSION`
+  - discovery bucket lemah tidak lolos mudah
+  - risk block final tidak bisa berubah jadi `ENTER`
+  - runtime selector tetap bergantung output policy (bukan `recommendedAction` mentah).
   - `tests/scout_enter_route_probe.ts` (route `SCOUT_ENTER`)
   - `tests/add_on_confirm_probe.ts` (route `ADD_ON_CONFIRM` + rejection saat continuation rusak)
   - `tests/add_on_confirm_account_scope_probe.ts` (add-on pair sama di akun lain tetap ditolak)

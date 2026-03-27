@@ -13,6 +13,7 @@ import type {
   ShadowRunTelegramSummary,
   SummaryAccuracy,
   TradingMode,
+  RiskCheckResult,
 } from '../../core/types';
 import { getIndodaxHistoryMode } from '../../config/env';
 import { errorMessage, toError } from '../../core/error-utils';
@@ -1567,19 +1568,22 @@ export class ExecutionEngine {
     return 'CONFIRM';
   }
 
-  decideAutoExecution(candidate: ExecutionCandidate): AutoExecutionDecision {
+  decideAutoExecution(
+    candidate: ExecutionCandidate,
+    riskCheckResult?: RiskCheckResult,
+  ): AutoExecutionDecision {
     const settings = this.settings.get();
     return 'finalScore' in candidate
-      ? evaluateOpportunityPolicyV1(candidate, settings)
-      : evaluateSignalPolicyV1(candidate, settings);
+      ? evaluateOpportunityPolicyV1(candidate, settings, riskCheckResult)
+      : evaluateSignalPolicyV1(candidate, settings, riskCheckResult);
   }
 
   async attemptAutoBuy(signal: ExecutionCandidate): Promise<string> {
     const settings = this.settings.get();
-    const decision = this.decideAutoExecution(signal);
+    const preRiskDecision = this.decideAutoExecution(signal);
 
-    if (decision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
-      return `skip auto-buy ${signal.pair}: ${decision.reasons.join('; ')}`;
+    if (preRiskDecision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
+      return `skip auto-buy ${signal.pair}: ${preRiskDecision.reasons.join('; ')}`;
     }
 
     const account = this.accounts.getDefault();
@@ -1624,6 +1628,11 @@ export class ExecutionEngine {
       cooldownUntil: this.state.get().pairCooldowns[signal.pair] ?? null,
       policyDecision: this.decideAutoExecution(signal),
     });
+
+    const finalDecision = this.decideAutoExecution(signal, riskResult);
+    if (finalDecision.action !== 'ENTER') {
+      throw new Error(finalDecision.reasons.join('; '));
+    }
 
     if (!riskResult.allowed) {
       throw new Error(riskResult.reasons.join('; '));
