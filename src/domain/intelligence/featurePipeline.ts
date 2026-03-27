@@ -34,7 +34,28 @@ export class FeaturePipeline {
       100,
     );
 
-    const usesProxyTradeFlow = snapshot.recentTradesSource === 'INFERRED_PROXY' || snapshot.recentTradesSource === 'NONE';
+    const tradeFlowSource = snapshot.recentTradesSource;
+    const tradeFlowQuality =
+      tradeFlowSource === 'EXCHANGE_TRADE_FEED'
+        ? 'TAPE'
+        : 'PROXY';
+
+    const tradeFlowEvidence: string[] = [];
+    if (tradeFlowSource === 'EXCHANGE_TRADE_FEED') {
+      tradeFlowEvidence.push('trade-flow microstructure berbasis tape trade exchange (truth)');
+    } else if (tradeFlowSource === 'MIXED') {
+      tradeFlowEvidence.push(
+        'trade-flow microstructure MIXED: tape exchange coverage tipis ditambah fallback proxy inferred',
+      );
+    } else if (tradeFlowSource === 'INFERRED_PROXY') {
+      tradeFlowEvidence.push(
+        'trade-flow microstructure berbasis proxy inferred dari delta snapshot, bukan tape riil',
+      );
+    } else {
+      tradeFlowEvidence.push(
+        'trade-flow microstructure tidak memiliki tape exchange; quality diturunkan konservatif',
+      );
+    }
 
     return {
       pair: snapshot.pair,
@@ -55,12 +76,10 @@ export class FeaturePipeline {
         ...spoof.evidence,
         ...iceberg.evidence,
         ...clusters.evidence,
-        ...(usesProxyTradeFlow
-          ? ['trade-flow microstructure berbasis proxy inferred dari delta snapshot, bukan tape riil']
-          : []),
+        ...tradeFlowEvidence,
       ],
-      tradeFlowSource: snapshot.recentTradesSource,
-      tradeFlowQuality: usesProxyTradeFlow ? 'PROXY' : 'TAPE',
+      tradeFlowSource,
+      tradeFlowQuality,
     };
   }
 }

@@ -98,7 +98,12 @@ Kontrak source-level yang dipaksa hidup:
 Impact downstream yang sudah tersambung:
 
 - `FeaturePipeline` membaca `recentTradesSource` untuk menetapkan `tradeFlowSource` + `tradeFlowQuality`.
-- `ProbabilityEngine` memberi confidence penalty saat quality masih `PROXY`, sehingga truth feed meningkatkan confidence secara nyata saat tersedia.
+- `FeaturePipeline` sekarang memberi evidence yang membedakan tiga status secara eksplisit: pure truth (`EXCHANGE_TRADE_FEED`), mixed truth+proxy (`MIXED`), dan pure proxy (`INFERRED_PROXY`/`NONE`).
+- `MIXED` diperlakukan konservatif (tidak dianggap full `TAPE`): quality diturunkan ke jalur non-tape dan kena caveat downstream.
+- `ProbabilityEngine` menerapkan penalty confidence bertingkat berdasarkan source:
+  - `EXCHANGE_TRADE_FEED` = tanpa penalty,
+  - `MIXED` = penalty konservatif menengah,
+  - `INFERRED_PROXY` / `NONE` = penalty paling besar.
 - `DecisionPolicyEngine` tetap single source final decision; efek Batch A masuk lewat confidence/trap context yang dipakai policy, bukan lewat bypass ke execution.
 
 Probe resmi yang membuktikan jalur Batch A:

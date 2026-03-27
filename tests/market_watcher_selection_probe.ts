@@ -97,6 +97,10 @@ async function main() {
     anomalySnapshot?.recentTrades.some((trade) => trade.source === 'EXCHANGE_TRADE_FEED' && trade.quality === 'TAPE'),
     'MarketWatcher must preserve truth trade feed labels when exchange feed available',
   );
+  assert.ok(
+    anomalySnapshot?.recentTrades.some((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
+    'MIXED source must include explicit proxy trace and must not be treated as full tape only',
+  );
 
   const fallbackSnapshot = snapshots.find((item) => item.pair !== 'anomaly_idr');
   assert.equal(

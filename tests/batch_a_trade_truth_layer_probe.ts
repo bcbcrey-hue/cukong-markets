@@ -113,6 +113,7 @@ function buildPolicySettings(minConfidence: number): BotSettings {
 function buildOpportunityConfidenceDriven(confidence: number) {
   return {
     pair: 'truth_idr',
+    discoveryBucket: 'ANOMALY' as const,
     rawScore: 80,
     finalScore: 83,
     confidence,
@@ -179,7 +180,7 @@ async function main() {
   const snapshots = await watcher.batchSnapshot(4);
 
   const truthSnapshot = snapshots.find((item) => item.pair === 'truth_idr');
-  const proxySnapshot = snapshots.find((item) => item.pair === 'proxy_idr');
+  const fallbackProxySnapshot = snapshots.find((item) => item.pair === 'proxy_idr');
 
   assert.equal(truthSnapshot?.recentTradesSource, 'EXCHANGE_TRADE_FEED', 'truth pair must consume exchange trade feed');
   assert.ok(
@@ -187,23 +188,84 @@ async function main() {
     'truth pair trades must stay labeled as EXCHANGE_TRADE_FEED + TAPE',
   );
 
-  assert.equal(proxySnapshot?.recentTradesSource, 'INFERRED_PROXY', 'fallback pair must stay explicit as inferred proxy');
+  assert.equal(fallbackProxySnapshot?.recentTradesSource, 'INFERRED_PROXY', 'fallback pair must stay explicit as inferred proxy');
   assert.ok(
-    proxySnapshot?.recentTrades.every((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
+    fallbackProxySnapshot?.recentTrades.every((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
     'fallback pair must never be mislabeled as tape truth',
   );
 
-  assert.ok(truthSnapshot && proxySnapshot, 'required snapshots must exist');
+  assert.ok(truthSnapshot && fallbackProxySnapshot, 'required snapshots must exist');
+
+  const mixedSnapshot: MarketSnapshot = {
+    ...truthSnapshot,
+    recentTradesSource: 'MIXED',
+    recentTrades: [
+      ...truthSnapshot.recentTrades.slice(0, 2),
+      {
+        pair: truthSnapshot.pair,
+        price: truthSnapshot.ticker.lastPrice,
+        quantity: 0.4,
+        side: 'buy',
+        timestamp: truthSnapshot.timestamp,
+        source: 'INFERRED_SNAPSHOT_DELTA',
+        quality: 'PROXY',
+        inferenceBasis: 'volume24hQuote_delta_and_price_direction',
+      },
+    ],
+  };
+
+  const proxySnapshot: MarketSnapshot = {
+    ...truthSnapshot,
+    recentTradesSource: 'INFERRED_PROXY',
+    recentTrades: [
+      {
+        pair: truthSnapshot.pair,
+        price: truthSnapshot.ticker.lastPrice,
+        quantity: 0.8,
+        side: 'buy',
+        timestamp: truthSnapshot.timestamp - 1000,
+        source: 'INFERRED_SNAPSHOT_DELTA',
+        quality: 'PROXY',
+        inferenceBasis: 'volume24hQuote_delta_and_price_direction',
+      },
+      {
+        pair: truthSnapshot.pair,
+        price: truthSnapshot.ticker.lastPrice,
+        quantity: 0.6,
+        side: 'sell',
+        timestamp: truthSnapshot.timestamp,
+        source: 'INFERRED_SNAPSHOT_DELTA',
+        quality: 'PROXY',
+        inferenceBasis: 'volume24hQuote_delta_and_price_direction',
+      },
+    ],
+  };
 
   const pipeline = new FeaturePipeline();
   const signalTruth = buildSignal(truthSnapshot);
+  const signalMixed = buildSignal(mixedSnapshot);
   const signalProxy = buildSignal(proxySnapshot);
 
   const truthFeatures = pipeline.build(truthSnapshot, signalTruth, []);
+  const mixedFeatures = pipeline.build(mixedSnapshot, signalMixed, []);
   const proxyFeatures = pipeline.build(proxySnapshot, signalProxy, []);
 
   assert.equal(truthFeatures.tradeFlowQuality, 'TAPE', 'truth snapshot must produce TAPE trade-flow quality');
+  assert.equal(mixedFeatures.tradeFlowQuality, 'PROXY', 'mixed snapshot must be treated conservatively as non-tape quality');
   assert.equal(proxyFeatures.tradeFlowQuality, 'PROXY', 'proxy snapshot must produce PROXY trade-flow quality');
+  assert.equal(mixedFeatures.tradeFlowSource, 'MIXED', 'mixed snapshot must preserve MIXED source identity');
+  assert.ok(
+    mixedFeatures.evidence.some((item) => item.includes('MIXED')),
+    'mixed snapshot evidence must explicitly mention mixed truth+proxy caveat',
+  );
+  assert.ok(
+    truthFeatures.evidence.some((item) => item.includes('truth')),
+    'truth snapshot evidence must explicitly mention pure truth tape basis',
+  );
+  assert.ok(
+    proxyFeatures.evidence.some((item) => item.includes('proxy inferred')),
+    'proxy snapshot evidence must explicitly mention pure proxy basis',
+  );
 
   const probability = new ProbabilityEngine();
   const baseContext = {
@@ -224,6 +286,12 @@ async function main() {
     historicalContext: baseContext,
   });
 
+  const mixedProbability = probability.assess({
+    signal: signalMixed,
+    microstructure: mixedFeatures,
+    historicalContext: baseContext,
+  });
+
   const proxyProbability = probability.assess({
     signal: signalProxy,
     microstructure: proxyFeatures,
@@ -231,13 +299,21 @@ async function main() {
   });
 
   assert.ok(
-    truthProbability.confidence > proxyProbability.confidence,
-    'truth trade-flow must increase probability confidence versus proxy fallback',
+    truthProbability.confidence > mixedProbability.confidence,
+    'pure truth confidence must stay stronger than mixed coverage',
+  );
+  assert.ok(
+    mixedProbability.confidence > proxyProbability.confidence,
+    'mixed confidence must stay above pure proxy when partial truth still exists',
   );
 
-  const policySettings = buildPolicySettings((truthProbability.confidence + proxyProbability.confidence) / 2);
+  const policySettings = buildPolicySettings((truthProbability.confidence + mixedProbability.confidence) / 2);
   const truthDecision = evaluateOpportunityPolicyV1(
     buildOpportunityConfidenceDriven(truthProbability.confidence),
+    policySettings,
+  );
+  const mixedDecision = evaluateOpportunityPolicyV1(
+    buildOpportunityConfidenceDriven(mixedProbability.confidence),
     policySettings,
   );
   const proxyDecision = evaluateOpportunityPolicyV1(
@@ -246,6 +322,7 @@ async function main() {
   );
 
   assert.equal(truthDecision.action, 'ENTER', 'higher confidence from truth feed must pass policy confidence gate');
+  assert.equal(mixedDecision.action, 'SKIP', 'mixed coverage confidence must not be treated equal to full truth');
   assert.equal(proxyDecision.action, 'SKIP', 'proxy confidence below threshold must be rejected by policy gate');
 
   console.log('PASS batch_a_trade_truth_layer_probe');
