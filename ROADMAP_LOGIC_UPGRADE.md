@@ -85,7 +85,7 @@ Hasil yang dicari:
 
 * fill realism lebih baik,
 * partial fill realism,
-* queue/slippage behaviour lebih masuk akal,
+* queue/slippage behaviour lebih masuk akal,default slipage tetap 60 [agar cepat fill ketika dapat momentum],market rasa order
 * stress handling saat likuiditas drop.
 
 ### Batch Baru F — Validation \& Shadow Live for New Brain
