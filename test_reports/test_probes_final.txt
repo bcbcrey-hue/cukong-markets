@@ -1,4 +1,4 @@
-timestamp_utc: 2026-03-22T20:33:41Z
+timestamp_utc: 2026-03-27T20:57:45Z
 command: npm run test:probes
 exit_code: 0
 --- stdout ---
@@ -12,174 +12,274 @@ exit_code: 0
 
 
 [probe] tests/private_api_v2_mapping_probe.ts
-{"level":30,"time":1774211630405,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"request-pacer","scope":"indodax-private:test-k","lane":"private_reconciliation","label":"get:/api/v2/myTrades","priority":70,"holdMs":261,"queueDepth":0,"totalQueueDepth":0,"msg":"request released after pacing hold"}
 PASS private_api_v2_mapping_probe
 
 [probe] tests/nginx_renderer_probe.ts
 PASS nginx_renderer_probe
 
 [probe] tests/http_servers_probe.ts
-{"level":30,"time":1774211633712,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3806,"msg":"app server started"}
-{"level":30,"time":1774211633717,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3906,"path":"/indodax/callback","callbackUrl":"https://kangtrade.top/indodax/callback","allowedHost":"kangtrade.top","msg":"indodax callback server started"}
 PASS http_servers_probe
-{"level":30,"time":1774211633824,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3906,"msg":"indodax callback server stopped"}
-{"level":30,"time":1774211633824,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3806,"msg":"app server stopped"}
 
 [probe] tests/telegram_menu_navigation_probe.ts
 PASS telegram_menu_navigation_probe
 
+[probe] tests/telegram_message_chunking_probe.ts
+PASS telegram_message_chunking_probe
+
+[probe] tests/telegram_monitoring_state_sync_probe.ts
+PASS telegram_monitoring_state_sync_probe
+
 [probe] tests/telegram_slippage_confirmation_probe.ts
 PASS telegram_slippage_confirmation_probe
+
+[probe] tests/telegram_settings_persistence_probe.ts
+PASS telegram_settings_persistence_probe
+
+[probe] tests/telegram_strategy_mode_probe.ts
+PASS telegram_strategy_mode_probe
 
 [probe] tests/telegram_manual_accounts_probe.ts
 PASS telegram_manual_accounts_probe
 
+[probe] tests/telegram_manual_buy_flow_probe.ts
+PASS telegram_manual_buy_flow_probe
+
+[probe] tests/telegram_manual_sell_flow_probe.ts
+PASS telegram_manual_sell_flow_probe
+
+[probe] tests/market_watcher_selection_probe.ts
+PASS market_watcher_selection_probe
+
+[probe] tests/batch_a_trade_truth_layer_probe.ts
+PASS batch_a_trade_truth_layer_probe
+
+[probe] tests/discovery_anomaly_priority_probe.ts
+PASS discovery_anomaly_priority_probe
+
+[probe] tests/discovery_bucket_allocation_probe.ts
+PASS discovery_bucket_allocation_probe
+
+[probe] tests/discovery_major_pair_cap_probe.ts
+PASS discovery_major_pair_cap_probe
+
+[probe] tests/discovery_market_watch_split_probe.ts
+PASS discovery_market_watch_split_probe
+
+[probe] tests/discovery_rejection_gate_probe.ts
+PASS discovery_rejection_gate_probe
+
+[probe] tests/discovery_settings_runtime_probe.ts
+PASS discovery_settings_runtime_probe
+
+[probe] tests/settings_discovery_normalization_probe.ts
+PASS settings_discovery_normalization_probe
+
+[probe] tests/discovery_scanner_settings_probe.ts
+PASS discovery_scanner_settings_probe
+
+[probe] tests/discovery_runtime_consumer_canonical_probe.ts
+PASS discovery_runtime_consumer_canonical_probe
+
+[probe] tests/discovery_health_observability_probe.ts
+PASS discovery_health_observability_probe
+
+[probe] tests/discovery_score_confidence_pivot_probe.ts
+PASS discovery_score_confidence_pivot_probe
+
+[probe] tests/history_outcome_grounding_probe.ts
+history_outcome_grounding_probe: ok
+
+[probe] tests/prediction_contract_probe.ts
+prediction_contract_probe: ok
+
+[probe] tests/prediction_horizon_calibration_probe.ts
+prediction_horizon_calibration_probe: ok
+
+[probe] tests/prediction_policy_input_probe.ts
+prediction_policy_input_probe: ok
+
+[probe] tests/runtime_prediction_policy_wiring_probe.ts
+runtime_prediction_policy_wiring_probe: ok
+
+[probe] tests/runtime_prediction_reachable_lane_probe.ts
+runtime_prediction_reachable_lane_probe: ok
+
+[probe] tests/ticker_quote_flow_features_probe.ts
+PASS ticker_quote_flow_features_probe
+
 [probe] tests/runtime_backend_regression.ts
-{"level":30,"time":1774211641005,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"b003aed3-9e36-4d53-bf9c-9a61ea530bda","orderId":"48a2bad4-1fdc-4ff4-852a-a9a94805298f","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"eth_idr","side":"buy","status":"SUBMITTED","accuracy":"SIMULATED","referencePrice":50049999.99999999,"intendedOrderPrice":50350299.99999999,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0.6000000000000001,"timestamp":"2026-03-22T20:34:01.004Z","reason":"simulated buy submitted"},"msg":"execution summary"}
-{"level":30,"time":1774211641010,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"42a26a5a-7565-478c-933f-23f4f8a4d5ac","orderId":"48a2bad4-1fdc-4ff4-852a-a9a94805298f","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"eth_idr","side":"buy","status":"FILLED","accuracy":"SIMULATED","referencePrice":50049999.99999999,"intendedOrderPrice":50350299.99999999,"averageFillPrice":50350299.99999999,"filledQuantity":0.003972170970182899,"filledNotional":200000,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0.6000000000000001,"timestamp":"2026-03-22T20:34:01.009Z","reason":"simulated buy filled"},"msg":"execution summary"}
-{"level":30,"time":1774211641013,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"sol_idr","accountId":"test-main-1774211640988","exchangeOrderId":"LIVE-BUY-1","liveResult":{"success":1,"return":{"order_id":"LIVE-BUY-1"}},"msg":"live buy order sent"}
-{"level":30,"time":1774211641015,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"000a98db-b9ee-4a22-8f2a-5c9f8cdb936e","orderId":"7d3ba2e5-6524-418f-9840-9644e68e0023","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"sol_idr","side":"buy","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":20010000,"intendedOrderPrice":20130060,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"LIVE-BUY-1","slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:01.014Z","reason":"buy submitted to exchange"},"msg":"execution summary"}
-{"level":30,"time":1774211641019,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"34d0f6bf-0f0f-424b-b957-b741f12dcfe5","orderId":"7d3ba2e5-6524-418f-9840-9644e68e0023","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"sol_idr","side":"buy","status":"FILLED","accuracy":"OPTIMISTIC_LIVE","referencePrice":20010000,"intendedOrderPrice":20130060,"averageFillPrice":20010000,"filledQuantity":0.009935390157803802,"filledNotional":198807.15705765408,"fee":0,"feeAsset":null,"exchangeOrderId":"LIVE-BUY-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:01.018Z","reason":"finalScore=90.00; pumpProbability=0.820; confidence=0.880; action=ENTER; exchangeOrderId=LIVE-BUY-1; getOrder=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211641020,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"sol_idr","accountId":"test-main-1774211640988","exchangeOrderId":"LIVE-SELL-1","liveResult":{"success":1,"return":{"order_id":"LIVE-SELL-1"}},"msg":"live sell order sent"}
-{"level":30,"time":1774211641021,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"8e3861d2-f4d7-4eec-a6b0-d22811010511","orderId":"0271d0df-322a-4471-8e17-f59fb268b2ed","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"sol_idr","side":"sell","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":20010000,"intendedOrderPrice":20010000,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"LIVE-SELL-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:01.021Z","reason":"AUTO_EXIT submitted"},"msg":"execution summary"}
-{"level":30,"time":1774211641025,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"4acb4fcf-c434-4ed4-9365-e61fb646a176","orderId":"0271d0df-322a-4471-8e17-f59fb268b2ed","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"sol_idr","side":"sell","status":"FILLED","accuracy":"OPTIMISTIC_LIVE","referencePrice":20010000,"intendedOrderPrice":20010000,"averageFillPrice":20010000,"filledQuantity":0.009935390157803802,"filledNotional":198807.15705765408,"fee":0,"feeAsset":null,"exchangeOrderId":"LIVE-SELL-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:01.024Z","reason":"manual/exit sell; exchangeOrderId=LIVE-SELL-1; getOrder=open; getOrder=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211641026,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"trade_outcome_summary","summary":{"id":"f10f57d3-4bc0-454b-8f13-9de7ad68cca6","positionId":"e09c70ef-ac5d-40fb-942b-6ff98be50e07","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"sol_idr","accuracy":"OPTIMISTIC_LIVE","entryAverage":20010000,"exitAverage":20010000,"totalQuantity":0.009935390157803802,"totalFee":0,"grossPnl":0,"netPnl":0,"returnPercentage":0,"holdDurationMs":7,"closeReason":"AUTO_EXIT","timestamp":"2026-03-22T20:34:01.025Z","notes":["optimistic-live"]},"msg":"trade outcome summary"}
-{"level":30,"time":1774211641028,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"xrp_idr","accountId":"test-main-1774211640988","exchangeOrderId":"LIVE-BUY-CANCEL-1","liveResult":{"success":1,"return":{"order_id":"LIVE-BUY-CANCEL-1"}},"msg":"live buy order sent"}
-{"level":30,"time":1774211641030,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"a9cb406d-d724-455d-93ce-17aa407ded7f","orderId":"c19f6e82-2e2c-47e4-ac1e-cc1010d08aef","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"xrp_idr","side":"buy","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":10005,"intendedOrderPrice":10065.03,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"LIVE-BUY-CANCEL-1","slippageVsReferencePricePct":0.6000000000000065,"timestamp":"2026-03-22T20:34:01.029Z","reason":"buy submitted to exchange"},"msg":"execution summary"}
-{"level":40,"time":1774211641032,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"714af97a-e0a8-4a87-a695-772509ed9c37","orderId":"c19f6e82-2e2c-47e4-ac1e-cc1010d08aef","accountId":"test-main-1774211640988","account":"TEST_MAIN","pair":"xrp_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":10005,"intendedOrderPrice":10065.03,"averageFillPrice":10005,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"LIVE-BUY-CANCEL-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:01.031Z","reason":"exchange cancel requested"},"msg":"execution summary"}
-{"level":30,"time":1774211641034,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211641036,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"pattern","workerPath":"/workspace/cukong-markets/dist/workers/patternWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211641038,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"backtest","workerPath":"/workspace/cukong-markets/dist/workers/backtestWorker.js","useTsxCli":false,"msg":"worker thread created"}
+{"level":40,"time":1774645116431,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"506a2416-cb83-4ad9-8f36-29bdc0b48295","orderId":"2d001046-4dc0-48b0-a0ef-ec636fcd0723","accountId":"test-main-1774645116347","account":"TEST_MAIN","pair":"xrp_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":10005,"intendedOrderPrice":10069.032,"averageFillPrice":10005,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"LIVE-BUY-CANCEL-1","slippageVsReferencePricePct":0,"executionPlan":{"pair":"xrp_idr","policyAction":"ENTER","policyAggressiveness":"NORMAL","entryLane":"DEFAULT","allocatedNotionalIdr":150000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"NORMAL","baselineSlippageBps":60,"finalSlippageBps":64,"slippageReasons":["policy_aggressiveness_normal","spread_guard"],"partialFillExpected":false,"partialFillRatio":1,"keepRemainderOpen":false,"cancelAfterTimeoutMs":8000,"marketContext":{"spreadPct":0.09995002498750624,"depthScore":null,"liquidityScore":67.23455672035186,"quoteFlowAccelerationScore":0}},"timestamp":"2026-03-27T20:58:36.429Z","reason":"exchange cancel requested"},"msg":"execution summary"}
 PASS runtime_backend_regression
 
+[probe] tests/last_signals_contract_probe.ts
+PASS last_signals_contract_probe
+
 [probe] tests/live_execution_hardening_probe.ts
-{"level":30,"time":1774211642816,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"515591fe-0ebc-4677-8d00-5d3bb1cb05e8","orderId":"34fee65b-55cd-411a-8a83-76292034da03","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"matic_idr","side":"buy","status":"PARTIALLY_FILLED","accuracy":"PARTIAL_LIVE","referencePrice":null,"intendedOrderPrice":2500,"averageFillPrice":2500,"filledQuantity":25,"filledNotional":62500,"fee":0,"feeAsset":null,"exchangeOrderId":"RECOVER-OPEN-1","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:02.814Z","reason":"persisted before restart; openOrders=open"},"msg":"execution summary"}
-{"level":30,"time":1774211642820,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"doge_idr","accountId":"test-main-1774211642806","exchangeOrderId":"BUY-PARTIAL-1","liveResult":{"success":1,"return":{"order_id":"BUY-PARTIAL-1"}},"msg":"live buy order sent"}
-{"level":30,"time":1774211642822,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"03dd33cf-8d94-42c5-aeb3-1793b7a29a22","orderId":"db6f67ea-98bf-433d-bd1f-701462d73108","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":1000,"intendedOrderPrice":1006,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"BUY-PARTIAL-1","slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:02.821Z","reason":"buy submitted to exchange"},"msg":"execution summary"}
-{"level":30,"time":1774211642831,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"4e24cec7-fea5-474e-b389-9ba64d6b6274","orderId":"db6f67ea-98bf-433d-bd1f-701462d73108","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"PARTIALLY_FILLED","accuracy":"PARTIAL_LIVE","referencePrice":1000,"intendedOrderPrice":1006,"averageFillPrice":1000,"filledQuantity":39.76143141153082,"filledNotional":39761.43141153082,"fee":10,"feeAsset":"idr","exchangeOrderId":"BUY-PARTIAL-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:02.830Z","reason":"finalScore=90.00; pumpProbability=0.900; confidence=0.900; action=ENTER; exchangeOrderId=BUY-PARTIAL-1; getOrder=open"},"msg":"execution summary"}
-{"level":30,"time":1774211642835,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"56bf1504-6074-45c8-a46f-aac3bcd67643","orderId":"db6f67ea-98bf-433d-bd1f-701462d73108","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"FILLED","accuracy":"CONFIRMED_LIVE","referencePrice":1000,"intendedOrderPrice":1006,"averageFillPrice":1006,"filledQuantity":99.40357852882704,"filledNotional":100000,"fee":25,"feeAsset":"idr","exchangeOrderId":"BUY-PARTIAL-1","slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:02.834Z","reason":"finalScore=90.00; pumpProbability=0.900; confidence=0.900; action=ENTER; exchangeOrderId=BUY-PARTIAL-1; getOrder=open; openOrders=open; getOrder=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211642836,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"trx_idr","accountId":"test-main-1774211642806","exchangeOrderId":"BUY-DUP-1","liveResult":{"success":1,"return":{"order_id":"BUY-DUP-1"}},"msg":"live buy order sent"}
-{"level":30,"time":1774211642837,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"ece52d4b-87b8-49ff-bf25-9bdbb89dd1b4","orderId":"1ff618af-1dc2-4702-a9f7-cfa57b4f6dcb","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"trx_idr","side":"buy","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":5000,"intendedOrderPrice":5030,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"BUY-DUP-1","slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:02.837Z","reason":"buy submitted to exchange"},"msg":"execution summary"}
-{"level":30,"time":1774211642840,"app":"cukong-markets","env":"test","name":"cukong-markets","pair":"ada_idr","accountId":"test-main-1774211642806","exchangeOrderId":"SELL-DUP-1","liveResult":{"success":1,"return":{"order_id":"SELL-DUP-1"}},"msg":"live sell order sent"}
-{"level":30,"time":1774211642841,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"c71321ab-0323-41ab-bd97-8a97ab70c1ea","orderId":"08ec1ee6-8ae3-4ccd-87a7-beda13599130","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"ada_idr","side":"sell","status":"SUBMITTED","accuracy":"OPTIMISTIC_LIVE","referencePrice":10000,"intendedOrderPrice":10000,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"exchangeOrderId":"SELL-DUP-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:02.840Z","reason":"AUTO_EXIT submitted"},"msg":"execution summary"}
-{"level":40,"time":1774211642844,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"0f5996bf-beee-4fb1-a80e-579f06a245a7","orderId":"08ec1ee6-8ae3-4ccd-87a7-beda13599130","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"ada_idr","side":"sell","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":10000,"intendedOrderPrice":10000,"averageFillPrice":10000,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"SELL-DUP-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:02.843Z","reason":"exchange cancel requested"},"msg":"execution summary"}
-{"level":40,"time":1774211642844,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"a601e011-c591-4262-828c-6f3376d22b68","orderId":"1ff618af-1dc2-4702-a9f7-cfa57b4f6dcb","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"trx_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":5000,"intendedOrderPrice":5030,"averageFillPrice":5000,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"BUY-DUP-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:02.844Z","reason":"exchange cancel requested"},"msg":"execution summary"}
-{"level":40,"time":1774211642845,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"13788ac1-ecd7-4def-9ca7-ce2a809bc2d1","orderId":"34fee65b-55cd-411a-8a83-76292034da03","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"matic_idr","side":"buy","status":"CANCELED","accuracy":"PARTIAL_LIVE","referencePrice":null,"intendedOrderPrice":2500,"averageFillPrice":2500,"filledQuantity":25,"filledNotional":62500,"fee":0,"feeAsset":null,"exchangeOrderId":"RECOVER-OPEN-1","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:02.845Z","reason":"exchange cancel requested"},"msg":"execution summary"}
-{"level":40,"time":1774211642848,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"e5a89644-b7d4-4adb-8de9-72004ea0b874","orderId":"8bb23853-b685-4364-a297-6bd4dc05496a","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"pepe_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":null,"intendedOrderPrice":100,"averageFillPrice":100,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"STALE-BUY-1","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:02.847Z","reason":"buy remainder canceled after timeout"},"msg":"execution summary"}
-{"level":30,"time":1774211642852,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"38a40e53-af71-444e-a827-103aa09f1b25","orderId":"6fbec3d9-76d7-4926-9a5e-fdac3c7ff496","accountId":"test-main-1774211642806","account":"TEST_MAIN","pair":"xlm_idr","side":"buy","status":"FILLED","accuracy":"CONFIRMED_LIVE","referencePrice":100,"intendedOrderPrice":100,"averageFillPrice":101,"filledQuantity":200,"filledNotional":20200,"fee":5,"feeAsset":"idr","exchangeOrderId":"RECOVER-HISTORY-1","slippageVsReferencePricePct":1,"timestamp":"2026-03-22T20:34:02.851Z","reason":"persisted for orderHistoriesV2 recovery test; orderHistoryV2=filled"},"msg":"execution summary"}
+{"level":40,"time":1774645119665,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"1ee9892e-c4d6-4cdb-abd1-c167a216840f","orderId":"beea2819-d8e1-4e89-a78a-f149ec0b84a7","accountId":"test-main-1774645119606","account":"TEST_MAIN","pair":"ada_idr","side":"sell","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":10000,"intendedOrderPrice":10000,"averageFillPrice":10000,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"SELL-DUP-1","slippageVsReferencePricePct":0,"executionPlan":{"pair":"ada_idr","policyAction":"ENTER","policyAggressiveness":"NORMAL","entryLane":"DEFAULT","allocatedNotionalIdr":200000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"NORMAL","baselineSlippageBps":0,"finalSlippageBps":0,"slippageReasons":["sell_limit_reference"],"partialFillExpected":false,"partialFillRatio":1,"keepRemainderOpen":false,"cancelAfterTimeoutMs":8000,"marketContext":{"spreadPct":null,"depthScore":null,"liquidityScore":null,"quoteFlowAccelerationScore":null}},"timestamp":"2026-03-27T20:58:39.664Z","reason":"exchange cancel requested"},"msg":"execution summary"}
+{"level":40,"time":1774645119671,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"4f7621e7-d9ec-4b5f-ad21-4c72642b3e09","orderId":"1c20e03c-afa4-4ad2-a19b-ef22db1e102d","accountId":"test-main-1774645119606","account":"TEST_MAIN","pair":"trx_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":5000,"intendedOrderPrice":5038.5,"averageFillPrice":5000,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"BUY-DUP-1","slippageVsReferencePricePct":0,"executionPlan":{"pair":"trx_idr","policyAction":"ENTER","policyAggressiveness":"NORMAL","entryLane":"DEFAULT","allocatedNotionalIdr":100000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"NORMAL","baselineSlippageBps":60,"finalSlippageBps":77,"slippageReasons":["policy_aggressiveness_normal","spread_guard","quote_flow_urgency"],"partialFillExpected":false,"partialFillRatio":1,"keepRemainderOpen":false,"cancelAfterTimeoutMs":8000,"marketContext":{"spreadPct":0.3,"depthScore":null,"liquidityScore":90,"quoteFlowAccelerationScore":80}},"timestamp":"2026-03-27T20:58:39.669Z","reason":"exchange cancel requested"},"msg":"execution summary"}
+{"level":40,"time":1774645119675,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"675807ab-a13b-4bc7-98c4-f34add508cea","orderId":"ea55a675-de12-4a2a-8e0f-9d65b4cc5077","accountId":"test-main-1774645119606","account":"TEST_MAIN","pair":"matic_idr","side":"buy","status":"CANCELED","accuracy":"PARTIAL_LIVE","referencePrice":null,"intendedOrderPrice":2500,"averageFillPrice":2500,"filledQuantity":25,"filledNotional":62500,"fee":0,"feeAsset":null,"exchangeOrderId":"RECOVER-OPEN-1","slippageVsReferencePricePct":null,"timestamp":"2026-03-27T20:58:39.673Z","reason":"exchange cancel requested"},"msg":"execution summary"}
+{"level":40,"time":1774645119683,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"262913aa-9da9-4573-b379-0d368c30e224","orderId":"8b8405df-9f5e-4724-aeea-e5fcf961c405","accountId":"test-main-1774645119606","account":"TEST_MAIN","pair":"pepe_idr","side":"buy","status":"CANCELED","accuracy":"CONFIRMED_LIVE","referencePrice":null,"intendedOrderPrice":100,"averageFillPrice":100,"filledQuantity":0,"filledNotional":0,"fee":0,"feeAsset":null,"exchangeOrderId":"STALE-BUY-1","slippageVsReferencePricePct":null,"timestamp":"2026-03-27T20:58:39.682Z","reason":"buy remainder canceled after timeout"},"msg":"execution summary"}
 PASS live_execution_hardening_probe
 
 [probe] tests/execution_summary_failed_probe.ts
-{"level":50,"time":1774211644428,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"88d86077-c58d-4c02-b83d-76993dabc6d8","orderId":"7321cbe6-4b8a-4afe-b7a4-74544108b041","accountId":"test-main-1774211644422","account":"TEST_MAIN","pair":"link_idr","side":"buy","status":"FAILED","accuracy":"CONFIRMED_LIVE","referencePrice":200000,"intendedOrderPrice":201200,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:04.428Z","reason":"exchange buy outage"},"msg":"execution summary"}
-{"level":50,"time":1774211644433,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"4dc268bf-3953-4b9d-9acc-19c983f9b708","orderId":"fed671af-6669-4030-8834-1154479a15ab","accountId":"test-main-1774211644422","account":"TEST_MAIN","pair":"avax_idr","side":"sell","status":"FAILED","accuracy":"CONFIRMED_LIVE","referencePrice":100000,"intendedOrderPrice":100000,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:04.433Z","reason":"exchange sell outage"},"msg":"execution summary"}
+{"level":50,"time":1774645120948,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"48526c39-81b3-48b1-8f0f-e68f25df8678","orderId":"abbf6d0d-559c-4ff6-8c7b-847d356893db","accountId":"test-main-1774645120935","account":"TEST_MAIN","pair":"link_idr","side":"buy","status":"FAILED","accuracy":"CONFIRMED_LIVE","referencePrice":200000,"intendedOrderPrice":201540,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0.77,"executionPlan":{"pair":"link_idr","policyAction":"ENTER","policyAggressiveness":"NORMAL","entryLane":"DEFAULT","allocatedNotionalIdr":100000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"NORMAL","baselineSlippageBps":60,"finalSlippageBps":77,"slippageReasons":["policy_aggressiveness_normal","spread_guard","quote_flow_urgency"],"partialFillExpected":false,"partialFillRatio":1,"keepRemainderOpen":false,"cancelAfterTimeoutMs":8000,"marketContext":{"spreadPct":0.3,"depthScore":null,"liquidityScore":90,"quoteFlowAccelerationScore":80}},"timestamp":"2026-03-27T20:58:40.945Z","reason":"exchange buy outage"},"msg":"execution summary"}
+{"level":50,"time":1774645120956,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"6fa88276-6503-4a43-ac00-800870419c4b","orderId":"28ae5a40-26a5-41c8-8937-2426672d65ea","accountId":"test-main-1774645120935","account":"TEST_MAIN","pair":"avax_idr","side":"sell","status":"FAILED","accuracy":"CONFIRMED_LIVE","referencePrice":100000,"intendedOrderPrice":100000,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0,"executionPlan":{"pair":"avax_idr","policyAction":"ENTER","policyAggressiveness":"NORMAL","entryLane":"DEFAULT","allocatedNotionalIdr":200000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"NORMAL","baselineSlippageBps":0,"finalSlippageBps":0,"slippageReasons":["sell_limit_reference"],"partialFillExpected":false,"partialFillRatio":1,"keepRemainderOpen":false,"cancelAfterTimeoutMs":8000,"marketContext":{"spreadPct":null,"depthScore":null,"liquidityScore":null,"quoteFlowAccelerationScore":null}},"timestamp":"2026-03-27T20:58:40.954Z","reason":"exchange sell outage"},"msg":"execution summary"}
 PASS execution_summary_failed_probe
 
 [probe] tests/buy_entry_price_guard_probe.ts
 PASS buy_entry_price_guard_probe
 
+[probe] tests/scout_enter_route_probe.ts
+scout_enter_route_probe: ok
+
+[probe] tests/add_on_confirm_probe.ts
+add_on_confirm_probe: ok
+
+[probe] tests/add_on_confirm_account_scope_probe.ts
+add_on_confirm_account_scope_probe: ok
+
+[probe] tests/scout_lane_sizing_probe.ts
+scout_lane_sizing_probe: ok
+
+[probe] tests/portfolio_capital_contract_probe.ts
+portfolio_capital_contract_probe: ok
+
+[probe] tests/policy_to_capital_sizing_probe.ts
+policy_to_capital_sizing_probe: ok
+
+[probe] tests/portfolio_exposure_cap_probe.ts
+portfolio_exposure_cap_probe: ok
+
+[probe] tests/portfolio_exposure_truth_persistence_probe.ts
+portfolio_exposure_truth_persistence_probe: ok
+
+[probe] tests/thin_book_cap_probe.ts
+thin_book_cap_probe: ok
+
+[probe] tests/runtime_capital_policy_wiring_probe.ts
+runtime_capital_policy_wiring_probe: ok
+
+[probe] tests/runtime_capital_final_sync_probe.ts
+runtime_capital_final_sync_probe: ok
+
+[probe] tests/execution_uses_final_allocated_notional_probe.ts
+execution_uses_final_allocated_notional_probe: ok
+
+[probe] tests/operator_capital_observability_probe.ts
+operator_capital_observability_probe: ok
+
+[probe] tests/decision_policy_semantic_sync_probe.ts
+decision_policy_semantic_sync_probe: ok
+
+[probe] tests/runtime_policy_wiring_probe.ts
+runtime_policy_wiring_probe: ok
+
+[probe] tests/runtime_policy_observability_probe.ts
+runtime_policy_observability_probe: ok
+
+[probe] tests/runtime_policy_operator_summary_probe.ts
+runtime_policy_operator_summary_probe: ok
+
+[probe] tests/execution_runtime_final_decision_probe.ts
+execution_runtime_final_decision_probe: ok
+
+[probe] tests/batch_e_execution_realism_probe.ts
+{"level":40,"time":1774645145870,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"9ccf4aea-d999-41a8-bcc9-4c9790876a7c","orderId":"a8161f3f-c652-4f64-baac-706960a77ea2","accountId":"test-main-1774645145820","account":"TEST_MAIN","pair":"shib_idr","side":"buy","status":"CANCELED","accuracy":"SIMULATED","referencePrice":1000,"intendedOrderPrice":1011.1000000000001,"averageFillPrice":1011.1000000000001,"filledQuantity":83.07783602017604,"filledNotional":84000,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":1.1100000000000136,"executionPlan":{"pair":"shib_idr","policyAction":"ENTER","policyAggressiveness":"HIGH","entryLane":"SCOUT","allocatedNotionalIdr":200000,"orderStyle":"LIMIT_MARKETABLE","stressMode":"THIN_BOOK_STRESS","baselineSlippageBps":60,"finalSlippageBps":111,"slippageReasons":["policy_aggressiveness_high","entry_lane_scout","spread_guard","quote_flow_urgency","thin_book_stress"],"partialFillExpected":true,"partialFillRatio":0.42,"keepRemainderOpen":true,"cancelAfterTimeoutMs":1,"marketContext":{"spreadPct":0.7,"depthScore":20,"liquidityScore":40,"quoteFlowAccelerationScore":34}},"timestamp":"2026-03-27T20:59:05.868Z","reason":"buy remainder canceled after timeout"},"msg":"execution summary"}
+batch_e_execution_realism_probe: ok
+
+[probe] tests/runtime_selector_prefers_scout_anomaly_probe.ts
+runtime_selector_prefers_scout_anomaly_probe: ok
+
+[probe] tests/runtime_selector_prefers_scout_stealth_probe.ts
+runtime_selector_prefers_scout_stealth_probe: ok
+
+[probe] tests/runtime_selector_prefers_add_on_after_scout_probe.ts
+runtime_selector_prefers_add_on_after_scout_probe: ok
+
+[probe] tests/runtime_selector_pair_priority_probe.ts
+runtime_selector_pair_priority_probe: ok
+
+[probe] tests/runtime_selector_fallback_general_probe.ts
+runtime_selector_fallback_general_probe: ok
+
+[probe] tests/runtime_selector_fallback_pair_priority_probe.ts
+runtime_selector_fallback_pair_priority_probe: ok
+
+[probe] tests/runtime_selector_monitoring_continuity_probe.ts
+runtime_selector_monitoring_continuity_probe: ok
+
+[probe] tests/batch_d_learning_loop_probe.ts
+batch_d_learning_loop_probe: ok
+
+[probe] tests/chasing_entry_rejected_probe.ts
+chasing_entry_rejected_probe: ok
+
+[probe] tests/normal_entry_other_account_same_pair_probe.ts
+normal_entry_other_account_same_pair_probe: ok
+
+[probe] tests/hold_winner_while_pump_healthy_probe.ts
+hold_winner_while_pump_healthy_probe: ok
+
+[probe] tests/dump_exit_trigger_probe.ts
+dump_exit_trigger_probe: ok
+
+[probe] tests/emergency_exit_override_probe.ts
+emergency_exit_override_probe: ok
+
+[probe] tests/runtime_exit_wiring_probe.ts
+runtime_exit_wiring_probe: ok
+
 [probe] tests/position_mark_pnl_correctness_probe.ts
 PASS position_mark_pnl_correctness_probe
 
 [probe] tests/live_submission_uncertain_probe.ts
-{"level":30,"time":1774211649077,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"61ddc710-f05e-4a13-afa4-c353eeee64ab","orderId":"1a45399c-f83b-4440-9c1c-bdbe8cbdca1c","accountId":"test-main-1774211649070","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"SUBMITTED","accuracy":"UNCERTAIN_LIVE","referencePrice":1000,"intendedOrderPrice":1006,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":0.6,"timestamp":"2026-03-22T20:34:09.076Z","reason":"buy submission uncertain after transport error"},"msg":"execution summary"}
 PASS live_submission_uncertain_probe
 
 [probe] tests/cancel_submission_uncertain_probe.ts
 PASS cancel_submission_uncertain_probe
 
 [probe] tests/submission_uncertain_unresolved_probe.ts
-{"level":30,"time":1774211652392,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"7acb34ed-f08e-42e5-8019-07339cec3e7d","orderId":"3aa0b3d8-17d5-41f7-9c25-eb8fc2ce6958","accountId":"test-main-1774211652385","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"SUBMITTED","accuracy":"UNRESOLVED_LIVE","referencePrice":null,"intendedOrderPrice":1000,"averageFillPrice":null,"filledQuantity":0,"filledNotional":0,"fee":null,"feeAsset":null,"slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:12.391Z","reason":"submission uncertain unresolved >30m; OPEN safety-blocking tetap aktif. Operator WAJIB verifikasi exchange order langsung sebelum tindakan lanjutan."},"msg":"execution summary"}
 PASS submission_uncertain_unresolved_probe
 
 [probe] tests/submission_uncertain_bounded_history_probe.ts
 PASS submission_uncertain_bounded_history_probe
 
 [probe] tests/indodax_history_v2_probe.ts
-{"level":30,"time":1774211655693,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"d768da7c-185c-4acc-a1e2-be4e3c0d9d3f","orderId":"c8c05c74-7979-451c-a709-6fb05afac3b8","accountId":"test-main-1774211655679","account":"TEST_MAIN","pair":"xlm_idr","side":"buy","status":"FILLED","accuracy":"CONFIRMED_LIVE","referencePrice":100,"intendedOrderPrice":100,"averageFillPrice":101,"filledQuantity":200,"filledNotional":20200,"fee":5,"feeAsset":"idr","exchangeOrderId":"V2-ORDER-1","slippageVsReferencePricePct":1,"timestamp":"2026-03-22T20:34:15.692Z","reason":"history probe; orderHistoryV2=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211655709,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"bc4b6f4a-e76d-4b33-8675-398c911fe115","orderId":"1a5973bc-895d-4282-9234-68f3b57d5ec6","accountId":"test-main-1774211655698","account":"TEST_MAIN","pair":"ada_idr","side":"buy","status":"FILLED","accuracy":"CONFIRMED_LIVE","referencePrice":10000,"intendedOrderPrice":10000,"averageFillPrice":10000,"filledQuantity":50,"filledNotional":500000,"fee":8,"feeAsset":"idr","exchangeOrderId":"CHUNK-LOOKUP-1","slippageVsReferencePricePct":0,"timestamp":"2026-03-22T20:34:15.708Z","reason":"history probe; orderHistoryV2=filled"},"msg":"execution summary"}
 PASS indodax_history_v2_probe
 
 [probe] tests/app_lifecycle_servers_probe.ts
-{"level":30,"time":1774211657639,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"persistence.bootstrap","msg":"app startup phase started"}
-{"level":30,"time":1774211657645,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"persistence.bootstrap","durationMs":7,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657646,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"runtime.state.load","msg":"app startup phase started"}
-{"level":30,"time":1774211657649,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"runtime.state.load","durationMs":3,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657656,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"worker-pool.start","msg":"app startup phase started"}
-{"level":30,"time":1774211657658,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211657659,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211657661,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"pattern","workerPath":"/workspace/cukong-markets/dist/workers/patternWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211657661,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"backtest","workerPath":"/workspace/cukong-markets/dist/workers/backtestWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211657662,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"worker-pool.start","durationMs":6,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657662,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"app-server.start","msg":"app startup phase started"}
-{"level":30,"time":1774211657679,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3834,"msg":"app server started"}
-{"level":30,"time":1774211657679,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"app-server.start","durationMs":17,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657679,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"callback-server.start","msg":"app startup phase started"}
-{"level":30,"time":1774211657692,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3934,"path":"/indodax/callback","callbackUrl":"https://kangtrade.top/indodax/callback","allowedHost":"kangtrade.top","msg":"indodax callback server started"}
-{"level":30,"time":1774211657692,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"callback-server.start","durationMs":13,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657692,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.recover-live-orders","msg":"app startup phase started"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.recover-live-orders","durationMs":1,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.evaluate-open-positions","msg":"app startup phase started"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.evaluate-open-positions","durationMs":0,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"telegram.start","msg":"app startup phase started"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"telegram.start","durationMs":0,"msg":"app startup phase completed"}
-{"level":30,"time":1774211657693,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"polling.start","msg":"app startup phase completed"}
-{"level":30,"time":1774211657695,"app":"cukong-markets","env":"test","name":"cukong-markets","mode":"ALERT_ONLY","executionMode":"SIMULATED","dryRun":true,"paperTrade":true,"uiOnly":false,"activeAccounts":0,"workers":4,"appPort":3834,"callbackEnabled":true,"callbackPort":3934,"historyMode":"v2_only","marketScanIntervalMs":10000,"runtimePollingIntervalMs":5000,"msg":"cukong-markets app started"}
-{"level":30,"time":1774211657840,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3934,"msg":"indodax callback server stopped"}
-{"level":30,"time":1774211657841,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3834,"msg":"app server stopped"}
-{"level":30,"time":1774211657887,"app":"cukong-markets","env":"test","name":"cukong-markets","msg":"cukong-markets app stopped"}
 PASS app_lifecycle_servers_probe
 
 [probe] tests/bootstrap_observability_probe.ts
 PASS bootstrap_observability_probe
 
 [probe] tests/startup_health_honesty_probe.ts
-{"level":30,"time":1774211661498,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"persistence.bootstrap","msg":"app startup phase started"}
-{"level":30,"time":1774211661506,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"persistence.bootstrap","durationMs":8,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661507,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"runtime.state.load","msg":"app startup phase started"}
-{"level":30,"time":1774211661510,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"runtime.state.load","durationMs":3,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661551,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"worker-pool.start","msg":"app startup phase started"}
-{"level":30,"time":1774211661552,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211661554,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211661555,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"pattern","workerPath":"/workspace/cukong-markets/dist/workers/patternWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211661556,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"backtest","workerPath":"/workspace/cukong-markets/dist/workers/backtestWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211661556,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"worker-pool.start","durationMs":5,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661556,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"app-server.start","msg":"app startup phase started"}
-{"level":30,"time":1774211661572,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3838,"msg":"app server started"}
-{"level":30,"time":1774211661572,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"app-server.start","durationMs":16,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661572,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"callback-server.start","msg":"app startup phase started"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3938,"path":"/indodax/callback","callbackUrl":"https://kangtrade.top/indodax/callback","allowedHost":"kangtrade.top","msg":"indodax callback server started"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"callback-server.start","durationMs":12,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.recover-live-orders","msg":"app startup phase started"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.recover-live-orders","durationMs":0,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.evaluate-open-positions","msg":"app startup phase started"}
-{"level":30,"time":1774211661584,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"execution.evaluate-open-positions","durationMs":0,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661585,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"telegram.start","msg":"app startup phase started"}
-{"level":30,"time":1774211661661,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"telegram.start","durationMs":76,"msg":"app startup phase completed"}
-{"level":30,"time":1774211661663,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-runtime","phase":"polling.start","msg":"app startup phase completed"}
 PASS startup_health_honesty_probe
-{"level":30,"time":1774211661669,"app":"cukong-markets","env":"test","name":"cukong-markets","mode":"ALERT_ONLY","executionMode":"SIMULATED","dryRun":true,"paperTrade":true,"uiOnly":false,"activeAccounts":0,"workers":4,"appPort":3838,"callbackEnabled":true,"callbackPort":3938,"historyMode":"v2_only","marketScanIntervalMs":10000,"runtimePollingIntervalMs":5000,"msg":"cukong-markets app started"}
-{"level":30,"time":1774211661681,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3938,"msg":"indodax callback server stopped"}
-{"level":30,"time":1774211661681,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"app-server","host":"127.0.0.1","port":3838,"msg":"app server stopped"}
-{"level":30,"time":1774211661765,"app":"cukong-markets","env":"test","name":"cukong-markets","msg":"cukong-markets app stopped"}
+
+[probe] tests/startup_hotlist_rehydrate_probe.ts
+PASS startup_hotlist_rehydrate_probe
+
+[probe] tests/startup_corrupted_state_probe.ts
+PASS startup_corrupted_state_probe
+
+[probe] tests/state_atomicity_probe.ts
+PASS state_atomicity_probe
+
+[probe] tests/state_replace_atomicity_probe.ts
+PASS state_replace_atomicity_probe
+
+[probe] tests/scheduler_overlap_guard_probe.ts
+{"level":40,"time":1774645181822,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"light-scheduler","job":"overlap-guard-probe","intervalMs":1000,"msg":"scheduler skipped overlapping run"}
+PASS scheduler_overlap_guard_probe
 
 [probe] tests/callback_reconciliation_probe.ts
-{"level":30,"time":1774211663335,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3940,"path":"/indodax/callback","callbackUrl":"https://kangtrade.top/indodax/callback","allowedHost":"kangtrade.top","msg":"indodax callback server started"}
-{"level":30,"time":1774211663408,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"93e0155b-850b-4fc8-b4ba-e863e3090245","orderId":"8401a92e-d995-40d9-99fd-b23e6fc1ebc7","accountId":"test-main-1774211663314","account":"TEST_MAIN","pair":"matic_idr","side":"buy","status":"FILLED","accuracy":"OPTIMISTIC_LIVE","referencePrice":null,"intendedOrderPrice":2500,"averageFillPrice":2500,"filledQuantity":10,"filledNotional":25000,"fee":0,"feeAsset":null,"exchangeOrderId":"CB-ORDER-ID","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:23.408Z","reason":"getOrder=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211663428,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"25b0721a-3a7a-499c-8b6e-1776bfe17f21","orderId":"f57c9f1a-230b-454f-8bf2-6ce4530e62c8","accountId":"test-main-1774211663314","account":"TEST_MAIN","pair":"xrp_idr","side":"buy","status":"FILLED","accuracy":"OPTIMISTIC_LIVE","referencePrice":null,"intendedOrderPrice":500,"averageFillPrice":500,"filledQuantity":20,"filledNotional":10000,"fee":0,"feeAsset":null,"exchangeOrderId":"CB-ORDERID","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:23.427Z","reason":"getOrder=filled"},"msg":"execution summary"}
-{"level":30,"time":1774211663436,"app":"cukong-markets","env":"test","name":"cukong-markets","kind":"execution_summary","summary":{"id":"e8613570-a303-49ba-94d7-86b601050c49","orderId":"97c9534b-4b57-489c-a84f-7e0d1a108672","accountId":"test-main-1774211663314","account":"TEST_MAIN","pair":"doge_idr","side":"buy","status":"FILLED","accuracy":"OPTIMISTIC_LIVE","referencePrice":null,"intendedOrderPrice":1000,"averageFillPrice":1000,"filledQuantity":30,"filledNotional":30000,"fee":0,"feeAsset":null,"exchangeOrderId":"CB-ID","slippageVsReferencePricePct":null,"timestamp":"2026-03-22T20:34:23.435Z","reason":"getOrder=filled"},"msg":"execution summary"}
 PASS callback_reconciliation_probe
-{"level":30,"time":1774211663448,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3940,"msg":"indodax callback server stopped"}
 
 [probe] tests/callback_security_probe.ts
-{"level":30,"time":1774211665110,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3942,"path":"/indodax/callback","callbackUrl":"https://kangtrade.top/indodax/callback","allowedHost":"kangtrade.top","msg":"indodax callback server started"}
 PASS callback_security_probe
-{"level":30,"time":1774211665229,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"indodax-callback-server","host":"127.0.0.1","port":3942,"msg":"indodax callback server stopped"}
 
 [probe] tests/worker_timeout_probe.ts
-{"level":30,"time":1774211666841,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"feature","workerPath":"/workspace/cukong-markets/dist/workers/featureWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211666843,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"pattern","workerPath":"/workspace/cukong-markets/dist/workers/patternWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":30,"time":1774211666846,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","type":"backtest","workerPath":"/workspace/cukong-markets/dist/workers/backtestWorker.js","useTsxCli":false,"msg":"worker thread created"}
-{"level":50,"time":1774211666853,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","workerId":"feature-5a4d52e4-1eda-496d-a2be-bd11a9a551c4","type":"feature","timeoutMs":1,"msg":"worker task timed out; respawning worker"}
+{"level":50,"time":1774645186260,"app":"cukong-markets","env":"test","name":"cukong-markets","module":"worker-pool","workerId":"feature-157d81a1-5838-43fe-8013-03c217690f69","type":"feature","timeoutMs":1,"msg":"worker task timed out; respawning worker"}
 PASS worker_timeout_probe
 
 [probe] tests/worker_production_runtime_probe.ts
@@ -190,26 +290,4 @@ All probes passed.
 --- stderr ---
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+[json-store] recovered from corrupted json state using fallback {"filePath":"/tmp/cukong-probe-81-caZ9Zt/state/runtime-state.json","quarantineFilePath":"/tmp/cukong-probe-81-caZ9Zt/state/runtime-state.json.corrupt-1774645178457.json","error":"Expected double-quoted property name in JSON at position 21 (line 1 column 22)"}

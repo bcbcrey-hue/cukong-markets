@@ -1,12 +1,25 @@
 {
-  "generated_at_utc": "2026-03-22T20:36:30Z",
-  "source_of_truth": "Current tracked repository source files and literal command execution artifacts stored in test_reports/*.txt",
+  "generated_at_utc": "2026-03-27T21:01:30Z",
+  "batch_scope": "Batch F — Validation & Shadow Live for New Brain",
+  "source_of_truth": "Repository source + fresh command artifacts in test_reports/*.txt",
   "final_status": {
+    "lint": {
+      "command": "npm run lint",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/lint_final.txt"
+    },
     "typecheck:probes": {
       "command": "npm run typecheck:probes",
       "exit_code": 0,
       "status": "PASS",
       "evidence": "test_reports/typecheck_probes_final.txt"
+    },
+    "build": {
+      "command": "npm run build",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/build_final.txt"
     },
     "probe:list": {
       "command": "npm run probe:list",
@@ -31,58 +44,36 @@
       "exit_code": 0,
       "status": "PASS",
       "evidence": "test_reports/verify_final.txt"
+    },
+    "runtime:contract": {
+      "command": "npm run runtime:contract",
+      "exit_code": 0,
+      "status": "PASS",
+      "evidence": "test_reports/runtime_contract_final.txt",
+      "artifact": "test_reports/runtime_contract_batch_f_current.json"
     }
   },
-  "non_blocking_environment_warning": {
+  "probe_registry_snapshot": {
+    "official_probes": 88,
+    "manual_probes": 1,
+    "manual_shadow_live_probe": "tests/real_exchange_shadow_run_probe.ts"
+  },
+  "known_environment_warning": {
     "message": "npm warn Unknown env config \"http-proxy\"",
-    "observed_in": [
-      "test_reports/npm_ci_final.txt",
-      "test_reports/typecheck_probes_final.txt",
-      "test_reports/probe_list_final.txt",
-      "test_reports/probe_audit_final.txt",
-      "test_reports/test_probes_final.txt",
-      "test_reports/verify_final.txt"
-    ],
-    "decision": "Documented as environment-level warning; not hidden; command exit codes remain 0."
+    "classification": "runtime/network/environment blocker (non-blocking for source verification)",
+    "impact": "No command failure observed from this warning."
   },
-  "files_opened_directly_final_pass": {
-    "core_verification": [
-      "package.json",
-      "package-lock.json",
-      "tsconfig.json",
-      "tsconfig.probes.json",
-      "scripts/run-probes.mjs"
+  "proof_boundary": {
+    "provable_from_source_and_local_commands": [
+      "Decision policy/risk/capital/execution wiring + observability/journal probes",
+      "Probe registry completeness and official-vs-manual shadow-live split",
+      "CI workflow definitions, verify-runtime-contract job, and combined status publisher in source",
+      "Runtime contract artifact generation from canonical env module"
     ],
-    "tests": "tests/*.ts (24 files)",
-    "reports": "test_reports/* (historical iteration_1..iteration_16 + txt artifacts)",
-    "docs_supporting": [
-      "README.md",
-      ".env.example",
-      "REFACTOR_LOG.md",
-      "SESSION_CONTEXT_NEXT.md",
-      "memory/PRD.md",
-      "scripts/render-nginx-conf.mjs",
-      "deploy/nginx/cukong-markets.nginx.conf",
-      "deploy/nginx/cukong-markets.nginx.conf.template",
-      "src/config/env.ts",
-      "src/services/workerPoolService.ts"
+    "requires_external_github_or_live_runtime": [
+      "Actual check run status on latest remote head",
+      "Branch protection/ruleset required check enforcement",
+      "Real exchange/account success for strict shadow-live checks"
     ]
-  },
-  "docs_output_mismatch_found": [
-    "No blocking mismatch found in README claims after literal npm run verify PASS was captured.",
-    "Historical reports still contain /app paths and yarn commands from prior sessions; kept as historical snapshots and not treated as final proof."
-  ],
-  "files_changed_for_this_finalization": [
-    "test_reports/npm_ci_final.txt",
-    "test_reports/typecheck_probes_final.txt",
-    "test_reports/probe_list_final.txt",
-    "test_reports/probe_audit_final.txt",
-    "test_reports/test_probes_final.txt",
-    "test_reports/verify_final.txt",
-    "test_reports/final_verification_sync.json",
-    "README.md",
-    "REFACTOR_LOG.md",
-    "SESSION_CONTEXT_NEXT.md"
-  ],
-  "historical_files_kept_unchanged": "test_reports/iteration_1.json .. test_reports/iteration_16.json retained as historical snapshots"
+  }
 }

@@ -1,0 +1,11 @@
+timestamp_utc: 2026-03-27T20:57:35Z
+command: npm run build
+exit_code: 0
+--- stdout ---
+
+> cukong-markets@1.0.0 build
+> tsc -p tsconfig.json
+
+
+--- stderr ---
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
