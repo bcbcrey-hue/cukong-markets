@@ -46,7 +46,7 @@ function opportunity(pair: string, pred: FutureTrendingPrediction): OpportunityA
     reasons: ['probe'],
     warnings: [],
     featureBreakdown: [],
-    recommendedAction: 'ENTER',
+    recommendedAction: 'SCOUT_ENTER',
     riskContext: [],
     historicalMatchSummary: 'probe',
     referencePrice: 100,
@@ -77,7 +77,14 @@ async function main() {
   );
 
   assert.equal(strongDecision.action, 'ENTER');
-  assert.equal(weakDecision.action, 'WAIT', 'prediction weak harus bisa menurunkan keputusan policy');
+  assert.equal(weakDecision.action, 'ENTER', 'lane runtime nyata SCOUT tetap ENTER saat semua guardrail sehat');
+  assert.equal(strongDecision.entryLane, 'SCOUT');
+  assert.equal(weakDecision.entryLane, 'SCOUT');
+  assert.ok(
+    strongDecision.sizeMultiplier > weakDecision.sizeMultiplier,
+    'prediction kuat vs lemah harus membedakan sizeMultiplier di lane runtime yang reachable',
+  );
+  assert.equal(weakDecision.aggressiveness, 'LOW', 'prediction lemah harus menurunkan aggressiveness secara nyata');
 
   const riskBlocked = evaluateOpportunityPolicyV1(
     opportunity('risk_blocked_pred_idr', prediction({ strength: 'STRONG', direction: 'UP' })),

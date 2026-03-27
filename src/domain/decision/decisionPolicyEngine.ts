@@ -177,15 +177,6 @@ export function evaluateDecisionPolicyV1(input: DecisionPolicyInput): DecisionPo
     return skip(['Confidence belum cukup'], entryLane);
   }
 
-  if (
-    input.prediction?.strength === 'WEAK'
-    && input.source === 'OPPORTUNITY'
-    && input.recommendedAction === 'ENTER'
-    && (input.prediction.confidence < input.minConfidence + 0.08 || input.score < input.minScoreToBuy + 6)
-  ) {
-    return wait(['Prediction Batch B lemah: minta kualitas setup lebih tinggi'], entryLane);
-  }
-
   if (input.source === 'OPPORTUNITY') {
     if (input.recommendedAction === 'AVOID') {
       return skip(['Opportunity hint memberi sinyal avoid'], entryLane);

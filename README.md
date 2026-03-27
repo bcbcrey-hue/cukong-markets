@@ -133,7 +133,8 @@ Wiring runtime yang sudah nyata:
 2. `prediction` masuk ke `OpportunityAssessment` dan memberi pengaruh konservatif ke `finalScore` (bukan override guardrail).
 3. `DecisionPolicyEngine` menerima `prediction` via `DecisionPolicyInput`:
    - prediction kuat sehat dapat membantu sizing/aggressiveness secara terbatas,
-   - prediction lemah dapat menurunkan keputusan (contoh: `WAIT`),
+   - prediction lemah pada lane runtime nyata (contoh `SCOUT_ENTER`) menurunkan size/aggressiveness secara defensif,
+   - prediction `strong-down` dapat menurunkan keputusan menjadi `WAIT` saat lane entry sudah terbuka,
    - risk/regime block tetap hard stop final.
 4. `app.ts` runtime read-model policy kini ikut memuat ringkasan prediction context untuk observability operator.
 

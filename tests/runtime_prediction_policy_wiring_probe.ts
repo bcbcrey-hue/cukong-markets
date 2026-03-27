@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { buildRuntimeEntryCandidates, selectRuntimeEntryCandidate } from '../src/app';
 import type { FutureTrendingPrediction, OpportunityAssessment, StoredAccount } from '../src/core/types';
 import { RiskEngine } from '../src/domain/trading/riskEngine';
-import { createDefaultSettings } from '../src/services/persistenceService';
+import { ReportService } from '../src/services/reportService';
+import { createDefaultHealth, createDefaultSettings } from '../src/services/persistenceService';
 
 function prediction(overrides: Partial<FutureTrendingPrediction>): FutureTrendingPrediction {
   return {
@@ -47,7 +48,7 @@ function opportunity(pair: string, pred: FutureTrendingPrediction, overrides: Pa
     reasons: ['probe'],
     warnings: [],
     featureBreakdown: [],
-    recommendedAction: 'ENTER',
+    recommendedAction: 'SCOUT_ENTER',
     riskContext: [],
     historicalMatchSummary: 'probe',
     referencePrice: 100,
@@ -102,14 +103,54 @@ async function main() {
   const weakCandidate = runtimeCandidates.find((item) => item.pair === 'weak_idr');
   const blockedCandidate = runtimeCandidates.find((item) => item.pair === 'blocked_idr');
 
-  assert.notEqual(strongCandidate?.policyDecision.action, 'WAIT', 'prediction kuat tidak boleh diperlakukan setara prediction lemah');
-  assert.notEqual(weakCandidate?.policyDecision.action, 'ENTER', 'prediction lemah tidak boleh diperlakukan setara strong');
+  assert.equal(strongCandidate?.policyDecision.action, 'ENTER', 'lane SCOUT runtime sehat tetap ENTER');
+  assert.equal(weakCandidate?.policyDecision.action, 'ENTER', 'prediction lemah tidak menggantikan policy menjadi hard skip');
+  assert.ok(
+    (strongCandidate?.policyDecision.sizeMultiplier ?? 0) > (weakCandidate?.policyDecision.sizeMultiplier ?? 0),
+    'prediction kuat vs lemah harus memberi sizing berbeda di runtime flow nyata',
+  );
+  assert.equal(
+    weakCandidate?.policyDecision.aggressiveness,
+    'LOW',
+    'prediction lemah wajib menurunkan aggressiveness pada lane runtime nyata',
+  );
   assert.equal(blockedCandidate?.policyDecision.action, 'SKIP', 'risk block tetap hard stop di runtime flow');
 
   const selected = selectRuntimeEntryCandidate(runtimeCandidates);
   if (selected) {
     assert.equal(selected.pair, 'strong_idr', 'jika ada kandidat ENTER, runtime selector harus mengikuti policy final');
   }
+
+  const report = new ReportService();
+  const status = report.statusText({
+    health: createDefaultHealth(),
+    activeAccounts: 1,
+    runtimePolicyDecision: {
+      pair: strong.pair,
+      action: strongCandidate?.policyDecision.action ?? 'WAIT',
+      reasons: strongCandidate?.policyDecision.reasons ?? [],
+      entryLane: strongCandidate?.policyDecision.entryLane ?? 'SCOUT',
+      sizeMultiplier: strongCandidate?.policyDecision.sizeMultiplier ?? 0,
+      aggressiveness: strongCandidate?.policyDecision.aggressiveness ?? 'LOW',
+      riskAllowed: strongCandidate?.riskCheckResult.allowed ?? false,
+      riskReasons: strongCandidate?.riskCheckResult.reasons ?? [],
+      predictionContext: strong.prediction
+        ? {
+          target: strong.prediction.target,
+          horizonLabel: strong.prediction.horizonLabel,
+          strength: strong.prediction.strength,
+          confidence: strong.prediction.confidence,
+          calibrationTag: strong.prediction.calibrationTag,
+          direction: strong.prediction.direction,
+        }
+        : undefined,
+      updatedAt: new Date().toISOString(),
+    },
+  });
+  assert.ok(
+    status.includes('runtimePolicyPrediction target=TREND_DIRECTIONAL_MOVE'),
+    'status operator-facing harus menampilkan prediction context runtime',
+  );
 
   console.log('runtime_prediction_policy_wiring_probe: ok');
 }
