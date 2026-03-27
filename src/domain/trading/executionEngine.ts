@@ -15,6 +15,7 @@ import type {
   TradingMode,
   RiskCheckResult,
   RuntimeEntryCandidate,
+  RuntimePolicyReadModel,
 } from '../../core/types';
 import { getIndodaxHistoryMode } from '../../config/env';
 import { errorMessage, toError } from '../../core/error-utils';
@@ -94,6 +95,86 @@ interface ShadowRunLifecycleState {
     policyVsHintConsistency: ShadowRunTelegramSummary['policyVsHintConsistency'];
     policyGuardrailEnforced: ShadowRunTelegramSummary['policyGuardrailEnforced'];
   };
+}
+
+interface ShadowPolicyValidationInput {
+  account: string;
+  runtimePolicy: RuntimePolicyReadModel | null;
+  opportunities: OpportunityAssessment[];
+}
+
+export function buildShadowPolicyValidationChecks(
+  input: ShadowPolicyValidationInput,
+): ShadowRunCheckResult[] {
+  const policy = input.runtimePolicy;
+  const pairMatchedOpportunity = policy
+    ? input.opportunities.find((item) => item.pair === policy.pair) ?? null
+    : null;
+
+  const policyRuntimeDecisionPass = Boolean(policy && policy.reasons.length > 0);
+  const policyRuntimeDecision: ShadowRunCheckResult = {
+    check: 'policy_runtime_decision',
+    endpoint: 'runtime read-model lastRuntimePolicyDecision',
+    account: input.account,
+    summary: policy
+      ? {
+        pair: policy.pair,
+        action: policy.action,
+        entryLane: policy.entryLane,
+        aggressiveness: policy.aggressiveness,
+        reasonCount: policy.reasons.length,
+        riskAllowed: policy.riskAllowed,
+      }
+      : { available: false },
+    pass: policyRuntimeDecisionPass,
+    error: policyRuntimeDecisionPass
+      ? undefined
+      : { message: 'Runtime policy decision belum tersedia dari jalur runtime nyata' },
+  };
+
+  const policyVsHintPass = Boolean(policy && pairMatchedOpportunity);
+  const policyVsHint: ShadowRunCheckResult = {
+    check: 'policy_vs_hint_consistency',
+    endpoint: 'runtime opportunity recommendedAction vs final policy action',
+    account: input.account,
+    summary: {
+      pairPolicy: policy?.pair ?? null,
+      pairHint: pairMatchedOpportunity?.pair ?? null,
+      hintAction: pairMatchedOpportunity?.recommendedAction ?? null,
+      finalAction: policy?.action ?? null,
+      finalReasons: policy?.reasons ?? [],
+      samePair: Boolean(policy && pairMatchedOpportunity && policy.pair === pairMatchedOpportunity.pair),
+    },
+    pass: policyVsHintPass,
+    error: policyVsHintPass
+      ? undefined
+      : policy
+        ? { message: `Bukti hint vs final policy pair=${policy.pair} tidak ditemukan pada opportunity runtime` }
+        : { message: 'Runtime policy decision belum tersedia untuk dibandingkan dengan hint action' },
+  };
+
+  const policyGuardrailPass = Boolean(policy && (policy.riskAllowed || policy.action !== 'ENTER'));
+  const policyGuardrail: ShadowRunCheckResult = {
+    check: 'policy_guardrail_enforced',
+    endpoint: 'runtime policy riskAllowed guardrail',
+    account: input.account,
+    summary: policy
+      ? {
+        pair: policy.pair,
+        action: policy.action,
+        riskAllowed: policy.riskAllowed,
+        riskReasons: policy.riskReasons,
+      }
+      : { available: false },
+    pass: policyGuardrailPass,
+    error: policyGuardrailPass
+      ? undefined
+      : policy
+        ? { message: 'Guardrail gagal: final policy ENTER muncul saat riskAllowed=false' }
+        : { message: 'Bukti guardrail policy belum tersedia dari runtime read-model' },
+  };
+
+  return [policyRuntimeDecision, policyVsHint, policyGuardrail];
 }
 
 export class ExecutionEngine {
@@ -2550,7 +2631,7 @@ export class ExecutionEngine {
       const privateApi = this.indodax.forAccount(account);
       const checks: ShadowRunCheckResult[] = [publicCheck];
       const runtimePolicy = this.state.get().lastRuntimePolicyDecision;
-      const topOpportunity = this.state.get().lastOpportunities[0] ?? null;
+      const runtimeOpportunities = this.state.get().lastOpportunities;
 
       try {
         const info = await privateApi.getInfo<{ balance?: Record<string, string | number> }>({
@@ -2581,70 +2662,10 @@ export class ExecutionEngine {
       }
 
       checks.push(
-        this.buildShadowCheck({
-          check: 'policy_runtime_decision',
-          endpoint: 'runtime read-model lastRuntimePolicyDecision',
+        ...buildShadowPolicyValidationChecks({
           account: accountLabel,
-          summary: runtimePolicy
-            ? {
-              pair: runtimePolicy.pair,
-              action: runtimePolicy.action,
-              entryLane: runtimePolicy.entryLane,
-              aggressiveness: runtimePolicy.aggressiveness,
-              reasonCount: runtimePolicy.reasons.length,
-              riskAllowed: runtimePolicy.riskAllowed,
-            }
-            : { available: false },
-          pass: Boolean(runtimePolicy && runtimePolicy.reasons.length > 0),
-          error:
-            runtimePolicy && runtimePolicy.reasons.length > 0
-              ? undefined
-              : { message: 'Runtime policy decision belum tersedia dari jalur runtime nyata' },
-        }),
-      );
-
-      checks.push(
-        this.buildShadowCheck({
-          check: 'policy_vs_hint_consistency',
-          endpoint: 'runtime opportunity recommendedAction vs final policy action',
-          account: accountLabel,
-          summary:
-            runtimePolicy && topOpportunity
-              ? {
-                pairPolicy: runtimePolicy.pair,
-                pairHint: topOpportunity.pair,
-                hintAction: topOpportunity.recommendedAction,
-                finalAction: runtimePolicy.action,
-                finalReasons: runtimePolicy.reasons,
-                samePair: runtimePolicy.pair === topOpportunity.pair,
-              }
-              : { available: false },
-          pass: Boolean(runtimePolicy && topOpportunity),
-          error:
-            runtimePolicy && topOpportunity
-              ? undefined
-              : { message: 'Bukti perbandingan hint vs final policy belum tersedia' },
-        }),
-      );
-
-      checks.push(
-        this.buildShadowCheck({
-          check: 'policy_guardrail_enforced',
-          endpoint: 'runtime policy riskAllowed guardrail',
-          account: accountLabel,
-          summary: runtimePolicy
-            ? {
-              pair: runtimePolicy.pair,
-              action: runtimePolicy.action,
-              riskAllowed: runtimePolicy.riskAllowed,
-              riskReasons: runtimePolicy.riskReasons,
-            }
-            : { available: false },
-          pass: runtimePolicy ? runtimePolicy.riskAllowed || runtimePolicy.action !== 'ENTER' : false,
-          error:
-            runtimePolicy
-              ? undefined
-              : { message: 'Bukti guardrail policy belum tersedia dari runtime read-model' },
+          runtimePolicy,
+          opportunities: runtimeOpportunities,
         }),
       );
 

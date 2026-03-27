@@ -66,6 +66,7 @@ const officialProbes = [
   'tests/execution_runtime_final_decision_probe.ts',
   'tests/batch_e_execution_realism_probe.ts',
   'tests/batch_f_new_brain_validation_probe.ts',
+  'tests/shadow_policy_checks_semantic_probe.ts',
   'tests/runtime_selector_prefers_scout_anomaly_probe.ts',
   'tests/runtime_selector_prefers_scout_stealth_probe.ts',
   'tests/runtime_selector_prefers_add_on_after_scout_probe.ts',
