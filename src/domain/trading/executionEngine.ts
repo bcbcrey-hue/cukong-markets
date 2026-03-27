@@ -14,6 +14,7 @@ import type {
   SummaryAccuracy,
   TradingMode,
   RiskCheckResult,
+  RuntimeEntryCandidate,
 } from '../../core/types';
 import { getIndodaxHistoryMode } from '../../config/env';
 import { errorMessage, toError } from '../../core/error-utils';
@@ -1578,12 +1579,17 @@ export class ExecutionEngine {
       : evaluateSignalPolicyV1(candidate, settings, riskCheckResult);
   }
 
-  async attemptAutoBuy(signal: ExecutionCandidate): Promise<string> {
+  async attemptAutoBuy(runtimeCandidate: RuntimeEntryCandidate): Promise<string> {
     const settings = this.settings.get();
-    const preRiskDecision = this.decideAutoExecution(signal);
+    const preRiskDecision = runtimeCandidate.policyDecision;
+    const signal = runtimeCandidate.opportunity;
 
     if (preRiskDecision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
       return `skip auto-buy ${signal.pair}: ${preRiskDecision.reasons.join('; ')}`;
+    }
+
+    if (!runtimeCandidate.riskCheckResult.allowed) {
+      return `skip auto-buy ${signal.pair}: ${runtimeCandidate.riskCheckResult.reasons.join('; ')}`;
     }
 
     const account = this.accounts.getDefault();

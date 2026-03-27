@@ -35,7 +35,14 @@ import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
 import { SummaryService } from './services/summaryService';
 import { AppServer } from './server/appServer';
-import type { BotSettings, DecisionPolicyOutput, OpportunityAssessment, PairClass } from './core/types';
+import type {
+  BotSettings,
+  OpportunityAssessment,
+  PairClass,
+  PositionRecord,
+  RuntimeEntryCandidate,
+  StoredAccount,
+} from './core/types';
 
 export interface AppRuntime {
   start(): Promise<void>;
@@ -66,45 +73,104 @@ function sortByPairClassThenScore(
   return b.finalScore - a.finalScore;
 }
 
-function buildRuntimeDecision(
-  candidate: OpportunityAssessment,
+function runtimeLanePriority(candidate: RuntimeEntryCandidate): number {
+  if (candidate.policyDecision.entryLane === 'SCOUT' && candidate.opportunity.discoveryBucket === 'ANOMALY') {
+    return 0;
+  }
+  if (candidate.policyDecision.entryLane === 'SCOUT' && candidate.opportunity.discoveryBucket === 'STEALTH') {
+    return 1;
+  }
+  if (candidate.policyDecision.entryLane === 'ADD_ON_CONFIRM') {
+    return 2;
+  }
+  return 3;
+}
+
+function sortRuntimeCandidates(
+  a: RuntimeEntryCandidate,
+  b: RuntimeEntryCandidate,
+): number {
+  const laneDelta = runtimeLanePriority(a) - runtimeLanePriority(b);
+  if (laneDelta !== 0) {
+    return laneDelta;
+  }
+
+  return sortByPairClassThenScore(a.opportunity, b.opportunity);
+}
+
+export function buildRuntimeEntryCandidates(
+  opportunities: OpportunityAssessment[],
   settings: BotSettings,
-): DecisionPolicyOutput {
-  return evaluateOpportunityPolicyV1(candidate, settings);
+  riskEngine: RiskEngine,
+  defaultAccount: StoredAccount,
+  accountOpenPositions: PositionRecord[],
+  pairCooldowns: Record<string, number>,
+): RuntimeEntryCandidate[] {
+  return opportunities.map((opportunity) => {
+    const preRiskDecision = evaluateOpportunityPolicyV1(opportunity, settings);
+    const riskCheckResult = riskEngine.checkCanEnter({
+      account: defaultAccount,
+      settings,
+      signal: opportunity,
+      openPositions: accountOpenPositions,
+      amountIdr: settings.risk.maxPositionSizeIdr,
+      cooldownUntil: pairCooldowns[opportunity.pair] ?? null,
+      policyDecision: preRiskDecision,
+    });
+    const policyDecision = evaluateOpportunityPolicyV1(opportunity, settings, riskCheckResult);
+
+    return {
+      pair: opportunity.pair,
+      opportunity,
+      riskCheckResult,
+      policyDecision,
+      policyReasons: policyDecision.reasons,
+      sizeMultiplier: policyDecision.sizeMultiplier,
+      aggressiveness: policyDecision.aggressiveness,
+    };
+  });
 }
 
 export function selectRuntimeEntryCandidate(
+  candidates: RuntimeEntryCandidate[],
+): RuntimeEntryCandidate | undefined;
+export function selectRuntimeEntryCandidate(
   opportunities: OpportunityAssessment[],
   settings: BotSettings,
-): OpportunityAssessment | undefined {
-  const eligible = opportunities
-    .map((item) => ({ item, decision: buildRuntimeDecision(item, settings) }))
-    .filter(({ decision }) => decision.action === 'ENTER');
-  const scoutAnomaly = eligible
-    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'ANOMALY')
-    .map(({ item }) => item)
-    .sort(sortByPairClassThenScore);
-  if (scoutAnomaly[0]) {
-    return scoutAnomaly[0];
+): OpportunityAssessment | undefined;
+export function selectRuntimeEntryCandidate(
+  candidatesOrOpportunities: RuntimeEntryCandidate[] | OpportunityAssessment[],
+  settings?: BotSettings,
+): RuntimeEntryCandidate | OpportunityAssessment | undefined {
+  const runtimeCandidates = settings
+    ? (candidatesOrOpportunities as OpportunityAssessment[]).map((opportunity) => {
+      const policyDecision = evaluateOpportunityPolicyV1(opportunity, settings);
+      return {
+        pair: opportunity.pair,
+        opportunity,
+        riskCheckResult: {
+          allowed: true,
+          reasons: [],
+          warnings: [],
+          entryLane: policyDecision.entryLane,
+        },
+        policyDecision,
+        policyReasons: policyDecision.reasons,
+        sizeMultiplier: policyDecision.sizeMultiplier,
+        aggressiveness: policyDecision.aggressiveness,
+      } satisfies RuntimeEntryCandidate;
+    })
+    : (candidatesOrOpportunities as RuntimeEntryCandidate[]);
+
+  const selected = runtimeCandidates
+    .filter((candidate) => candidate.policyDecision.action === 'ENTER' && candidate.riskCheckResult.allowed)
+    .sort(sortRuntimeCandidates)[0];
+
+  if (!selected) {
+    return undefined;
   }
 
-  const scoutStealth = eligible
-    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'STEALTH')
-    .map(({ item }) => item)
-    .sort(sortByPairClassThenScore);
-  if (scoutStealth[0]) {
-    return scoutStealth[0];
-  }
-
-  const addOn = eligible
-    .filter(({ decision }) => decision.entryLane === 'ADD_ON_CONFIRM')
-    .map(({ item }) => item)
-    .sort(sortByPairClassThenScore);
-  if (addOn[0]) {
-    return addOn[0];
-  }
-
-  return eligible.map(({ item }) => item).sort(sortByPairClassThenScore)[0];
+  return settings ? selected.opportunity : selected;
 }
 
 async function runStartupPhase<T>(phase: string, task: () => Promise<T>): Promise<T> {
@@ -413,7 +479,18 @@ export async function createApp(): Promise<AppRuntime> {
       await state.markPairSeen(snapshot.pair);
     }
 
-    const selectedRuntimeCandidate = selectRuntimeEntryCandidate(opportunities, currentSettings);
+    const defaultAccount = accountRegistry.getDefault();
+    const runtimeCandidates = defaultAccount
+      ? buildRuntimeEntryCandidates(
+        opportunities,
+        currentSettings,
+        riskEngine,
+        defaultAccount,
+        positionManager.listOpen().filter((position) => position.accountId === defaultAccount.id),
+        state.get().pairCooldowns,
+      )
+      : [];
+    const selectedRuntimeCandidate = selectRuntimeEntryCandidate(runtimeCandidates);
 
     if (selectedRuntimeCandidate) {
       await state.markSignal(selectedRuntimeCandidate.pair);
@@ -431,7 +508,8 @@ export async function createApp(): Promise<AppRuntime> {
 
         await journal.error('AUTO_BUY_FAILED', message, {
           pair: selectedRuntimeCandidate.pair,
-          action: selectedRuntimeCandidate.recommendedAction,
+          action: selectedRuntimeCandidate.policyDecision.action,
+          entryLane: selectedRuntimeCandidate.policyDecision.entryLane,
         });
       }
     }
