@@ -1,0 +1,10 @@
+
+> cukong-markets@1.0.0 verify:shadow-live
+> RUN_REAL_EXCHANGE_SHADOW=1 npm run probe:shadow-live
+
+
+> cukong-markets@1.0.0 probe:shadow-live
+> tsx tests/real_exchange_shadow_run_probe.ts
+
+{"level":30,"time":1774638803768,"app":"cukong-markets","env":"development","name":"cukong-markets","module":"request-pacer","scope":"indodax-public","lane":"market_data_scan","label":"tickers","priority":41,"holdMs":1,"queueDepth":0,"totalQueueDepth":0,"msg":"request released after pacing hold"}
+{"level":40,"time":1774638803920,"app":"cukong-markets","env":"development","name":"cukong-markets","label":"tickers","attempt":1,"error":{"name":"TypeError","message":"fetch failed","stack":"TypeError: fetch failed\n    at node:internal/deps/undici/undici:14900:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async RequestPacer.runLoop (/workspace/cukong-markets/src/integrations/indodax/requestPacer.ts:230:24)","cause":{"name":"AggregateError","message":"","stack":"AggregateError [ENETUNREACH]: \n    at internalConnectMultiple (node:net:1134:18)\n    at internalConnectMultiple (node:net:1210:5)\n    at internalConnectMultiple (node:net:1210:5)\n    at internalConnectMultiple (node:net:1210:5)\n    at internalConnectMultiple (node:net:1210:5)\n    at defaultTriggerAsyncIdScope (node:internal/async_hooks:472:18)\n    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1552:7)\n    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:134:8)","code":"ENETUNREACH"}},"msg":"retrying public api request after transport failure"}
