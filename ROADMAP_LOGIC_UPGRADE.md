@@ -85,7 +85,7 @@ Hasil yang dicari:
 
 * fill realism lebih baik,
 * partial fill realism,
-* queue/slippage behaviour lebih masuk akal,default slipage tetap 60 [agar cepat fill ketika dapat momentum],market rasa order
+*queue/slippage behaviour lebih masuk akal dengan pendekatan dinamis: slippage tidak bersifat tetap, namun dapat meningkat hingga 150 bps sebagai upper bound pada kondisi momentum untuk memastikan fill cepat menggunakan limit order yang bersifat marketable (limit rasa market), sementara pada kondisi normal tetap menjaga efisiensi harga dan menghormati slippage yang diatur oleh operator melalui UI Telegram, tanpa default tetap.
 * stress handling saat likuiditas drop.
 
 ### Batch Baru F — Validation \& Shadow Live for New Brain
