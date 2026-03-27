@@ -238,6 +238,8 @@ export class PairHistoryStore {
       anomalyCount: anomalies.length,
       recentWinRate,
       recentFalseBreakRate,
+      outcomeGrounding: hasOutcomeGroundedMetrics ? 'OUTCOME_GROUNDED' : 'PROXY_FALLBACK',
+      outcomeSampleSize: hasOutcomeGroundedMetrics ? outcomeSummary.eligibleCount : opportunities.length,
       regime,
       patternMatches,
       contextNotes,
