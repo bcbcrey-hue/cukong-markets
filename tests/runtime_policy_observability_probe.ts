@@ -11,6 +11,7 @@ import {
 import type { OpportunityAssessment, StoredAccount } from '../src/core/types';
 import { AccountRegistry } from '../src/domain/accounts/accountRegistry';
 import { AccountStore } from '../src/domain/accounts/accountStore';
+import { PortfolioCapitalEngine } from '../src/domain/portfolio/portfolioCapitalEngine';
 import { ExecutionEngine } from '../src/domain/trading/executionEngine';
 import { OrderManager } from '../src/domain/trading/orderManager';
 import { PositionManager } from '../src/domain/trading/positionManager';
@@ -120,8 +121,10 @@ async function main() {
     opportunities,
     runtimeSettings,
     new RiskEngine(),
+    new PortfolioCapitalEngine(),
     defaultAccount,
     [],
+    opportunities,
     {},
   );
 

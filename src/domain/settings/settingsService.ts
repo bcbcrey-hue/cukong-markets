@@ -48,6 +48,18 @@ export class SettingsService {
         ...defaults.risk,
         ...input.risk,
       },
+      portfolio: {
+        ...defaults.portfolio,
+        ...input.portfolio,
+        maxExposurePerPairClassPct: {
+          ...defaults.portfolio.maxExposurePerPairClassPct,
+          ...input.portfolio?.maxExposurePerPairClassPct,
+        },
+        maxExposurePerDiscoveryBucketPct: {
+          ...defaults.portfolio.maxExposurePerDiscoveryBucketPct,
+          ...input.portfolio?.maxExposurePerDiscoveryBucketPct,
+        },
+      },
       strategy: {
         ...defaults.strategy,
         ...input.strategy,

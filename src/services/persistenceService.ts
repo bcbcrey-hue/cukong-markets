@@ -73,6 +73,24 @@ export function createDefaultSettings(): BotSettings {
       stopLossPct: 1.5,
       trailingStopPct: 1,
     },
+    portfolio: {
+      baseEntryCapitalIdr: env.portfolioBaseEntryCapitalIdr,
+      maxTotalDeployedCapitalIdr: env.portfolioMaxTotalDeployedCapitalIdr,
+      riskBudgetPerPositionPct: env.portfolioRiskBudgetPerPositionPct,
+      maxExposurePerPairClassPct: {
+        MAJOR: env.portfolioMaxExposureMajorPct,
+        MID: env.portfolioMaxExposureMidPct,
+        MICRO: env.portfolioMaxExposureMicroPct,
+      },
+      maxExposurePerDiscoveryBucketPct: {
+        ANOMALY: env.portfolioMaxExposureAnomalyPct,
+        ROTATION: env.portfolioMaxExposureRotationPct,
+        STEALTH: env.portfolioMaxExposureStealthPct,
+        LIQUID_LEADER: env.portfolioMaxExposureLiquidLeaderPct,
+      },
+      thinBookDepthScoreThreshold: env.portfolioThinBookDepthScoreThreshold,
+      thinBookCapMultiplier: env.portfolioThinBookCapMultiplier,
+    },
     strategy: {
       minScoreToAlert: 60,
       minScoreToBuy: 75,

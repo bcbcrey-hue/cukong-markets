@@ -140,6 +140,16 @@ export interface RiskSettings {
   trailingStopPct: number;
 }
 
+export interface PortfolioCapitalSettings {
+  baseEntryCapitalIdr: number;
+  maxTotalDeployedCapitalIdr: number;
+  riskBudgetPerPositionPct: number;
+  maxExposurePerPairClassPct: Record<PairClass, number>;
+  maxExposurePerDiscoveryBucketPct: Record<DiscoveryBucketType, number>;
+  thinBookDepthScoreThreshold: number;
+  thinBookCapMultiplier: number;
+}
+
 export interface StrategySettings {
   minScoreToAlert: number;
   minScoreToBuy: number;
@@ -183,6 +193,7 @@ export interface BotSettings {
   uiOnly: boolean;
   defaultQuoteAsset: string;
   risk: RiskSettings;
+  portfolio: PortfolioCapitalSettings;
   strategy: StrategySettings;
   scanner: ScannerSettings;
   workers: WorkerSettings;
@@ -469,6 +480,44 @@ export interface DecisionPolicyOutput {
   entryLane: DecisionPolicyEntryLane;
 }
 
+export interface ExposureBucketSnapshot {
+  key: string;
+  usedNotionalIdr: number;
+  capNotionalIdr: number;
+  remainingNotionalIdr: number;
+}
+
+export interface PortfolioExposureSnapshot {
+  totalDeployedCapitalIdr: number;
+  totalRemainingCapitalIdr: number;
+  pairClass: ExposureBucketSnapshot;
+  discoveryBucket: ExposureBucketSnapshot;
+}
+
+export interface PortfolioCapitalPlan {
+  policySizeIntentMultiplier: number;
+  baseEntryCapitalIdr: number;
+  policyIntentNotionalIdr: number;
+  riskBudgetCapIdr: number;
+  thinBookCapIdr: number | null;
+  allowedNotionalIdr: number;
+  cappedNotionalIdr: number;
+  allocatedNotionalIdr: number;
+  blocked: boolean;
+  reasons: string[];
+  exposure: PortfolioExposureSnapshot;
+}
+
+export interface RuntimeCandidateCapitalContext {
+  policyIntentNotionalIdr: number;
+  allocatedNotionalIdr: number;
+  cappedNotionalIdr: number;
+  blocked: boolean;
+  reasons: string[];
+  pairClassBucket: string;
+  discoveryBucket: string;
+}
+
 export interface RuntimeEntryCandidate {
   pair: string;
   opportunity: OpportunityAssessment;
@@ -478,6 +527,8 @@ export interface RuntimeEntryCandidate {
    * ExecutionEngine wajib mengeksekusi kontrak ini apa adanya.
    */
   policyDecision: DecisionPolicyOutput;
+  capitalPlan: PortfolioCapitalPlan;
+  capitalContext: RuntimeCandidateCapitalContext;
   policyReasons: string[];
   sizeMultiplier: number;
   aggressiveness: DecisionPolicyAggressiveness;
@@ -492,6 +543,15 @@ export interface RuntimePolicyReadModel {
   aggressiveness: DecisionPolicyAggressiveness;
   riskAllowed: boolean;
   riskReasons: string[];
+  capital?: {
+    policyIntentNotionalIdr: number;
+    allocatedNotionalIdr: number;
+    cappedNotionalIdr: number;
+    blocked: boolean;
+    reasons: string[];
+    pairClassBucket: string;
+    discoveryBucket: string;
+  };
   predictionContext?: {
     target: FutureTrendingPrediction['target'];
     horizonLabel: FutureTrendingPrediction['horizonLabel'];
@@ -833,6 +893,18 @@ export interface RiskCheckResult {
   entryLane?: 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
   baseAmountIdr?: number;
   adjustedAmountIdr?: number;
+}
+
+export interface OperatorCapitalReadModel {
+  pair: string;
+  policyAction: DecisionPolicyAction;
+  policySizeIntentMultiplier: number;
+  allocatedNotionalIdr: number;
+  cappedNotionalIdr: number;
+  blocked: boolean;
+  pairClassBucket: string;
+  discoveryBucket: string;
+  reasons: string[];
 }
 
 export interface ManualOrderRequest {
