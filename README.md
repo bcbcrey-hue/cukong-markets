@@ -140,6 +140,14 @@ Saat `NODE_ENV=production`:
 
 Semua variabel pacing, polling, risk, worker pool, scanner, serta threshold strategi (`INDODAX_*_INTERVAL_MS`, `POLLING_INTERVAL_MS`, `RISK_*`, `WORKER_*`, `BUY_*`, dll) bersifat tuning operasional sesuai kebutuhan deployment.
 
+## Audit Tahap 0A (jalur keputusan auto-entry aktual)
+
+Audit permanen untuk pemetaan jalur keputusan runtime aktual disimpan di:
+
+- `docs/decision_path_audit_stage_0A.md`
+
+Dokumen ini khusus Tahap 0A: memetakan keputusan yang saat ini masih tersebar (`opportunityEngine`/`app.ts`/`executionEngine`/`riskEngine`) tanpa mengklaim DecisionPolicyEngine final sudah terimplementasi.
+
 ## Yang sudah terbukti dari source/probe
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
