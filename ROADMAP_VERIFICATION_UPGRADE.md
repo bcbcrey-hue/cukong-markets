@@ -9,12 +9,7 @@
 ## 📊 STATUS SAAT INI
 
 |Komponen|Status|Keterangan|
-|-|-|-|
-|Source Code Architecture|✅ SELESAI|DDD, clean separation, type-safe|
-|Decision Policy Engine|✅ SELESAI|Single source of decision|
-|Trade Feed Truth Layer|✅ SELESAI|Real trade data dari exchange|
-|Future Prediction Engine|✅ SELESAI|Rule-based prediction 15 menit|
-|Portfolio Capital Engine|✅ SELESAI|Adaptive sizing|
+
 |**Backtest Kuantitatif**|❌ BELUM ADA|Prediction belum diuji historis|
 |**Shadow-Live Kalibrasi**|❌ BELUM ADA|Akurasi belum diukur real-time|
 |**End-to-End Exchange**|❌ BELUM ADA|Belum ada bukti di exchange sungguhan|
