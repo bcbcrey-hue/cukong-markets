@@ -114,6 +114,7 @@ export interface RuntimePolicyDecisionEvidence {
   marketRegime: OpportunityAssessment['marketRegime'];
   timingState: OpportunityAssessment['entryTiming']['state'];
   recommendedAction: OpportunityAssessment['recommendedAction'];
+  predictionContext?: RuntimePolicyReadModel['predictionContext'];
 }
 
 function toRuntimePolicyReadModel(
@@ -132,6 +133,7 @@ function toRuntimePolicyReadModel(
     aggressiveness: evidence.aggressiveness,
     riskAllowed: evidence.riskAllowed,
     riskReasons: evidence.riskReasons,
+    predictionContext: evidence.predictionContext,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -155,6 +157,16 @@ export function buildRuntimePolicyDecisionEvidence(
     marketRegime: candidate.opportunity.marketRegime,
     timingState: candidate.opportunity.entryTiming.state,
     recommendedAction: candidate.opportunity.recommendedAction,
+    predictionContext: candidate.opportunity.prediction
+      ? {
+        target: candidate.opportunity.prediction.target,
+        horizonLabel: candidate.opportunity.prediction.horizonLabel,
+        strength: candidate.opportunity.prediction.strength,
+        confidence: candidate.opportunity.prediction.confidence,
+        calibrationTag: candidate.opportunity.prediction.calibrationTag,
+        direction: candidate.opportunity.prediction.direction,
+      }
+      : undefined,
   }));
 }
 

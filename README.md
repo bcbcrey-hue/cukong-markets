@@ -117,6 +117,34 @@ Probe resmi yang membuktikan jalur Batch A:
 - `tests/market_watcher_selection_probe.ts`
   - validasi kombinasi source-level `MIXED` (truth tipis + inferred) dan fallback `INFERRED_PROXY`.
 
+## Batch B — Future Gainer / Trending Prediction Engine (aktif sebagai context tambahan policy)
+
+Batch B sekarang menambah `FutureTrendingPredictionEngine` rule-based/deterministic (tanpa ML baru) untuk prediksi target eksplisit:
+
+- `target`: `TREND_DIRECTIONAL_MOVE`
+- horizon eksplisit: `H5_15M` (`horizonMinutes=15`)
+- arah prediksi: `UP | SIDEWAYS | DOWN`
+- confidence + calibration jujur (`OUTCOME_AND_TRADE_TRUTH`, `PROXY_FALLBACK`, dst)
+- pemisahan kekuatan prediksi: `WEAK | MODERATE | STRONG`
+
+Wiring runtime yang sudah nyata:
+
+1. `OpportunityEngine` membangun `prediction` dari `SignalCandidate + MicrostructureFeatures + HistoricalContext`.
+2. `prediction` masuk ke `OpportunityAssessment` dan memberi pengaruh konservatif ke `finalScore` (bukan override guardrail).
+3. `DecisionPolicyEngine` menerima `prediction` via `DecisionPolicyInput`:
+   - prediction kuat sehat dapat membantu sizing/aggressiveness secara terbatas,
+   - prediction lemah pada lane runtime nyata (contoh `SCOUT_ENTER`) menurunkan size/aggressiveness secara defensif,
+   - prediction `strong-down` dapat menurunkan keputusan menjadi `WAIT` saat lane entry sudah terbuka,
+   - risk/regime block tetap hard stop final.
+4. `app.ts` runtime read-model policy kini ikut memuat ringkasan prediction context untuk observability operator.
+
+Probe Batch B resmi:
+
+- `tests/prediction_contract_probe.ts`
+- `tests/prediction_horizon_calibration_probe.ts`
+- `tests/prediction_policy_input_probe.ts`
+- `tests/runtime_prediction_policy_wiring_probe.ts`
+
 Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
 
 - `test_reports/typecheck_probes_final.txt`
@@ -317,6 +345,12 @@ Probe tambahan Tahap 0F:
 - **BELUM TERBUKTI sebagai live trading production end-to-end.**
 
 Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembuktian live tetap butuh verifikasi runtime non-destruktif ke exchange nyata dan validasi operasional production (secret management, observability, incident response, dan prosedur rollback) yang benar-benar dijalankan.
+
+### Incomplete testing yang masih tersisa (jujur)
+
+- Belum ada backtest kuantitatif horizon Batch B lintas dataset historis panjang (multi-regime, multi-pair class).
+- Belum ada shadow-live khusus kalibrasi prediction Batch B yang membandingkan expected-move vs real outcome per horizon.
+- Belum ada branch protection/ruleset GitHub yang bisa dibuktikan dari source saja untuk hard-enforce “PR tidak boleh merge jika CI gagal” (ini tetap butuh setting repo GitHub).
 
 ## Batas pengujian yang belum tercakup penuh (Incomplete testing)
 

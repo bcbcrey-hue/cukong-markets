@@ -399,6 +399,11 @@ export class ReportService {
       lines.push(
         `runtimePolicy pair=${policy.pair} action=${policy.action} lane=${policy.entryLane} size=${asNum(policy.sizeMultiplier, 2)} aggressiveness=${policy.aggressiveness} risk=${policy.riskAllowed ? 'ALLOWED' : 'BLOCKED'}`,
       );
+      if (policy.predictionContext) {
+        lines.push(
+          `runtimePolicyPrediction target=${policy.predictionContext.target} horizon=${policy.predictionContext.horizonLabel} strength=${policy.predictionContext.strength} confidence=${asNum(policy.predictionContext.confidence, 2)} direction=${policy.predictionContext.direction} calibration=${policy.predictionContext.calibrationTag}`,
+        );
+      }
       lines.push(`runtimePolicyReasons=${truncate(policy.reasons.join('; ') || '-', 220)}`);
       lines.push(`runtimePolicyRiskReasons=${truncate(policy.riskReasons.join('; ') || '-', 220)}`);
       lines.push(`runtimePolicyUpdatedAt=${policy.updatedAt}`);

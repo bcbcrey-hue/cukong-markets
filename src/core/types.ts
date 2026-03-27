@@ -337,6 +337,8 @@ export interface HistoricalContext {
   anomalyCount: number;
   recentWinRate: number;
   recentFalseBreakRate: number;
+  outcomeGrounding?: 'OUTCOME_GROUNDED' | 'MIXED' | 'PROXY_FALLBACK';
+  outcomeSampleSize?: number;
   regime: MarketRegime;
   patternMatches: PatternMatchResult[];
   contextNotes: string[];
@@ -348,6 +350,26 @@ export interface ProbabilityAssessment {
   continuationProbability: number;
   trapProbability: number;
   confidence: number;
+}
+
+export interface FutureTrendingPrediction {
+  target: 'TREND_DIRECTIONAL_MOVE';
+  horizonLabel: 'H5_15M';
+  horizonMinutes: number;
+  direction: 'UP' | 'SIDEWAYS' | 'DOWN';
+  expectedMovePct: number;
+  confidence: number;
+  strength: 'WEAK' | 'MODERATE' | 'STRONG';
+  calibrationTag:
+    | 'OUTCOME_AND_TRADE_TRUTH'
+    | 'OUTCOME_GROUNDED_WITH_FLOW_CAVEAT'
+    | 'TRADE_TRUTH_WITH_PROXY_OUTCOME'
+    | 'PROXY_FALLBACK';
+  reasons: string[];
+  caveats: string[];
+  tradeFlowSource: MarketSnapshot['recentTradesSource'];
+  tradeFlowQuality: TradePrintQuality;
+  generatedAt: number;
 }
 
 export interface EdgeValidationResult {
@@ -412,6 +434,7 @@ export interface OpportunityAssessment {
   orderbookTimestamp?: number;
   spreadPct: number;
   liquidityScore: number;
+  prediction?: FutureTrendingPrediction;
   timestamp: number;
 }
 
@@ -435,6 +458,7 @@ export interface DecisionPolicyInput {
   spoofRiskBlockThreshold?: number;
   tradingMode: TradingMode;
   riskCheckResult?: RiskCheckResult;
+  prediction?: FutureTrendingPrediction;
 }
 
 export interface DecisionPolicyOutput {
@@ -468,6 +492,14 @@ export interface RuntimePolicyReadModel {
   aggressiveness: DecisionPolicyAggressiveness;
   riskAllowed: boolean;
   riskReasons: string[];
+  predictionContext?: {
+    target: FutureTrendingPrediction['target'];
+    horizonLabel: FutureTrendingPrediction['horizonLabel'];
+    strength: FutureTrendingPrediction['strength'];
+    confidence: number;
+    calibrationTag: FutureTrendingPrediction['calibrationTag'];
+    direction: FutureTrendingPrediction['direction'];
+  };
   updatedAt: string;
 }
 

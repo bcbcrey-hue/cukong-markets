@@ -6,6 +6,7 @@ import type { WorkerPoolService } from '../../services/workerPoolService';
 import { EdgeValidator } from './edgeValidator';
 import { EntryTimingEngine } from './entryTimingEngine';
 import { FeaturePipeline } from './featurePipeline';
+import { FutureTrendingPredictionEngine } from './futureTrendingPredictionEngine';
 import { ProbabilityEngine } from './probabilityEngine';
 import { ScoreExplainer } from './scoreExplainer';
 
@@ -18,6 +19,7 @@ export class OpportunityEngine {
     private readonly scoreExplainer = new ScoreExplainer(),
     private readonly entryTimingEngine = new EntryTimingEngine(),
     private readonly workerPool?: WorkerPoolService,
+    private readonly predictionEngine = new FutureTrendingPredictionEngine(),
   ) {}
 
   async assess(
@@ -38,6 +40,11 @@ export class OpportunityEngine {
       microstructure,
     );
     const probability = this.probabilityEngine.assess({
+      signal,
+      microstructure,
+      historicalContext,
+    });
+    const prediction = this.predictionEngine.predict({
       signal,
       microstructure,
       historicalContext,
@@ -75,6 +82,8 @@ export class OpportunityEngine {
         signal.breakoutPressure * 1.8 +
         signal.quoteFlowAccelerationScore * 0.22 +
         (validation.valid ? 6 : -6) +
+        (prediction.strength === 'STRONG' ? (prediction.direction === 'UP' ? 2.8 : -2.8) : 0) +
+        (prediction.strength === 'WEAK' ? -0.8 : 0) +
         timing.quality * 0.14,
       0,
       100,
@@ -207,6 +216,7 @@ export class OpportunityEngine {
       orderbookTimestamp: signal.orderbookTimestamp,
       spreadPct: signal.spreadPct,
       liquidityScore: signal.liquidityScore,
+      prediction,
       timestamp: snapshot.timestamp,
     };
   }

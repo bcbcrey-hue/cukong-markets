@@ -94,6 +94,58 @@ function resolveHardRiskBlock(
   return null;
 }
 
+function isPredictionAssistHealthy(input: DecisionPolicyInput): boolean {
+  return Boolean(
+    input.edgeValid !== false
+    && input.marketRegime
+    && !['TRAP_RISK', 'DISTRIBUTION'].includes(input.marketRegime)
+    && input.entryTimingState
+    && !['LATE', 'AVOID', 'CHASING', 'DEAD'].includes(input.entryTimingState),
+  );
+}
+
+function applyPredictionBiasToEnter(
+  decision: DecisionPolicyOutput,
+  input: DecisionPolicyInput,
+): DecisionPolicyOutput {
+  const prediction = input.prediction;
+  if (!prediction || decision.action !== 'ENTER') {
+    return decision;
+  }
+
+  if (prediction.strength === 'WEAK') {
+    return {
+      ...decision,
+      sizeMultiplier: Math.max(0.1, decision.sizeMultiplier * 0.72),
+      aggressiveness: 'LOW',
+      reasons: [...decision.reasons, 'Prediction Batch B lemah: kurangi size/aggressiveness'],
+    };
+  }
+
+  const assistAllowed = isPredictionAssistHealthy(input);
+  if (!assistAllowed || prediction.strength !== 'STRONG') {
+    return {
+      ...decision,
+      reasons: [...decision.reasons, 'Prediction Batch B dipakai sebagai konteks tambahan (tanpa boost)'],
+    };
+  }
+
+  if (prediction.direction === 'DOWN') {
+    return wait(['Prediction Batch B strong-down: tunda entry hingga konfirmasi baru'], decision.entryLane);
+  }
+
+  if (prediction.direction === 'UP') {
+    return {
+      ...decision,
+      sizeMultiplier: Math.min(1.25, decision.sizeMultiplier * 1.08),
+      aggressiveness: input.marketRegime === 'EXPANSION' ? 'HIGH' : decision.aggressiveness,
+      reasons: [...decision.reasons, 'Prediction Batch B strong-up mendukung entry secara konservatif'],
+    };
+  }
+
+  return decision;
+}
+
 /**
  * Decision Policy V1 (Tahap 0C): rule-based only.
  * Single source of final decision auto-entry (tanpa ML / prediction model baru / learning loop).
@@ -157,27 +209,27 @@ export function evaluateDecisionPolicyV1(input: DecisionPolicyInput): DecisionPo
         return wait(['Regime QUIET: tunggu setup lebih kuat'], entryLane);
       }
 
-      return enter(['Regime QUIET: mode defensif'], {
+      return applyPredictionBiasToEnter(enter(['Regime QUIET: mode defensif'], {
         sizeMultiplier: Math.min(entryLane === 'SCOUT' ? 0.22 : 0.5, input.tradingMode === 'FULL_AUTO' ? 0.5 : 0.45),
         aggressiveness: 'LOW',
         entryLane,
-      });
+      }), input);
     }
 
     if (input.recommendedAction === 'SCOUT_ENTER') {
-      return enter(['Opportunity scout lane aktif'], {
+      return applyPredictionBiasToEnter(enter(['Opportunity scout lane aktif'], {
         sizeMultiplier: 0.3,
         aggressiveness: input.marketRegime === 'EXPANSION' ? 'NORMAL' : 'LOW',
         entryLane,
-      });
+      }), input);
     }
 
     if (input.recommendedAction === 'ADD_ON_CONFIRM') {
-      return enter(['Opportunity continuation mengizinkan add-on'], {
+      return applyPredictionBiasToEnter(enter(['Opportunity continuation mengizinkan add-on'], {
         sizeMultiplier: input.marketRegime === 'EXPANSION' ? 0.7 : 0.55,
         aggressiveness: input.marketRegime === 'EXPANSION' ? 'HIGH' : 'NORMAL',
         entryLane,
-      });
+      }), input);
     }
 
     if (input.recommendedAction !== 'ENTER') {
@@ -194,18 +246,18 @@ export function evaluateDecisionPolicyV1(input: DecisionPolicyInput): DecisionPo
   }
 
   if (input.marketRegime === 'EXPANSION') {
-    return enter(['Regime EXPANSION mendukung entry agresif'], {
+    return applyPredictionBiasToEnter(enter(['Regime EXPANSION mendukung entry agresif'], {
       sizeMultiplier: entryLane === 'SCOUT' ? 0.35 : 1.15,
       aggressiveness: input.tradingMode === 'FULL_AUTO' ? 'HIGH' : 'NORMAL',
       entryLane,
-    });
+    }), input);
   }
 
-  return enter(['Signal memenuhi syarat entry'], {
+  return applyPredictionBiasToEnter(enter(['Signal memenuhi syarat entry'], {
     sizeMultiplier: entryLane === 'SCOUT' ? 0.3 : 1,
     aggressiveness: input.tradingMode === 'FULL_AUTO' ? 'HIGH' : 'NORMAL',
     entryLane,
-  });
+  }), input);
 }
 
 function buildOpportunityPolicyInput(
@@ -233,6 +285,7 @@ function buildOpportunityPolicyInput(
     spoofRiskBlockThreshold: settings.strategy.spoofRiskBlockThreshold,
     tradingMode: settings.tradingMode,
     riskCheckResult,
+    prediction: opportunity.prediction,
   };
 }
 
