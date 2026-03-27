@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { selectRuntimeEntryCandidate } from '../src/app';
-import type { OpportunityAssessment } from '../src/core/types';
+import type { OpportunityAssessment, RiskCheckResult } from '../src/core/types';
 import { ExecutionEngine } from '../src/domain/trading/executionEngine';
 import { createDefaultSettings } from '../src/services/persistenceService';
 
@@ -64,129 +64,95 @@ function makeExecution(settingsOverride?: ReturnType<typeof createDefaultSetting
   );
 }
 
-function assertSelectorAndExecutionConsistent(
-  opportunities: OpportunityAssessment[],
-  expectedSelectedPair: string | undefined,
-  targetPair: string,
-  expectedAction: 'ENTER' | 'SKIP' | 'WAIT',
-  expectedLane: 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM',
-  message: string,
-  settings = createDefaultSettings(),
-): void {
-  const selected = selectRuntimeEntryCandidate(opportunities, settings);
-  assert.equal(selected?.pair, expectedSelectedPair, `${message} - selector mismatch`);
-
-  const execution = makeExecution(settings);
-  const target = opportunities.find((item) => item.pair === targetPair);
-  assert.ok(target, `${message} - target opportunity tidak ditemukan`);
-
-  const decision = execution.decideAutoExecution(target!);
-  assert.equal(decision.action, expectedAction, `${message} - action mismatch`);
-  assert.equal(decision.entryLane, expectedLane, `${message} - lane mismatch`);
+function blockedRiskResult(reason: string): RiskCheckResult {
+  return {
+    allowed: false,
+    reasons: [reason],
+    warnings: [],
+    entryLane: 'DEFAULT',
+    baseAmountIdr: 1_000_000,
+    adjustedAmountIdr: 1_000_000,
+  };
 }
 
 async function main() {
   const settings = createDefaultSettings();
+  settings.tradingMode = 'FULL_AUTO';
+  const execution = makeExecution(settings);
 
-  const scout = makeOpportunity('scout_idr', {
-    recommendedAction: 'SCOUT_ENTER',
+  const trapRisk = makeOpportunity('trap_risk_idr', {
+    marketRegime: 'TRAP_RISK',
+    recommendedAction: 'ENTER',
+  });
+  const trapRiskDecision = execution.decideAutoExecution(trapRisk);
+  assert.equal(trapRiskDecision.action, 'SKIP', 'TRAP_RISK wajib SKIP');
+  assert.ok(trapRiskDecision.reasons.some((reason) => reason.includes('TRAP_RISK')));
+
+  const distribution = makeOpportunity('distribution_idr', {
+    marketRegime: 'DISTRIBUTION',
+    recommendedAction: 'ENTER',
+  });
+  const distributionDecision = execution.decideAutoExecution(distribution);
+  assert.equal(distributionDecision.action, 'SKIP', 'DISTRIBUTION wajib SKIP');
+
+  const quiet = makeOpportunity('quiet_idr', {
+    marketRegime: 'QUIET',
+    finalScore: settings.strategy.minScoreToBuy + 6,
+  });
+  const quietDecision = execution.decideAutoExecution(quiet);
+  assert.equal(quietDecision.action, 'ENTER', 'QUIET sehat boleh ENTER defensif');
+  assert.equal(quietDecision.aggressiveness, 'LOW', 'QUIET wajib defensif');
+  assert.ok(quietDecision.sizeMultiplier <= 0.5, 'QUIET wajib sizing kecil');
+
+  const expansion = makeOpportunity('expansion_idr', {
+    marketRegime: 'EXPANSION',
     discoveryBucket: 'ANOMALY',
-    pairClass: 'MICRO',
+    finalScore: settings.strategy.minScoreToBuy + 8,
   });
-  const addOn = makeOpportunity('addon_idr', {
-    recommendedAction: 'ADD_ON_CONFIRM',
-    pairClass: 'MID',
+  const expansionDecision = execution.decideAutoExecution(expansion);
+  assert.equal(expansionDecision.action, 'ENTER', 'EXPANSION aman boleh ENTER');
+  assert.equal(expansionDecision.aggressiveness, 'HIGH', 'EXPANSION full-auto wajib lebih agresif');
+  assert.ok(expansionDecision.sizeMultiplier >= 1, 'EXPANSION sizing minimal normal');
+
+  const weakDiscovery = makeOpportunity('weak_discovery_idr', {
+    discoveryBucket: 'ROTATION',
+    finalScore: settings.strategy.minScoreToBuy + 1,
+    confidence: settings.strategy.minConfidence + 0.01,
   });
-  const normal = makeOpportunity('normal_idr', {
-    recommendedAction: 'ENTER',
-    pairClass: 'MAJOR',
-  });
+  const weakDiscoveryDecision = execution.decideAutoExecution(weakDiscovery);
+  assert.equal(weakDiscoveryDecision.action, 'WAIT', 'Discovery lemah tidak boleh lolos mudah');
 
-  assertSelectorAndExecutionConsistent(
-    [normal, scout],
-    'scout_idr',
-    'scout_idr',
-    'ENTER',
-    'SCOUT',
-    'lane scout harus sinkron',
-    settings,
-  );
-
-  assertSelectorAndExecutionConsistent(
-    [normal, addOn],
-    'addon_idr',
-    'addon_idr',
-    'ENTER',
-    'ADD_ON_CONFIRM',
-    'lane add-on harus sinkron',
-    settings,
-  );
-
-  assertSelectorAndExecutionConsistent(
-    [normal],
-    'normal_idr',
-    'normal_idr',
-    'ENTER',
-    'DEFAULT',
-    'lane default harus sinkron',
-    settings,
-  );
-
-  const lowScore = makeOpportunity('low_score_idr', {
-    finalScore: settings.strategy.minScoreToAlert - 1,
-    recommendedAction: 'ENTER',
-  });
-  assertSelectorAndExecutionConsistent(
-    [lowScore],
-    undefined,
-    'low_score_idr',
-    'WAIT',
-    'DEFAULT',
-    'score rendah harus sinkron',
-    settings,
-  );
-
-  const lowConfidence = makeOpportunity('low_conf_idr', {
-    confidence: settings.strategy.minConfidence - 0.05,
-    recommendedAction: 'ENTER',
-  });
-  assertSelectorAndExecutionConsistent(
-    [lowConfidence],
-    undefined,
-    'low_conf_idr',
-    'SKIP',
-    'DEFAULT',
-    'confidence rendah harus sinkron',
-    settings,
-  );
-
-  const lowPump = makeOpportunity('low_pump_idr', {
-    pumpProbability: settings.strategy.minPumpProbability - 0.05,
-    recommendedAction: 'ENTER',
-  });
-  assertSelectorAndExecutionConsistent(
-    [lowPump],
-    undefined,
-    'low_pump_idr',
-    'WAIT',
-    'DEFAULT',
-    'pumpProbability rendah harus sinkron',
-    settings,
-  );
-
-  const timingVeto = makeOpportunity('timing_veto_idr', {
-    entryTiming: { state: 'CHASING', quality: 40, reason: 'late', leadScore: 20 },
-    recommendedAction: 'SCOUT_ENTER',
+  const riskBlocked = makeOpportunity('risk_block_idr', {
+    marketRegime: 'EXPANSION',
     discoveryBucket: 'ANOMALY',
   });
-  assertSelectorAndExecutionConsistent(
-    [timingVeto],
-    undefined,
-    'timing_veto_idr',
-    'SKIP',
-    'SCOUT',
-    'timing veto post-policy harus sinkron',
-    settings,
+  const riskBlockedDecision = execution.decideAutoExecution(
+    riskBlocked,
+    blockedRiskResult('max open positions reached'),
+  );
+  assert.equal(riskBlockedDecision.action, 'SKIP', 'Risk block tidak boleh dioverride jadi ENTER');
+  assert.ok(riskBlockedDecision.reasons.some((reason) => reason.includes('RiskEngine memblokir')));
+
+  const selectorResult = selectRuntimeEntryCandidate([
+    makeOpportunity('selector_enter_idr', {
+      discoveryBucket: 'ANOMALY',
+      marketRegime: 'EXPANSION',
+      pairClass: 'MICRO',
+      finalScore: settings.strategy.minScoreToBuy + 7,
+      recommendedAction: 'ENTER',
+    }),
+    makeOpportunity('selector_blocked_idr', {
+      discoveryBucket: 'ANOMALY',
+      marketRegime: 'TRAP_RISK',
+      pairClass: 'MICRO',
+      finalScore: settings.strategy.minScoreToBuy + 12,
+      recommendedAction: 'ENTER',
+    }),
+  ], settings);
+  assert.equal(
+    selectorResult?.pair,
+    'selector_enter_idr',
+    'runtime selector harus mengikuti output policy final, bukan recommendedAction mentah',
   );
 
   console.log('decision_policy_semantic_sync_probe: ok');

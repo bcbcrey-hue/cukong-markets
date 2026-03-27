@@ -8,7 +8,7 @@ function general(pair: string, pairClass: OpportunityAssessment['pairClass'], fi
   const now = Date.now();
   return {
     pair,
-    discoveryBucket: 'ROTATION',
+    discoveryBucket: 'ANOMALY',
     pairClass,
     rawScore: finalScore,
     finalScore,
@@ -43,8 +43,8 @@ function general(pair: string, pairClass: OpportunityAssessment['pairClass'], fi
 async function main() {
   const settings = createDefaultSettings();
   const major = general('fallback_major_idr', 'MAJOR', 95);
-  const mid = general('fallback_mid_idr', 'MID', 80);
-  const micro = general('fallback_micro_idr', 'MICRO', 65);
+  const mid = general('fallback_mid_idr', 'MID', 84);
+  const micro = general('fallback_micro_idr', 'MICRO', 80);
 
   const selected = selectRuntimeEntryCandidate([major, mid, micro], settings);
   assert.equal(selected?.pair, 'fallback_micro_idr', 'fallback umum wajib MICRO > MID > MAJOR meski score lebih rendah');

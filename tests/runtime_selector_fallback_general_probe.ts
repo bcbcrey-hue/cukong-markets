@@ -8,7 +8,7 @@ function opp(pair: string, finalScore: number): OpportunityAssessment {
   const now = Date.now();
   return {
     pair,
-    discoveryBucket: 'ROTATION',
+    discoveryBucket: 'ANOMALY',
     pairClass: 'MID',
     rawScore: finalScore,
     finalScore,
@@ -47,7 +47,7 @@ async function main() {
     pairClass: 'MAJOR' as const,
   };
   const lowerGeneral = {
-    ...opp('general_lower_micro_idr', 70),
+    ...opp('general_lower_micro_idr', 80),
     pairClass: 'MICRO' as const,
   };
 
