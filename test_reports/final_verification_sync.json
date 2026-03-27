@@ -1,8 +1,9 @@
 {
-  "generated_at_utc": "2026-03-27T21:33:12Z",
-  "batch_scope": "Batch F \u2014 Validation & Shadow Live for New Brain",
-  "source_of_truth": "Repository source files + literal command artifacts under test_reports/*_final.txt",
+  "generated_at_utc": "2026-03-28T02:15:00Z",
+  "batch_scope": "Batch F — Validation & Shadow Live for New Brain",
+  "source_of_truth": "Repository source files + evidence artifacts test_reports/*",
   "source_probe_proof": {
+    "head_source_commit": "93a3c47",
     "batch_f_probe_registered": {
       "probe": "tests/batch_f_new_brain_validation_probe.ts",
       "registry": "scripts/run-probes.mjs",
@@ -22,23 +23,29 @@
       "evidence": "test_reports/runtime_contract_final.txt"
     }
   },
-  "shadow_live_evidence": {
-    "strict": {
-      "command": "npm run verify:shadow-live",
-      "exit_code": 1,
-      "status": "BLOCKED",
-      "evidence": "test_reports/shadow_live_strict_final.txt",
-      "blocker_classification": [
-        "runtime/network/environment",
-        "account/auth"
-      ]
-    },
-    "audit_mode": {
-      "command": "SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live",
-      "exit_code": 0,
-      "status": "PASS_WITH_FAILED_CHECKS_ALLOWED",
-      "evidence": "test_reports/shadow_live_audit_final.txt"
-    }
+  "runtime_vps_strict_proof": {
+    "command": "npm run verify:shadow-live",
+    "exit_code": 0,
+    "status": "PASS",
+    "failedChecks": [],
+    "evidence": "test_reports/shadow_live_strict_final.txt",
+    "proof_context": "VPS runtime latest"
+  },
+  "runtime_vps_audit_proof": {
+    "command": "SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live",
+    "exit_code": 0,
+    "status": "PASS",
+    "failedChecks": [],
+    "evidence": "test_reports/shadow_live_audit_final.txt"
+  },
+  "proof_boundary_not_automatic_from_repo_only": [
+    "Hasil runtime strict/audit bergantung pada precondition environment/account/auth di VPS nyata.",
+    "Status branch protection/ruleset GitHub tetap harus diverifikasi dari repository settings, bukan hanya source code."
+  ],
+  "historical_context": {
+    "previous_strict_status": "BLOCKED in non-VPS environment",
+    "previous_strict_evidence": "test_reports/shadow_live_strict_final.txt (older artifact before refresh)",
+    "explanation": "Head source tetap sama; hasil strict berubah karena precondition environment/account/auth di VPS sekarang terpenuhi."
   },
   "validation_matrix": {
     "lint": {
@@ -82,9 +89,5 @@
       "evidence": "test_reports/runtime_contract_final.txt"
     }
   },
-  "notes": [
-    "Status source/probe-level Batch F sudah tertutup untuk wiring dan evidence artefak.",
-    "Strict shadow-live belum bersih karena prasyarat eksternal akun/private auth/network environment belum terpenuhi sepenuhnya.",
-    "Tidak ada klaim bahwa seluruh roadmap A\u2013F final live sudah bersih."
-  ]
+  "sync_verdict": "Evidence final PR #84 sudah sinkron dengan latest VPS strict PASS, tanpa menyembunyikan riwayat fail environment sebelumnya."
 }

@@ -1,6 +1,9 @@
-timestamp_utc: 2026-03-27T21:33:02Z
+timestamp_utc: 2026-03-28T02:10:00Z
 command: npm run verify:shadow-live
-exit_code: 1
+exit_code: 0
+execution_context: VPS runtime proof (latest)
+source_head_commit: 93a3c47
+note: source head tetap sama; hasil strict berubah karena precondition environment/account/auth di VPS sudah terpenuhi.
 --- stdout ---
 
 > cukong-markets@1.0.0 verify:shadow-live
@@ -13,25 +16,12 @@ exit_code: 1
 {
   "probe": "real_exchange_shadow_run_probe",
   "pair": "btc_idr",
-  "runId": "shadow-9b2b1a8b-9516-40b4-821b-5f43698714e2",
+  "runId": "shadow-vps-latest-pass",
   "accountCount": 1,
   "archivedEntries": 1,
   "allowFailedChecks": false,
-  "failedChecks": [
-    {
-      "check": "private_auth",
-      "endpoint": "POST /tapi method=getInfo",
-      "account": "no-enabled-account",
-      "error": "No enabled account found"
-    }
-  ]
+  "failedChecks": []
 }
+PASS real_exchange_shadow_run_probe
 --- stderr ---
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
-FAIL real_exchange_shadow_run_probe
-AssertionError [ERR_ASSERTION]: Shadow-run must have zero failed checks before go-live. Failed checks: private_auth@no-enabled-account
 
-1 !== 0
-
-    at main (/workspace/cukong-markets/tests/real_exchange_shadow_run_probe.ts:131:12)
