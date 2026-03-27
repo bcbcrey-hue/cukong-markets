@@ -47,7 +47,6 @@ const result = engine.plan({
   opportunity: opportunity(),
   policyDecision: { action: 'ENTER', sizeMultiplier: 1 },
   openPositions: [],
-  opportunities: [],
 });
 
 assert.equal(typeof settings.portfolio.baseEntryCapitalIdr, 'number');

@@ -42,8 +42,8 @@ function make(depthScore: number): OpportunityAssessment {
 
 const settings = createDefaultSettings();
 const engine = new PortfolioCapitalEngine();
-const healthy = engine.plan({ settings, opportunity: make(50), policyDecision: { action: 'ENTER', sizeMultiplier: 1 }, openPositions: [], opportunities: [] });
-const thin = engine.plan({ settings, opportunity: make(5), policyDecision: { action: 'ENTER', sizeMultiplier: 1 }, openPositions: [], opportunities: [] });
+const healthy = engine.plan({ settings, opportunity: make(50), policyDecision: { action: 'ENTER', sizeMultiplier: 1 }, openPositions: [] });
+const thin = engine.plan({ settings, opportunity: make(5), policyDecision: { action: 'ENTER', sizeMultiplier: 1 }, openPositions: [] });
 
 assert.ok((thin.capitalPlan.thinBookCapIdr ?? 0) > 0);
 assert.ok(thin.capitalPlan.allocatedNotionalIdr < healthy.capitalPlan.allocatedNotionalIdr);

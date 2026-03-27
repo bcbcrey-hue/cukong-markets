@@ -181,7 +181,6 @@ export function buildRuntimeEntryCandidates(
   capitalEngine: PortfolioCapitalEngine,
   defaultAccount: StoredAccount,
   accountOpenPositions: PositionRecord[],
-  allOpportunities: OpportunityAssessment[],
   pairCooldowns: Record<string, number>,
 ): RuntimeEntryCandidate[] {
   return opportunities.map((opportunity) => {
@@ -191,7 +190,6 @@ export function buildRuntimeEntryCandidates(
       opportunity,
       policyDecision: preRiskDecision,
       openPositions: accountOpenPositions,
-      opportunities: allOpportunities,
     });
     const riskCheckResult = riskEngine.checkCanEnter({
       account: defaultAccount,
@@ -204,14 +202,22 @@ export function buildRuntimeEntryCandidates(
       policyDecision: preRiskDecision,
     });
     const policyDecision = evaluateOpportunityPolicyV1(opportunity, settings, riskCheckResult);
+    const finalizedCapital = capitalEngine.finalizeRuntimeCapital({
+      initialPlan: capitalPlan,
+      initialContext: capitalContext,
+      finalPolicyAction: policyDecision.action,
+      riskAllowed: riskCheckResult.allowed,
+      riskReasons: riskCheckResult.reasons,
+      finalAllocatedNotionalIdr: riskCheckResult.adjustedAmountIdr,
+    });
 
     return {
       pair: opportunity.pair,
       opportunity,
       riskCheckResult,
       policyDecision,
-      capitalPlan,
-      capitalContext,
+      capitalPlan: finalizedCapital.capitalPlan,
+      capitalContext: finalizedCapital.capitalContext,
       policyReasons: policyDecision.reasons,
       sizeMultiplier: policyDecision.sizeMultiplier,
       aggressiveness: policyDecision.aggressiveness,
@@ -604,7 +610,6 @@ export async function createApp(): Promise<AppRuntime> {
         capitalEngine,
         defaultAccount,
         positionManager.listOpen().filter((position) => position.accountId === defaultAccount.id),
-        opportunities,
         state.get().pairCooldowns,
       )
       : [];

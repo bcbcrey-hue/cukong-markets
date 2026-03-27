@@ -98,7 +98,6 @@ async function main() {
     new PortfolioCapitalEngine(),
     account,
     [],
-    [strong, weak, blocked],
     { blocked_idr: Date.now() + settings.risk.cooldownMs + 5_000 },
   );
 

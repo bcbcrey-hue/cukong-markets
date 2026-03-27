@@ -15,6 +15,9 @@ export interface OpenPositionInput {
   entryStyle?: 'SCOUT' | 'CONFIRM';
   continuationScore?: number;
   dumpRisk?: number;
+  exposurePairClass?: PositionRecord['exposurePairClass'];
+  exposureDiscoveryBucket?: PositionRecord['exposureDiscoveryBucket'];
+  exposureSource?: PositionRecord['exposureSource'];
 }
 
 export class PositionManager {
@@ -53,6 +56,10 @@ export class PositionManager {
             lastDumpRisk: Number.isFinite(position.lastDumpRisk) ? position.lastDumpRisk : 0,
             lastScaleOutAt: position.lastScaleOutAt ?? null,
             emergencyExitArmed: position.emergencyExitArmed ?? false,
+            exposurePairClass: position.exposurePairClass ?? undefined,
+            exposureDiscoveryBucket: position.exposureDiscoveryBucket ?? undefined,
+            exposureSource: position.exposureSource
+              ?? (position.exposurePairClass || position.exposureDiscoveryBucket ? 'POSITION_METADATA' : 'LEGACY_FALLBACK'),
           };
         })
       : [];
@@ -116,6 +123,9 @@ export class PositionManager {
       lastDumpRisk: input.dumpRisk ?? 0,
       lastScaleOutAt: null,
       emergencyExitArmed: false,
+      exposurePairClass: input.exposurePairClass,
+      exposureDiscoveryBucket: input.exposureDiscoveryBucket,
+      exposureSource: input.exposureSource ?? (input.exposurePairClass || input.exposureDiscoveryBucket ? 'POSITION_METADATA' : 'LEGACY_FALLBACK'),
       openedAt: now,
       updatedAt: now,
       closedAt: null,
@@ -170,6 +180,13 @@ export class PositionManager {
       lastContinuationScore: input.continuationScore ?? current.lastContinuationScore ?? 0,
       lastDumpRisk: input.dumpRisk ?? current.lastDumpRisk ?? 0,
       emergencyExitArmed: current.emergencyExitArmed ?? false,
+      exposurePairClass: input.exposurePairClass ?? current.exposurePairClass,
+      exposureDiscoveryBucket: input.exposureDiscoveryBucket ?? current.exposureDiscoveryBucket,
+      exposureSource: input.exposureSource
+        ?? current.exposureSource
+        ?? (input.exposurePairClass || input.exposureDiscoveryBucket || current.exposurePairClass || current.exposureDiscoveryBucket
+          ? 'POSITION_METADATA'
+          : 'LEGACY_FALLBACK'),
       updatedAt: nowIso(),
       sourceOrderId: input.sourceOrderId ?? current.sourceOrderId,
     };

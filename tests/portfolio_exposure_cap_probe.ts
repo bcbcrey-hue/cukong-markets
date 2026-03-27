@@ -50,6 +50,9 @@ const open: PositionRecord = {
   totalEntryFeesPaid: 0, totalBoughtQuantity: 1000, totalSoldQuantity: 0, stopLossPrice: null, takeProfitPrice: null,
   entryStyle: 'CONFIRM', pumpState: 'ACTIVE', lastContinuationScore: 0, lastDumpRisk: 0, lastScaleOutAt: null,
   emergencyExitArmed: false, openedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), closedAt: null,
+  exposurePairClass: 'MICRO',
+  exposureDiscoveryBucket: 'ANOMALY',
+  exposureSource: 'POSITION_METADATA',
 };
 
 const engine = new PortfolioCapitalEngine();
@@ -58,7 +61,6 @@ const planned = engine.plan({
   opportunity: opp(),
   policyDecision: { action: 'ENTER', sizeMultiplier: 1 },
   openPositions: [open],
-  opportunities: [{ ...opp(), pair: 'micro_old_idr' }],
 });
 
 assert.equal(planned.capitalPlan.exposure.pairClass.key, 'MICRO');

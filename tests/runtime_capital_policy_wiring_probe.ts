@@ -55,7 +55,7 @@ const account: StoredAccount = {
   id: 'acc', name: 'a', apiKey: 'k', apiSecret: 's', isDefault: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), enabled: true,
 };
 
-const candidates = buildRuntimeEntryCandidates([opp()], settings, new RiskEngine(), new PortfolioCapitalEngine(), account, [], [opp()], {});
+const candidates = buildRuntimeEntryCandidates([opp()], settings, new RiskEngine(), new PortfolioCapitalEngine(), account, [], {});
 const candidate = candidates[0];
 assert.ok(candidate.capitalPlan.baseEntryCapitalIdr === 120_000);
 assert.ok((candidate.riskCheckResult.adjustedAmountIdr ?? 0) <= 120_000 * 1.3);

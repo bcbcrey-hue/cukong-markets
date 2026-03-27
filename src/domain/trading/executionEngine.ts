@@ -1254,6 +1254,7 @@ export class ExecutionEngine {
         takeProfitPrice: stops.takeProfitPrice,
         sourceOrderId: order.id,
         entryStyle: order.entryStyle,
+        exposureSource: 'LEGACY_FALLBACK',
       });
     } else {
       const targetPosition =
@@ -1727,6 +1728,9 @@ export class ExecutionEngine {
         entryStyle: this.resolveEntryStyle(signal),
         continuationScore: 'finalScore' in signal ? signal.continuationProbability : undefined,
         dumpRisk: 'finalScore' in signal ? signal.trapProbability : undefined,
+        exposurePairClass: 'finalScore' in signal ? signal.pairClass : undefined,
+        exposureDiscoveryBucket: 'finalScore' in signal ? signal.discoveryBucket : undefined,
+        exposureSource: 'finalScore' in signal ? 'POSITION_METADATA' : 'LEGACY_FALLBACK',
       });
 
       await this.journal.append({

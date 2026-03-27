@@ -91,7 +91,6 @@ async function main() {
     new PortfolioCapitalEngine(),
     account,
     [],
-    [enterCandidate, waitCandidate, skipCandidate, cooldownBlocked],
     { blocked_idr: Date.now() + settings.risk.cooldownMs + 10_000 },
   );
 

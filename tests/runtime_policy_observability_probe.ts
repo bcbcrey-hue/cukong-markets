@@ -124,7 +124,6 @@ async function main() {
     new PortfolioCapitalEngine(),
     defaultAccount,
     [],
-    opportunities,
     {},
   );
 

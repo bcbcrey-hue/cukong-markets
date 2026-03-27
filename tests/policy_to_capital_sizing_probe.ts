@@ -54,8 +54,8 @@ const normal = opp('normal_idr', 'ENTER');
 
 const scoutPolicy = evaluateOpportunityPolicyV1(scout, settings);
 const normalPolicy = evaluateOpportunityPolicyV1(normal, settings);
-const scoutPlan = engine.plan({ settings, opportunity: scout, policyDecision: scoutPolicy, openPositions: [], opportunities: [scout, normal] });
-const normalPlan = engine.plan({ settings, opportunity: normal, policyDecision: normalPolicy, openPositions: [], opportunities: [scout, normal] });
+const scoutPlan = engine.plan({ settings, opportunity: scout, policyDecision: scoutPolicy, openPositions: [] });
+const normalPlan = engine.plan({ settings, opportunity: normal, policyDecision: normalPolicy, openPositions: [] });
 
 assert.equal(scoutPolicy.action, 'ENTER');
 assert.equal(normalPolicy.action, 'ENTER');

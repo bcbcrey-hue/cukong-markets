@@ -227,7 +227,6 @@ async function main() {
     new PortfolioCapitalEngine(),
     account,
     [],
-    [strongOpportunity, weakOpportunity],
     {},
   );
 

@@ -16,7 +16,6 @@ interface PortfolioCapitalPlanInput {
     sizeMultiplier: number;
   };
   openPositions: PositionRecord[];
-  opportunities: OpportunityAssessment[];
 }
 
 interface PositionExposureContext {
@@ -34,15 +33,10 @@ function toNotionalIdr(position: PositionRecord): number {
 }
 
 export class PortfolioCapitalEngine {
-  private positionContext(
-    position: PositionRecord,
-    opportunitiesByPair: Map<string, OpportunityAssessment>,
-  ): PositionExposureContext {
-    const fromOpportunity = opportunitiesByPair.get(position.pair);
-
+  private positionContext(position: PositionRecord): PositionExposureContext {
     return {
-      pairClass: fromOpportunity?.pairClass ?? 'MAJOR',
-      discoveryBucket: fromOpportunity?.discoveryBucket ?? 'LIQUID_LEADER',
+      pairClass: position.exposurePairClass ?? 'MAJOR',
+      discoveryBucket: position.exposureDiscoveryBucket ?? 'LIQUID_LEADER',
       notionalIdr: toNotionalIdr(position),
     };
   }
@@ -53,12 +47,13 @@ export class PortfolioCapitalEngine {
   } {
     const settings = input.settings.portfolio;
     const reasons: string[] = [];
-    const opportunitiesByPair = new Map(input.opportunities.map((item) => [item.pair, item]));
     const currentPairClass = input.opportunity.pairClass ?? 'MAJOR';
     const currentBucket = input.opportunity.discoveryBucket ?? 'LIQUID_LEADER';
 
-    const exposures = input.openPositions
-      .map((position) => this.positionContext(position, opportunitiesByPair));
+    const exposures = input.openPositions.map((position) => this.positionContext(position));
+    const legacyExposureFallbackCount = input.openPositions.filter(
+      (position) => !position.exposurePairClass || !position.exposureDiscoveryBucket,
+    ).length;
 
     const totalDeployed = exposures.reduce((sum, item) => sum + item.notionalIdr, 0);
     const currentPairClassExposure = exposures
@@ -86,6 +81,11 @@ export class PortfolioCapitalEngine {
 
     if (input.policyDecision.action !== 'ENTER') {
       reasons.push(`Policy action ${input.policyDecision.action}: capital allocation diblok`);
+    }
+    if (legacyExposureFallbackCount > 0) {
+      reasons.push(
+        `Exposure memakai fallback legacy untuk ${legacyExposureFallbackCount} posisi terbuka (metadata exposure belum lengkap)`,
+      );
     }
 
     if (thinBookCap !== null) {
@@ -156,6 +156,54 @@ export class PortfolioCapitalEngine {
         reasons: capitalPlan.reasons,
         pairClassBucket: capitalPlan.exposure.pairClass.key,
         discoveryBucket: capitalPlan.exposure.discoveryBucket.key,
+      },
+    };
+  }
+
+  finalizeRuntimeCapital(
+    input: {
+      initialPlan: PortfolioCapitalPlan;
+      initialContext: RuntimeCandidateCapitalContext;
+      finalPolicyAction: 'ENTER' | 'SKIP' | 'WAIT';
+      riskAllowed: boolean;
+      riskReasons: string[];
+      finalAllocatedNotionalIdr?: number;
+    },
+  ): {
+    capitalPlan: PortfolioCapitalPlan;
+    capitalContext: RuntimeCandidateCapitalContext;
+  } {
+    const runtimeBlocked = input.finalPolicyAction !== 'ENTER' || !input.riskAllowed;
+    const finalAllocatedNotionalIdr = runtimeBlocked
+      ? 0
+      : Math.max(0, input.finalAllocatedNotionalIdr ?? input.initialPlan.allocatedNotionalIdr);
+    const blockedReasons = runtimeBlocked
+      ? [
+          ...input.initialPlan.reasons,
+          input.finalPolicyAction !== 'ENTER'
+            ? `Final runtime blocked by policy action=${input.finalPolicyAction}`
+            : 'Final runtime blocked by risk guardrail',
+          ...input.riskReasons,
+        ]
+      : input.initialPlan.reasons;
+
+    const capitalPlan: PortfolioCapitalPlan = {
+      ...input.initialPlan,
+      allocatedNotionalIdr: finalAllocatedNotionalIdr,
+      allowedNotionalIdr: runtimeBlocked ? 0 : input.initialPlan.allowedNotionalIdr,
+      cappedNotionalIdr: Math.max(0, input.initialPlan.policyIntentNotionalIdr - finalAllocatedNotionalIdr),
+      blocked: runtimeBlocked || input.initialPlan.blocked,
+      reasons: blockedReasons,
+    };
+
+    return {
+      capitalPlan,
+      capitalContext: {
+        ...input.initialContext,
+        allocatedNotionalIdr: capitalPlan.allocatedNotionalIdr,
+        cappedNotionalIdr: capitalPlan.cappedNotionalIdr,
+        blocked: capitalPlan.blocked,
+        reasons: capitalPlan.reasons,
       },
     };
   }

@@ -619,6 +619,9 @@ export interface PositionRecord {
   lastDumpRisk: number;
   lastScaleOutAt: string | null;
   emergencyExitArmed: boolean;
+  exposurePairClass?: PairClass;
+  exposureDiscoveryBucket?: DiscoveryBucketType;
+  exposureSource?: 'POSITION_METADATA' | 'LEGACY_FALLBACK';
   openedAt: string;
   updatedAt: string;
   closedAt: string | null;
