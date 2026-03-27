@@ -35,7 +35,7 @@ import { AccountRegistry } from '../accounts/accountRegistry';
 import { OrderManager } from './orderManager';
 import { PositionManager } from './positionManager';
 import { RiskEngine } from './riskEngine';
-import { evaluateDecisionPolicyV1 } from '../decision/decisionPolicyEngine';
+import { evaluateOpportunityPolicyV1, evaluateSignalPolicyV1 } from '../decision/decisionPolicyEngine';
 
 type ExecutionCandidate = SignalCandidate | OpportunityAssessment;
 
@@ -1569,49 +1569,9 @@ export class ExecutionEngine {
 
   decideAutoExecution(candidate: ExecutionCandidate): AutoExecutionDecision {
     const settings = this.settings.get();
-    const score = this.getCandidateScore(candidate);
-    const baseInput = {
-      pair: candidate.pair,
-      score,
-      confidence: candidate.confidence,
-      minScoreToAlert: settings.strategy.minScoreToAlert,
-      minScoreToBuy: settings.strategy.minScoreToBuy,
-      minConfidence: settings.strategy.minConfidence,
-      tradingMode: settings.tradingMode,
-    } as const;
-
-    const decision = 'finalScore' in candidate
-      ? evaluateDecisionPolicyV1({
-          ...baseInput,
-          source: 'OPPORTUNITY',
-          recommendedAction: candidate.recommendedAction,
-          edgeValid: candidate.edgeValid,
-          pumpProbability: candidate.pumpProbability,
-          minPumpProbability: settings.strategy.minPumpProbability,
-        })
-      : evaluateDecisionPolicyV1({
-          ...baseInput,
-          source: 'SIGNAL',
-        });
-
-    if ('finalScore' in candidate) {
-      if (
-        candidate.entryTiming.state === 'LATE' ||
-        candidate.entryTiming.state === 'AVOID' ||
-        candidate.entryTiming.state === 'CHASING' ||
-        candidate.entryTiming.state === 'DEAD'
-      ) {
-        return {
-          action: 'SKIP',
-          sizeMultiplier: 0,
-          aggressiveness: 'LOW',
-          reasons: ['Timing entry tidak layak'],
-          entryLane: decision.entryLane,
-        };
-      }
-    }
-
-    return decision;
+    return 'finalScore' in candidate
+      ? evaluateOpportunityPolicyV1(candidate, settings)
+      : evaluateSignalPolicyV1(candidate, settings);
   }
 
   async attemptAutoBuy(signal: ExecutionCandidate): Promise<string> {

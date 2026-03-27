@@ -21,6 +21,7 @@ import { ExecutionEngine } from './domain/trading/executionEngine';
 import { OrderManager } from './domain/trading/orderManager';
 import { PositionManager } from './domain/trading/positionManager';
 import { RiskEngine } from './domain/trading/riskEngine';
+import { evaluateOpportunityPolicyV1 } from './domain/decision/decisionPolicyEngine';
 
 import { IndodaxClient } from './integrations/indodax/client';
 import { IndodaxCallbackServer } from './integrations/indodax/callbackServer';
@@ -65,43 +66,11 @@ function sortByPairClassThenScore(
   return b.finalScore - a.finalScore;
 }
 
-function isRuntimeEntryEligible(
-  candidate: OpportunityAssessment,
-  settings: BotSettings,
-): boolean {
-  const decision = buildRuntimeDecision(candidate, settings);
-  return decision.action === 'ENTER';
-}
-
 function buildRuntimeDecision(
   candidate: OpportunityAssessment,
   settings: BotSettings,
 ): DecisionPolicyOutput {
-  const isLaneScout = candidate.recommendedAction === 'SCOUT_ENTER';
-  const isLaneAddOn = candidate.recommendedAction === 'ADD_ON_CONFIRM';
-  const eligible =
-    candidate.edgeValid
-    && ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(candidate.recommendedAction)
-    && candidate.pumpProbability >= settings.strategy.minPumpProbability
-    && candidate.confidence >= settings.strategy.minConfidence;
-
-  if (!eligible) {
-    return {
-      action: 'SKIP',
-      sizeMultiplier: 0,
-      aggressiveness: 'LOW',
-      reasons: ['Tidak lolos gate runtime entry selector'],
-      entryLane: 'DEFAULT',
-    };
-  }
-
-  return {
-    action: 'ENTER',
-    sizeMultiplier: isLaneScout ? 0.3 : isLaneAddOn ? 0.55 : 1,
-    aggressiveness: isLaneScout ? 'LOW' : isLaneAddOn ? 'NORMAL' : 'HIGH',
-    reasons: ['Lolos gate runtime entry selector'],
-    entryLane: isLaneScout ? 'SCOUT' : isLaneAddOn ? 'ADD_ON_CONFIRM' : 'DEFAULT',
-  };
+  return evaluateOpportunityPolicyV1(candidate, settings);
 }
 
 export function selectRuntimeEntryCandidate(
@@ -110,7 +79,7 @@ export function selectRuntimeEntryCandidate(
 ): OpportunityAssessment | undefined {
   const eligible = opportunities
     .map((item) => ({ item, decision: buildRuntimeDecision(item, settings) }))
-    .filter(({ item }) => isRuntimeEntryEligible(item, settings));
+    .filter(({ decision }) => decision.action === 'ENTER');
   const scoutAnomaly = eligible
     .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'ANOMALY')
     .map(({ item }) => item)

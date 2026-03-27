@@ -156,6 +156,7 @@ Tahap 0B mengunci **kontrak keputusan tunggal** untuk downstream, bukan implemen
 - `DecisionPolicyOutput` (minimal wajib: `action`, `sizeMultiplier`, `aggressiveness`, `reasons`)
 
 Implementasi `decision policy v1` saat ini bersifat **rule-based** (tanpa ML, tanpa model prediksi baru, tanpa learning loop baru), dan dipakai sinkronisasi minimum di runtime selector / execution / risk.
+Evaluator policy untuk opportunity sekarang dipakai bersama (selector app + execution + risk) agar semantik keputusan final tidak bercabang.
 
 Status jujur Tahap 0B:
 

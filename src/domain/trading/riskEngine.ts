@@ -9,7 +9,7 @@ import type {
   StoredAccount,
 } from '../../core/types';
 import { ExitDecisionEngine } from '../intelligence/exitDecisionEngine';
-import { evaluateDecisionPolicyV1 } from '../decision/decisionPolicyEngine';
+import { evaluateOpportunityPolicyV1, evaluateSignalPolicyV1 } from '../decision/decisionPolicyEngine';
 
 export interface RiskEntryCheckInput {
   account: StoredAccount;
@@ -40,9 +40,7 @@ export class RiskEngine {
     adjustedAmountIdr: number;
   } {
     const baseAmountIdr = input.amountIdr;
-    const policy = input.policyDecision
-      ?? this.resolveLanePolicyFromOpportunity(input.signal)
-      ?? this.resolvePolicyDecision(input);
+    const policy = input.policyDecision ?? this.resolvePolicyDecision(input);
     const lane: EntryLane = policy.entryLane;
     const multiplier = policy.sizeMultiplier;
 
@@ -53,64 +51,10 @@ export class RiskEngine {
     };
   }
 
-  private resolveLanePolicyFromOpportunity(
-    signal: SignalCandidate | OpportunityAssessment,
-  ): DecisionPolicyOutput | null {
-    if (!('finalScore' in signal)) {
-      return null;
-    }
-
-    if (signal.recommendedAction === 'SCOUT_ENTER') {
-      return {
-        action: 'ENTER',
-        sizeMultiplier: 0.3,
-        aggressiveness: 'LOW',
-        reasons: ['Lane scout dari recommendedAction opportunity'],
-        entryLane: 'SCOUT',
-      };
-    }
-
-    if (signal.recommendedAction === 'ADD_ON_CONFIRM') {
-      return {
-        action: 'ENTER',
-        sizeMultiplier: 0.55,
-        aggressiveness: 'NORMAL',
-        reasons: ['Lane add-on dari recommendedAction opportunity'],
-        entryLane: 'ADD_ON_CONFIRM',
-      };
-    }
-
-    return null;
-  }
-
   private resolvePolicyDecision(input: RiskEntryCheckInput): DecisionPolicyOutput {
-    if ('finalScore' in input.signal) {
-      return evaluateDecisionPolicyV1({
-        pair: input.signal.pair,
-        source: 'OPPORTUNITY',
-        score: input.signal.finalScore,
-        confidence: input.signal.confidence,
-        recommendedAction: input.signal.recommendedAction,
-        edgeValid: input.signal.edgeValid,
-        pumpProbability: input.signal.pumpProbability,
-        minScoreToAlert: input.settings.strategy.minScoreToAlert,
-        minScoreToBuy: input.settings.strategy.minScoreToBuy,
-        minConfidence: input.settings.strategy.minConfidence,
-        minPumpProbability: input.settings.strategy.minPumpProbability,
-        tradingMode: input.settings.tradingMode,
-      });
-    }
-
-    return evaluateDecisionPolicyV1({
-      pair: input.signal.pair,
-      source: 'SIGNAL',
-      score: input.signal.score,
-      confidence: input.signal.confidence,
-      minScoreToAlert: input.settings.strategy.minScoreToAlert,
-      minScoreToBuy: input.settings.strategy.minScoreToBuy,
-      minConfidence: input.settings.strategy.minConfidence,
-      tradingMode: input.settings.tradingMode,
-    });
+    return 'finalScore' in input.signal
+      ? evaluateOpportunityPolicyV1(input.signal, input.settings)
+      : evaluateSignalPolicyV1(input.signal, input.settings);
   }
 
   private getPair(signal: SignalCandidate | OpportunityAssessment): string {
