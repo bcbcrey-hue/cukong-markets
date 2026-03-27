@@ -36,7 +36,7 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run probe:audit`
 - `npm run test:probes`
 - `npm run verify`
-- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch_e_current.json`)
+- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch_f_current.json`)
 
 Job/check utama workflow bernama `verify-runtime-contract`.
 Workflow juga mempublikasikan commit status context `verify-runtime-contract/combined` yang mengikuti hasil job utama (success/failure) agar status gabungan commit tidak kosong.
@@ -73,6 +73,17 @@ npm run verify:shadow-live
 ```
 
 Secara default, `verify:shadow-live` sekarang **strict**: command akan gagal jika ada `failedChecks` (contoh: akun exchange belum aktif / auth private gagal). Ini sengaja agar status go-live tidak false positive.
+
+
+Probe resmi Batch F untuk validasi New Brain:
+
+- `tests/batch_f_new_brain_validation_probe.ts` (memvalidasi wiring opportunity -> risk -> policy -> capital -> execution, memastikan final policy decision menjadi sumber keputusan runtime, dan guardrail risk tidak bypass).
+
+Evidence shadow-live juga kini mencakup policy checks non-destruktif berikut:
+
+- `policy_runtime_decision`
+- `policy_vs_hint_consistency`
+- `policy_guardrail_enforced`
 
 Jika hanya ingin mengarsipkan evidence tanpa menggagalkan command (mode audit eksploratif), gunakan:
 
@@ -258,7 +269,7 @@ Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_
 Probe ini ikut di jalur `npm run verify`.
 
 
-## Runtime verifier contract (Phase 2 Batch E)
+## Runtime verifier contract (Phase 2 Batch F)
 
 Untuk membekukan target proof runtime VPS, gunakan:
 
@@ -266,7 +277,7 @@ Untuk membekukan target proof runtime VPS, gunakan:
 npm run runtime:contract
 ```
 
-Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch_e_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch_f_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
 
 Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
 

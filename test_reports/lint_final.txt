@@ -1,0 +1,10 @@
+timestamp_utc: 2026-03-27T21:30:38Z
+command: npm run lint
+exit_code: 0
+--- stdout ---
+
+> cukong-markets@1.0.0 lint
+> tsc -p tsconfig.json --noEmit
+
+--- stderr ---
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.

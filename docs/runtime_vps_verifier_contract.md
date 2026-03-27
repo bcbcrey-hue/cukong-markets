@@ -1,4 +1,4 @@
-# Runtime VPS Verifier Contract & Target Proof (Phase 2 Batch E)
+# Runtime VPS Verifier Contract & Target Proof (Phase 2 Batch F)
 
 Dokumen ini membekukan kontrak pembuktian runtime VPS yang sempit dan jujur.
 
@@ -26,7 +26,7 @@ Gunakan helper berikut untuk memotret target runtime dari env aktual:
 npm run runtime:contract
 ```
 
-Output JSON dari command ini dicetak ke stdout dan otomatis ditulis ke `test_reports/runtime_contract_batch_e_current.json` sebagai artefak resmi kontrak target yang harus dipenuhi saat validasi di VPS.
+Output JSON dari command ini dicetak ke stdout dan otomatis ditulis ke `test_reports/runtime_contract_batch_f_current.json` sebagai artefak resmi kontrak target yang harus dipenuhi saat validasi di VPS.
 
 Di CI (`.github/workflows/ci.yml`), command yang sama dijalankan dan artifact tersebut di-upload agar bukti kontrak runtime tidak hanya bergantung pada eksekusi lokal.
 

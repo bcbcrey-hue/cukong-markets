@@ -89,6 +89,22 @@ async function main() {
   );
 
   const failed = evidences.flatMap((item) => item.checks.filter((check) => !check.pass));
+
+  const hasPrivateAuthEvidence = matching.some((item) =>
+    item.checks.some((check) => check.check === 'private_auth' && check.pass),
+  );
+  const requiredPolicyChecks = [
+    'policy_runtime_decision',
+    'policy_vs_hint_consistency',
+    'policy_guardrail_enforced',
+  ];
+
+  if (hasPrivateAuthEvidence) {
+    for (const checkName of requiredPolicyChecks) {
+      const seen = matching.some((item) => item.checks.some((check) => check.check === checkName));
+      assert.equal(seen, true, `Policy shadow check wajib ada saat account evidence tersedia: ${checkName}`);
+    }
+  }
   const allowFailedChecks = process.env.SHADOW_RUN_ALLOW_FAILED_CHECKS === '1';
   console.log(
     JSON.stringify(

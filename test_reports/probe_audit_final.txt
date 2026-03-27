@@ -1,4 +1,4 @@
-timestamp_utc: 2026-03-22T20:33:39Z
+timestamp_utc: 2026-03-27T21:30:57Z
 command: npm run probe:audit
 exit_code: 0
 --- stdout ---
@@ -7,8 +7,7 @@ exit_code: 0
 > node scripts/run-probes.mjs --audit
 
 Probe registry is valid.
-Official probes: 23
+Official probes: 89
 Manual probes: 1
-
 --- stderr ---
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
