@@ -1,6 +1,11 @@
 import { env } from '../../config/env';
 import type { StoredAccount } from '../../core/types';
-import { PublicApi, type IndodaxOrderbook, type IndodaxTickerEntry } from './publicApi';
+import {
+  PublicApi,
+  type IndodaxOrderbook,
+  type IndodaxRecentTrade,
+  type IndodaxTickerEntry,
+} from './publicApi';
 import { PrivateApi } from './privateApi';
 
 export class IndodaxClient {
@@ -20,6 +25,10 @@ export class IndodaxClient {
 
   async getDepth(pair: string): Promise<IndodaxOrderbook> {
     return this.publicApi.safeGetDepth(pair);
+  }
+
+  async getRecentTrades(pair: string): Promise<IndodaxRecentTrade[] | null> {
+    return this.publicApi.safeGetRecentTrades(pair);
   }
 
   forAccount(account: StoredAccount): PrivateApi {

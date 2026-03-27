@@ -4,7 +4,11 @@ import type { DiscoverySettings } from '../src/core/types';
 import { MarketWatcher } from '../src/domain/market/marketWatcher';
 import { PairUniverse } from '../src/domain/market/pairUniverse';
 import type { IndodaxClient } from '../src/integrations/indodax/client';
-import type { IndodaxOrderbook, IndodaxTickerEntry } from '../src/integrations/indodax/publicApi';
+import type {
+  IndodaxOrderbook,
+  IndodaxRecentTrade,
+  IndodaxTickerEntry,
+} from '../src/integrations/indodax/publicApi';
 
 
 const discoverySettings: DiscoverySettings = {
@@ -19,19 +23,24 @@ const discoverySettings: DiscoverySettings = {
 };
 
 class FakeIndodaxClient {
+  private callCount = 0;
+
   async getTickers(): Promise<Record<string, IndodaxTickerEntry>> {
+    this.callCount += 1;
+    const multiplier = this.callCount;
+
     return {
       btc_idr: {
-        name: 'btc_idr', high: 100, low: 80, vol_btc: 10, vol_idr: 950_000_000, last: 90, buy: 89, sell: 91, server_time: Date.now(),
+        name: 'btc_idr', high: 100, low: 80, vol_btc: 10, vol_idr: 950_000_000 + multiplier * 10_000, last: 90, buy: 89, sell: 91, server_time: Date.now(),
       },
       anomaly_idr: {
-        name: 'anomaly_idr', high: 210, low: 110, vol_btc: 2, vol_idr: 400_000_000, last: 205, buy: 204, sell: 205, server_time: Date.now(),
+        name: 'anomaly_idr', high: 210, low: 110, vol_btc: 2, vol_idr: 400_000_000 + multiplier * 25_000, last: 205, buy: 204, sell: 205, server_time: Date.now(),
       },
       stealth_idr: {
-        name: 'stealth_idr', high: 150, low: 120, vol_btc: 1, vol_idr: 300_000_000, last: 148, buy: 147.8, sell: 148, server_time: Date.now(),
+        name: 'stealth_idr', high: 150, low: 120, vol_btc: 1, vol_idr: 300_000_000 + multiplier * 15_000, last: 148, buy: 147.8, sell: 148, server_time: Date.now(),
       },
       volume_giant_badspread_idr: {
-        name: 'volume_giant_badspread_idr', high: 100, low: 80, vol_btc: 20, vol_idr: 1_500_000_000, last: 90, buy: 70, sell: 90, server_time: Date.now(),
+        name: 'volume_giant_badspread_idr', high: 100, low: 80, vol_btc: 20, vol_idr: 1_500_000_000 + multiplier * 30_000, last: 90, buy: 70, sell: 90, server_time: Date.now(),
       },
     };
   }
@@ -46,6 +55,17 @@ class FakeIndodaxClient {
     }
 
     return { buy: [[89, 20], [88, 20], [87, 20]], sell: [[91, 20], [92, 20], [93, 20]] };
+  }
+
+  async getRecentTrades(pair: string): Promise<IndodaxRecentTrade[] | null> {
+    if (pair === 'anomaly_idr') {
+      return [
+        { tid: '1', date: Math.floor(Date.now() / 1000), price: 205, amount: 1.2, type: 'buy' },
+        { tid: '2', date: Math.floor(Date.now() / 1000) - 1, price: 204.9, amount: 0.7, type: 'sell' },
+      ];
+    }
+
+    return null;
   }
 }
 
@@ -67,15 +87,32 @@ async function main() {
   assert(selectedPairs.includes('stealth_idr'), 'stealth pair should be selected by discovery ranking');
   assert(!selectedPairs.includes('volume_giant_badspread_idr'), 'top volume with bad spread must be filtered out');
 
-  assert(
-    snapshots.every((item) => item.recentTradesSource === 'INFERRED_PROXY'),
-    'MarketWatcher snapshots must mark recentTradesSource as INFERRED_PROXY',
+  const anomalySnapshot = snapshots.find((item) => item.pair === 'anomaly_idr');
+  assert.equal(
+    anomalySnapshot?.recentTradesSource,
+    'MIXED',
+    'MarketWatcher must mark low-coverage truth feed plus inferred delta as MIXED',
+  );
+  assert.ok(
+    anomalySnapshot?.recentTrades.some((trade) => trade.source === 'EXCHANGE_TRADE_FEED' && trade.quality === 'TAPE'),
+    'MarketWatcher must preserve truth trade feed labels when exchange feed available',
+  );
+  assert.ok(
+    anomalySnapshot?.recentTrades.some((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
+    'MIXED source must include explicit proxy trace and must not be treated as full tape only',
   );
 
-  const flattenedTrades = snapshots.flatMap((item) => item.recentTrades);
-  assert(
-    flattenedTrades.every((trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY'),
-    'MarketWatcher inferred trades must be explicitly labeled as proxy and inferred',
+  const fallbackSnapshot = snapshots.find((item) => item.pair !== 'anomaly_idr');
+  assert.equal(
+    fallbackSnapshot?.recentTradesSource,
+    'INFERRED_PROXY',
+    'MarketWatcher must fallback to inferred proxy when exchange trades unavailable',
+  );
+  assert.ok(
+    (fallbackSnapshot?.recentTrades ?? []).every(
+      (trade) => trade.source === 'INFERRED_SNAPSHOT_DELTA' && trade.quality === 'PROXY',
+    ),
+    'Fallback inferred trades must be explicitly labeled as proxy and inferred',
   );
 
   console.log('PASS market_watcher_selection_probe');

@@ -22,6 +22,7 @@ const officialProbes = [
   'tests/telegram_manual_buy_flow_probe.ts',
   'tests/telegram_manual_sell_flow_probe.ts',
   'tests/market_watcher_selection_probe.ts',
+  'tests/batch_a_trade_truth_layer_probe.ts',
   'tests/discovery_anomaly_priority_probe.ts',
   'tests/discovery_bucket_allocation_probe.ts',
   'tests/discovery_major_pair_cap_probe.ts',

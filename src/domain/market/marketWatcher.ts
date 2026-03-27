@@ -16,6 +16,11 @@ interface TickerPoint {
   volumeQuote: number;
 }
 
+interface TradeFlowResolution {
+  recentTrades: TradePrint[];
+  recentTradesSource: MarketSnapshot['recentTradesSource'];
+}
+
 export class MarketWatcher {
   private inferredTrades = new Map<string, TradePrint[]>();
   private lastTickerByPair = new Map<string, TickerPoint>();
@@ -68,6 +73,72 @@ export class MarketWatcher {
     return next;
   }
 
+  private toTruthTradePrints(
+    pair: string,
+    trades: Awaited<ReturnType<IndodaxClient['getRecentTrades']>>,
+  ): TradePrint[] {
+    if (!trades) {
+      return [];
+    }
+
+    return trades
+      .slice(0, 40)
+      .map((trade) => ({
+        pair,
+        price: trade.price,
+        quantity: trade.amount,
+        side: trade.type,
+        timestamp: trade.date * 1000,
+        source: 'EXCHANGE_TRADE_FEED' as const,
+        quality: 'TAPE' as const,
+      }))
+      .filter((trade) => trade.price > 0 && trade.quantity > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  private async fetchRecentTrades(pair: string): Promise<Awaited<ReturnType<IndodaxClient['getRecentTrades']>>> {
+    const client = this.indodax as IndodaxClient & {
+      getRecentTrades?: (candidatePair: string) => Promise<Awaited<ReturnType<IndodaxClient['getRecentTrades']>>>;
+    };
+
+    if (typeof client.getRecentTrades !== 'function') {
+      return null;
+    }
+
+    return client.getRecentTrades(pair);
+  }
+
+  private resolveTradeFlow(
+    inferredTrades: TradePrint[],
+    truthTrades: TradePrint[],
+  ): TradeFlowResolution {
+    if (truthTrades.length > 0 && inferredTrades.length > 0 && truthTrades.length < 3) {
+      return {
+        recentTrades: [...truthTrades, ...inferredTrades].slice(-40),
+        recentTradesSource: 'MIXED',
+      };
+    }
+
+    if (truthTrades.length > 0) {
+      return {
+        recentTrades: truthTrades,
+        recentTradesSource: 'EXCHANGE_TRADE_FEED',
+      };
+    }
+
+    if (inferredTrades.length > 0) {
+      return {
+        recentTrades: inferredTrades,
+        recentTradesSource: 'INFERRED_PROXY',
+      };
+    }
+
+    return {
+      recentTrades: [],
+      recentTradesSource: 'NONE',
+    };
+  }
+
   async batchSnapshot(limit = 10): Promise<MarketSnapshot[]> {
     const tickers = await this.indodax.getTickers();
     this.universe.updateFromTickers(tickers);
@@ -104,14 +175,21 @@ export class MarketWatcher {
           volumeQuote: ticker.volume24hQuote,
         });
 
+        const inferredTrades = this.inferTradePrints(ticker, previous);
+        const truthTrades = this.toTruthTradePrints(
+          selected.pair,
+          await this.fetchRecentTrades(selected.pair),
+        );
+        const tradeFlow = this.resolveTradeFlow(inferredTrades, truthTrades);
+
         snapshots.push({
           pair: selected.pair,
           discoveryBucket: selected.bucket,
           pairClass: classifyPair(selected.pair).pairClass,
           ticker,
           orderbook: discovery.orderbookByPair.get(selected.pair) ?? null,
-          recentTrades: this.inferTradePrints(ticker, previous),
-          recentTradesSource: 'INFERRED_PROXY',
+          recentTrades: tradeFlow.recentTrades,
+          recentTradesSource: tradeFlow.recentTradesSource,
           timestamp,
         });
       } catch (error) {

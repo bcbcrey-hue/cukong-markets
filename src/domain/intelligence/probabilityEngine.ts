@@ -38,7 +38,12 @@ export class ProbabilityEngine {
       1,
     );
 
-    const confidencePenalty = microstructure.tradeFlowQuality === 'PROXY' ? 8 : 0;
+    const confidencePenalty =
+      microstructure.tradeFlowSource === 'EXCHANGE_TRADE_FEED'
+        ? 0
+        : microstructure.tradeFlowSource === 'MIXED'
+          ? 5
+          : 8;
 
     const confidence =
       clamp(
