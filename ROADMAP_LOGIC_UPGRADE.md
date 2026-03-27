@@ -85,7 +85,7 @@ Hasil yang dicari:
 
 * fill realism lebih baik,
 * partial fill realism,
-*queue/slippage behaviour lebih masuk akal dengan pendekatan dinamis: slippage tidak bersifat tetap, namun dapat meningkat hingga 150 bps sebagai upper bound pada kondisi momentum untuk memastikan fill cepat menggunakan limit order yang bersifat marketable (limit rasa market), sementara pada kondisi normal tetap menjaga efisiensi harga dan menghormati slippage yang diatur oleh operator melalui UI Telegram, tanpa default tetap.
+* queue/slippage behaviour harus lebih masuk akal dengan pendekatan dinamis: slippage tidak boleh bersifat fixed/default tetap, tetapi dihitung dari execution plan yang tunduk pada final policy decision, market microstructure context yang sudah tersedia, dan preferensi operator dari UI Telegram. Pada kondisi momentum/urgency tinggi, slippage boleh dinaikkan secara konservatif untuk membuat limit order menjadi marketable agar fill lebih cepat, tetapi tetap dibatasi oleh upper bound 150 bps / maxBuySlippageBps. Pada kondisi normal, execution harus tetap menjaga efisiensi harga dan tidak boleh menaikkan slippage tanpa alasan yang eksplisit dan terukur. Perubahan ini hanya boleh memengaruhi taktik eksekusi, bukan mengubah keputusan final ENTER/WAIT/SKIP.
 * stress handling saat likuiditas drop.
 
 ### Batch Baru F — Validation \& Shadow Live for New Brain
