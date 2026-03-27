@@ -1567,16 +1567,44 @@ export class ExecutionEngine {
     return 'CONFIRM';
   }
 
+  private buildRuntimePolicyPayload(runtimeCandidate: RuntimeEntryCandidate): Record<string, unknown> {
+    return {
+      pair: runtimeCandidate.pair,
+      action: runtimeCandidate.policyDecision.action,
+      reasons: runtimeCandidate.policyDecision.reasons,
+      sizeMultiplier: runtimeCandidate.policyDecision.sizeMultiplier,
+      aggressiveness: runtimeCandidate.policyDecision.aggressiveness,
+      entryLane: runtimeCandidate.policyDecision.entryLane,
+      riskAllowed: runtimeCandidate.riskCheckResult.allowed,
+      riskReasons: runtimeCandidate.riskCheckResult.reasons,
+      riskWarnings: runtimeCandidate.riskCheckResult.warnings,
+      discoveryBucket: runtimeCandidate.opportunity.discoveryBucket,
+      marketRegime: runtimeCandidate.opportunity.marketRegime,
+      timingState: runtimeCandidate.opportunity.entryTiming.state,
+      recommendedAction: runtimeCandidate.opportunity.recommendedAction,
+    };
+  }
+
   async attemptAutoBuy(runtimeCandidate: RuntimeEntryCandidate): Promise<string> {
     const settings = this.settings.get();
     const finalPolicyDecision = runtimeCandidate.policyDecision;
     const signal = runtimeCandidate.opportunity;
 
     if (finalPolicyDecision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
+      await this.journal.info(
+        'AUTO_ENTRY_POLICY_DECISION',
+        `auto-entry ${signal.pair} ditahan policy: ${finalPolicyDecision.action}`,
+        this.buildRuntimePolicyPayload(runtimeCandidate),
+      );
       return `skip auto-buy ${signal.pair}: ${finalPolicyDecision.reasons.join('; ')}`;
     }
 
     if (!runtimeCandidate.riskCheckResult.allowed) {
+      await this.journal.warn(
+        'AUTO_ENTRY_POLICY_DECISION',
+        `auto-entry ${signal.pair} diblokir risk guardrail`,
+        this.buildRuntimePolicyPayload(runtimeCandidate),
+      );
       return `skip auto-buy ${signal.pair}: ${runtimeCandidate.riskCheckResult.reasons.join('; ')}`;
     }
 
@@ -1603,6 +1631,12 @@ export class ExecutionEngine {
     if (!Number.isFinite(executionAmountIdr) || executionAmountIdr <= 0) {
       throw new Error('RuntimeEntryCandidate tidak valid: adjustedAmountIdr tidak valid');
     }
+
+    await this.journal.info(
+      'AUTO_ENTRY_POLICY_DECISION',
+      `auto-entry ${signal.pair} lanjut eksekusi policy ENTER`,
+      this.buildRuntimePolicyPayload(runtimeCandidate),
+    );
 
     const executionSignal: OpportunityAssessment = {
       ...signal,

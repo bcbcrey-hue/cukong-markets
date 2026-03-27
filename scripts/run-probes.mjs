@@ -46,6 +46,7 @@ const officialProbes = [
   'tests/scout_lane_sizing_probe.ts',
   'tests/decision_policy_semantic_sync_probe.ts',
   'tests/runtime_policy_wiring_probe.ts',
+  'tests/runtime_policy_observability_probe.ts',
   'tests/execution_runtime_final_decision_probe.ts',
   'tests/runtime_selector_prefers_scout_anomaly_probe.ts',
   'tests/runtime_selector_prefers_scout_stealth_probe.ts',
