@@ -219,6 +219,7 @@ Tahap 0F menambahkan bukti hidup runtime bahwa policy flow final benar-benar dip
   - konteks `discoveryBucket`, `marketRegime`, `timingState`, `recommendedAction` (sebagai hint context)
 - `AUTO_ENTRY_POLICY_DECISION` sekarang dicatat dari `ExecutionEngine.attemptAutoBuy(...)` untuk jalur `ENTER/WAIT/SKIP`, sehingga alasan policy final terlihat di jejak runtime eksekusi.
 - `AUTO_BUY_FAILED` diperkaya dengan payload policy final lengkap (`policyReasons`, `sizeMultiplier`, `aggressiveness`, `entryLane`, status risk) agar investigasi failure tidak kehilangan alasan policy.
+- operator-facing `status` sekarang ikut menampilkan read-model policy runtime final (pair/action/reasons/lane/size/aggressiveness/risk) dan `recommendedAction` dipertahankan sebagai `hintAction` agar tidak rancu sebagai keputusan final.
 
 Probe tambahan Tahap 0F:
 
@@ -226,6 +227,9 @@ Probe tambahan Tahap 0F:
   - membuktikan evidence `ENTER/WAIT/SKIP` ada di payload observability runtime;
   - membuktikan `policyDecision.reasons` benar-benar masuk ke journal runtime untuk jalur auto-entry;
   - membuktikan eksekusi hanya lanjut saat action final `ENTER` (WAIT/SKIP tetap diblok).
+- `tests/runtime_policy_operator_summary_probe.ts`
+  - membuktikan output operator-facing summary/read-model mengambil final policy runtime (bukan `recommendedAction` mentah);
+  - membuktikan `recommendedAction` tetap tampil sebagai hint/context (`hintAction`).
 
 ## Yang sudah terbukti dari source/probe
 

@@ -44,6 +44,7 @@ export function createDefaultRuntimeState(): RuntimeState {
     lastHotlist: [],
     lastSignals: [],
     lastOpportunities: [],
+    lastRuntimePolicyDecision: null,
     tradeCount: 0,
     lastTradeAt: null,
     pollingStats: {

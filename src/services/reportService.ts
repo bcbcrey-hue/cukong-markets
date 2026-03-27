@@ -7,6 +7,7 @@ import type {
   OpportunityAssessment,
   OrderRecord,
   PositionRecord,
+  RuntimePolicyReadModel,
   SignalCandidate,
   ShadowRunTelegramSummary,
   StoredAccount,
@@ -326,7 +327,7 @@ export class ReportService {
         `Trap probability: ${(signal.trapProbability * 100).toFixed(1)}%`,
         `Confidence: ${(signal.confidence * 100).toFixed(1)}%`,
         `Timing: ${signal.entryTiming.state} (${signal.entryTiming.reason})`,
-        `Action: ${signal.recommendedAction}`,
+        `Hint action: ${signal.recommendedAction}`,
         ...this.orderbookDebugLines(signal),
         asReasonLine(signal.reasons),
         asWarningLine(signal.warnings),
@@ -352,6 +353,7 @@ export class ReportService {
     activeAccounts: number;
     topSignal?: HotlistEntry | SignalCandidate;
     topOpportunity?: OpportunityAssessment;
+    runtimePolicyDecision?: RuntimePolicyReadModel | null;
   }): string {
     const lines = [
       '🤖 BOT STATUS',
@@ -384,12 +386,22 @@ export class ReportService {
 
     if (params.topOpportunity) {
       lines.push(
-        `topOpportunity=${params.topOpportunity.pair} score=${asNum(params.topOpportunity.finalScore, 1)} pump=${(params.topOpportunity.pumpProbability * 100).toFixed(1)}% action=${params.topOpportunity.recommendedAction}`,
+        `topOpportunity=${params.topOpportunity.pair} score=${asNum(params.topOpportunity.finalScore, 1)} pump=${(params.topOpportunity.pumpProbability * 100).toFixed(1)}% hintAction=${params.topOpportunity.recommendedAction}`,
       );
     } else if (params.topSignal) {
       lines.push(
         `topSignal=${params.topSignal.pair} score=${asNum(params.topSignal.score, 1)} confidence=${(params.topSignal.confidence * 100).toFixed(1)}%`,
       );
+    }
+
+    if (params.runtimePolicyDecision) {
+      const policy = params.runtimePolicyDecision;
+      lines.push(
+        `runtimePolicy pair=${policy.pair} action=${policy.action} lane=${policy.entryLane} size=${asNum(policy.sizeMultiplier, 2)} aggressiveness=${policy.aggressiveness} risk=${policy.riskAllowed ? 'ALLOWED' : 'BLOCKED'}`,
+      );
+      lines.push(`runtimePolicyReasons=${truncate(policy.reasons.join('; ') || '-', 220)}`);
+      lines.push(`runtimePolicyRiskReasons=${truncate(policy.riskReasons.join('; ') || '-', 220)}`);
+      lines.push(`runtimePolicyUpdatedAt=${policy.updatedAt}`);
     }
 
     lines.push(`notes=${truncate((params.health.notes ?? []).join('; ') || '-', 220)}`);
@@ -484,7 +496,7 @@ export class ReportService {
         `pump=${(item.pumpProbability * 100).toFixed(1)}%`,
         `trap=${(item.trapProbability * 100).toFixed(1)}%`,
         `timing=${item.entryTiming.state}`,
-        `action=${item.recommendedAction}`,
+        `hintAction=${item.recommendedAction}`,
       ].join(' | '),
     );
 

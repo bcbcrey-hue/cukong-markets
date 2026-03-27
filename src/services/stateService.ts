@@ -3,6 +3,7 @@ import type {
   MarketOverview,
   OpportunityAssessment,
   PairRuntimeState,
+  RuntimePolicyReadModel,
   RuntimeState,
   RuntimeStatus,
   SignalCandidate,
@@ -192,6 +193,12 @@ export class StateService {
     return this.patch({
       lastOpportunities: opportunities,
       pairs: nextPairs,
+    });
+  }
+
+  async setRuntimePolicyDecision(decision: RuntimePolicyReadModel | null): Promise<RuntimeState> {
+    return this.patch({
+      lastRuntimePolicyDecision: decision,
     });
   }
 

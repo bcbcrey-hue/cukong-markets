@@ -37,12 +37,10 @@ import { SummaryService } from './services/summaryService';
 import { AppServer } from './server/appServer';
 import type {
   BotSettings,
-  DecisionPolicyAction,
-  DecisionPolicyAggressiveness,
-  DecisionPolicyEntryLane,
   OpportunityAssessment,
   PairClass,
   PositionRecord,
+  RuntimePolicyReadModel,
   RuntimeEntryCandidate,
   StoredAccount,
 } from './core/types';
@@ -102,20 +100,40 @@ function sortRuntimeCandidates(
 }
 
 export interface RuntimePolicyDecisionEvidence {
-  pair: string;
+  pair: RuntimePolicyReadModel['pair'];
   selected: boolean;
-  action: DecisionPolicyAction;
-  reasons: string[];
-  sizeMultiplier: number;
-  aggressiveness: DecisionPolicyAggressiveness;
-  entryLane: DecisionPolicyEntryLane;
-  riskAllowed: boolean;
-  riskReasons: string[];
+  action: RuntimePolicyReadModel['action'];
+  reasons: RuntimePolicyReadModel['reasons'];
+  sizeMultiplier: RuntimePolicyReadModel['sizeMultiplier'];
+  aggressiveness: RuntimePolicyReadModel['aggressiveness'];
+  entryLane: RuntimePolicyReadModel['entryLane'];
+  riskAllowed: RuntimePolicyReadModel['riskAllowed'];
+  riskReasons: RuntimePolicyReadModel['riskReasons'];
   riskWarnings: string[];
   discoveryBucket?: OpportunityAssessment['discoveryBucket'];
   marketRegime: OpportunityAssessment['marketRegime'];
   timingState: OpportunityAssessment['entryTiming']['state'];
   recommendedAction: OpportunityAssessment['recommendedAction'];
+}
+
+function toRuntimePolicyReadModel(
+  evidence: RuntimePolicyDecisionEvidence | undefined,
+): RuntimePolicyReadModel | null {
+  if (!evidence) {
+    return null;
+  }
+
+  return {
+    pair: evidence.pair,
+    action: evidence.action,
+    reasons: evidence.reasons,
+    entryLane: evidence.entryLane,
+    sizeMultiplier: evidence.sizeMultiplier,
+    aggressiveness: evidence.aggressiveness,
+    riskAllowed: evidence.riskAllowed,
+    riskReasons: evidence.riskReasons,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export function buildRuntimePolicyDecisionEvidence(
@@ -537,6 +555,11 @@ export async function createApp(): Promise<AppRuntime> {
       runtimeCandidates,
       selectedRuntimeCandidate?.pair,
     );
+    const canonicalPolicyDecision =
+      runtimePolicyEvidence.find((item) => item.selected)
+      ?? runtimePolicyEvidence[0];
+
+    await state.setRuntimePolicyDecision(toRuntimePolicyReadModel(canonicalPolicyDecision));
 
     if (selectedRuntimeCandidate) {
       await state.markSignal(selectedRuntimeCandidate.pair);
