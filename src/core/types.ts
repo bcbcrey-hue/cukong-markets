@@ -441,6 +441,16 @@ export interface DecisionPolicyOutput {
   entryLane: DecisionPolicyEntryLane;
 }
 
+export interface RuntimeEntryCandidate {
+  pair: string;
+  opportunity: OpportunityAssessment;
+  riskCheckResult: RiskCheckResult;
+  policyDecision: DecisionPolicyOutput;
+  policyReasons: string[];
+  sizeMultiplier: number;
+  aggressiveness: DecisionPolicyAggressiveness;
+}
+
 export interface OrderRecord {
   id: string;
   pair: string;

@@ -170,6 +170,29 @@ Rule minimum Tahap 0C yang sudah dipaksa hidup di engine policy:
 - discovery bucket lemah tidak lolos mudah
 - risk block dari `RiskEngine` jadi hard block final (tidak bisa dioverride menjadi `ENTER`)
 
+## Tahap 0D — Wiring runtime ke policy (aktif)
+
+Tahap 0D memindahkan wiring runtime auto-entry agar keputusan final tidak tercecer lagi di `app.ts`.
+
+Flow runtime auto-entry sekarang:
+
+1. market scan
+2. signal generation
+3. opportunity assessment
+4. risk check per kandidat (`RiskEngine.checkCanEnter(...)`)
+5. final decision policy (`decisionPolicyEngine.decide(...)` via `evaluateOpportunityPolicyV1(..., riskCheckResult)`)
+6. hanya kandidat dengan `action === ENTER` yang diteruskan ke `ExecutionEngine.attemptAutoBuy(...)`
+
+Runtime kini mengirim objek kandidat final yang sudah disahkan policy (bukan `OpportunityAssessment` mentah) dengan muatan minimal:
+
+- `pair`
+- `opportunity` (context asli)
+- `riskCheckResult`
+- `policyDecision`
+- `policyReasons`
+- `sizeMultiplier`
+- `aggressiveness`
+
 ## Yang sudah terbukti dari source/probe
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.
@@ -199,6 +222,12 @@ Rule minimum Tahap 0C yang sudah dipaksa hidup di engine policy:
     - `tests/runtime_selector_fallback_general_probe.ts`
     - `tests/runtime_selector_fallback_pair_priority_probe.ts`
     - `tests/runtime_selector_monitoring_continuity_probe.ts`
+- Tahap 0D wiring runtime→risk→policy→execution diprove lewat:
+  - `tests/runtime_policy_wiring_probe.ts`:
+    - risk check runtime terjadi sebelum policy final
+    - kandidat `WAIT`/`SKIP` tidak lolos ke execution path runtime
+    - hanya kandidat `ENTER` yang dipilih runtime final
+    - kandidat yang terblokir risk runtime tidak bisa lolos policy final
 - Jalur Batch 4 exit scalping intelligence sudah diprove:
   - TP sekarang soft/guard rail (bukan hard auto-sell) ketika continuation + quote flow masih sehat (`tests/hold_winner_while_pump_healthy_probe.ts`).
   - Kondisi distribusi/dump risk memicu `DUMP_EXIT` (`tests/dump_exit_trigger_probe.ts`).
@@ -219,7 +248,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 - Probe repo ini membuktikan kontrak source/runtime lokal (startup bootstrap, state persistence, scheduler guard, worker path, callback security, dan alur Telegram read-model) tetapi tidak membuktikan ketahanan infrastruktur VPS jangka panjang.
 - Probe Telegram settings membuktikan persistence reload service-level, tetapi belum membuktikan interaksi operator pada chat Telegram production real network end-to-end.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
-- Probe Batch 3 runtime selector saat ini fokus pada logika pemilihan kandidat di source/probe; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback di market nyata.
+- Probe Batch 3/0D runtime selector + wiring policy saat ini fokus pada source/probe wiring; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback/policy di market nyata.
 - Probe Batch 4 exit intelligence sudah menutup logika exit decision + wiring monitor, tetapi belum membuktikan slippage/partial-fill real exchange pada skenario dump ekstrem.
 - End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
 - Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.

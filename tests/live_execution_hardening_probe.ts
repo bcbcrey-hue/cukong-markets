@@ -9,7 +9,7 @@ import { ExecutionEngine } from '../src/domain/trading/executionEngine';
 import { OrderManager } from '../src/domain/trading/orderManager';
 import { PositionManager } from '../src/domain/trading/positionManager';
 import { RiskEngine } from '../src/domain/trading/riskEngine';
-import type { OpportunityAssessment, SignalCandidate } from '../src/core/types';
+import type { OpportunityAssessment, RuntimeEntryCandidate, SignalCandidate } from '../src/core/types';
 import { JournalService } from '../src/services/journalService';
 import { PersistenceService, createDefaultSettings } from '../src/services/persistenceService';
 import { ReportService } from '../src/services/reportService';
@@ -211,6 +211,31 @@ function makeOpportunity(pair: string, ask: number): OpportunityAssessment {
     spreadPct: 0.3,
     liquidityScore: 90,
     timestamp: now,
+  };
+}
+
+function makeRuntimeEntryCandidate(opportunity: OpportunityAssessment): RuntimeEntryCandidate {
+  return {
+    pair: opportunity.pair,
+    opportunity,
+    riskCheckResult: {
+      allowed: true,
+      reasons: [],
+      warnings: [],
+      entryLane: 'DEFAULT',
+      baseAmountIdr: 100_000,
+      adjustedAmountIdr: 100_000,
+    },
+    policyDecision: {
+      action: 'ENTER',
+      sizeMultiplier: 1,
+      aggressiveness: 'NORMAL',
+      reasons: ['probe'],
+      entryLane: 'DEFAULT',
+    },
+    policyReasons: ['probe'],
+    sizeMultiplier: 1,
+    aggressiveness: 'NORMAL',
   };
 }
 
@@ -549,7 +574,7 @@ async function main() {
   });
   await execution.buy(defaultAccount.id, dupBuyOpportunity, 100_000, 'AUTO');
 
-  const skippedAutoBuy = await execution.attemptAutoBuy(dupBuyOpportunity);
+  const skippedAutoBuy = await execution.attemptAutoBuy(makeRuntimeEntryCandidate(dupBuyOpportunity));
   assert.match(
     skippedAutoBuy,
     /skip auto-buy/,
