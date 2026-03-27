@@ -80,18 +80,8 @@ function makeCandidate(pair: string, lane: DecisionPolicyEntryLane): RuntimeEntr
       exposure: {
         totalDeployedCapitalIdr: 0,
         totalRemainingCapitalIdr: 100_000,
-        pairClass: {
-          key: 'MAJOR',
-          usedNotionalIdr: 0,
-          capNotionalIdr: 100_000,
-          remainingNotionalIdr: 100_000,
-        },
-        discoveryBucket: {
-          key: 'ANOMALY',
-          usedNotionalIdr: 0,
-          capNotionalIdr: 100_000,
-          remainingNotionalIdr: 100_000,
-        },
+        pairClass: { key: 'MAJOR', usedNotionalIdr: 0, capNotionalIdr: 100_000, remainingNotionalIdr: 100_000 },
+        discoveryBucket: { key: 'ANOMALY', usedNotionalIdr: 0, capNotionalIdr: 100_000, remainingNotionalIdr: 100_000 },
       },
     },
     capitalContext: {
@@ -112,13 +102,14 @@ function makeCandidate(pair: string, lane: DecisionPolicyEntryLane): RuntimeEntr
 function makeOutcome(input: {
   id: string;
   pair: string;
+  positionId: string;
   accuracy: TradeOutcomeSummary['accuracy'];
   netPnl: number;
   returnPercentage: number;
 }): TradeOutcomeSummary {
   return {
     id: input.id,
-    positionId: `pos-${input.id}`,
+    positionId: input.positionId,
     accountId: ACCOUNT_ID,
     account: 'Probe',
     pair: input.pair,
@@ -148,40 +139,60 @@ async function main() {
 
   const learning = new PolicyLearningService(persistence);
 
-  // 1) evaluation record tercipta dari final policy entry runtime nyata.
-  const firstRecord = await learning.recordPolicyEntry(makeCandidate('btc_idr', 'SCOUT'), settingsService.get(), ACCOUNT_ID);
-  assert.equal(firstRecord.finalDecision.action, 'ENTER');
-  assert.equal(firstRecord.finalDecision.entryLane, 'SCOUT');
+  // 1) Record dibuat setelah anchor eksekusi (orderId) terbentuk.
+  const sharedScout = await learning.recordAutoEntryExecution(
+    makeCandidate('btc_idr', 'SCOUT'),
+    settingsService.get(),
+    ACCOUNT_ID,
+    'order-shared-1',
+  );
+  const sharedAddOn = await learning.recordAutoEntryExecution(
+    makeCandidate('btc_idr', 'ADD_ON_CONFIRM'),
+    settingsService.get(),
+    ACCOUNT_ID,
+    'order-shared-2',
+  );
+  assert.equal(sharedScout.status, 'PENDING_EXECUTION');
+  assert.equal(sharedAddOn.status, 'PENDING_EXECUTION');
 
-  // 2) outcome linkage + simulated outcome tidak boleh jadi dasar tuning aktif.
+  // 2) Multi-entry same pair: dua entry di-anchor ke position lifecycle yang sama.
+  await learning.markExecutionAnchoredByOrder('order-shared-1', 'pos-shared-btc');
+  await learning.markExecutionAnchoredByOrder('order-shared-2', 'pos-shared-btc');
+
   await persistence.appendTradeOutcome(
     makeOutcome({
-      id: 'outcome-sim-1',
+      id: 'outcome-shared-btc',
       pair: 'btc_idr',
-      accuracy: 'SIMULATED',
-      netPnl: -1200,
+      positionId: 'pos-shared-btc',
+      accuracy: 'CONFIRMED_LIVE',
+      netPnl: -2000,
       returnPercentage: -1.2,
     }),
   );
-  const firstLink = await learning.resolveOutcomesWithEvaluations();
-  assert.equal(firstLink.linked, 1);
-  const storedAfterSim = await persistence.readPolicyEvaluations();
-  const simResolved = storedAfterSim.find((item) => item.id === firstRecord.id);
-  assert.equal(simResolved?.status, 'RESOLVED');
-  assert.equal(simResolved?.resolution?.eligibleForTuning, false);
-  const noOpResult = await learning.runConservativeLearningCycle(settingsService.get());
-  assert.equal(noOpResult.tuned, false);
-  assert.match(noOpResult.noOpReason ?? '', /sample belum cukup/i);
 
-  // Tambah sample CONFIRMED/PARTIAL agar gating lolos dan tuning terjadi.
+  // 3) Entry yang lifecycle eksekusinya gagal harus punya status jelas dan tidak ikut tuning.
+  await learning.recordAutoEntryExecution(
+    makeCandidate('eth_idr', 'DEFAULT'),
+    settingsService.get(),
+    ACCOUNT_ID,
+    'order-failed-1',
+  );
+  await learning.markExecutionFailedByOrder('order-failed-1', 'exchange rejected');
+
+  // Tambah sample eligible agar gate sample lolos.
   for (let i = 0; i < 6; i += 1) {
-    const lane: DecisionPolicyEntryLane = i < 4 ? 'SCOUT' : 'DEFAULT';
+    const orderId = `order-live-${i}`;
+    const positionId = `pos-live-${i}`;
     const pair = `pair_${i}_idr`;
-    await learning.recordPolicyEntry(makeCandidate(pair, lane), settingsService.get(), ACCOUNT_ID);
+    const lane: DecisionPolicyEntryLane = i < 4 ? 'SCOUT' : 'DEFAULT';
+
+    await learning.recordAutoEntryExecution(makeCandidate(pair, lane), settingsService.get(), ACCOUNT_ID, orderId);
+    await learning.markExecutionAnchoredByOrder(orderId, positionId);
     await persistence.appendTradeOutcome(
       makeOutcome({
         id: `outcome-live-${i}`,
         pair,
+        positionId,
         accuracy: i % 2 === 0 ? 'CONFIRMED_LIVE' : 'PARTIAL_LIVE',
         netPnl: -1000 - i * 10,
         returnPercentage: -0.8,
@@ -189,36 +200,49 @@ async function main() {
     );
   }
 
-  const linkResult = await learning.resolveOutcomesWithEvaluations();
-  assert.ok(linkResult.linked >= 6);
+  const linkage = await learning.resolveOutcomesWithEvaluations();
+  assert.ok(linkage.linked >= 8);
 
-  const learningResult = await learning.runConservativeLearningCycle(settingsService.get());
+  const records = await persistence.readPolicyEvaluations();
+  const sharedResolved = records.filter((item) => item.executionAnchor?.positionId === 'pos-shared-btc');
+  assert.equal(sharedResolved.length, 2);
+  assert.ok(sharedResolved.every((item) => item.status === 'RESOLVED'));
+  assert.ok(sharedResolved.every((item) => item.resolution?.outcomeId === 'outcome-shared-btc'));
+  assert.ok(sharedResolved.every((item) => item.resolution?.sharedPositionLifecycle === true));
 
-  assert.equal(learningResult.tuned, true);
+  const failedRecord = records.find((item) => item.executionAnchor?.orderId === 'order-failed-1');
+  assert.equal(failedRecord?.status, 'EXECUTION_FAILED');
 
-  // 3) tuning hanya whitelist parameter policy.
-  const tunedKeys = learningResult.changes.map((item) => item.key);
+  // 4) Run learning pertama boleh tune.
+  const learningResult1 = await learning.runConservativeLearningCycle(settingsService.get(), null);
+  assert.equal(learningResult1.tuned, true);
+  const tunedKeys = learningResult1.changes.map((item) => item.key);
   assert(tunedKeys.every((key) => ['minScoreToBuy', 'minConfidence', 'minPumpProbability'].includes(key)));
 
   const patch: Partial<typeof baseSettings.strategy> = {};
-  for (const change of learningResult.changes) {
+  for (const change of learningResult1.changes) {
     patch[change.key] = change.after;
   }
   await settingsService.patchStrategy(patch);
-  const afterTune = settingsService.get();
 
-  // 4) tuning tidak menembus guardrail.
+  // 5) Run learning kedua dataset identik wajib NO_OP (idempotent).
+  const learningResult2 = await learning.runConservativeLearningCycle(settingsService.get(), learningResult1);
+  assert.equal(learningResult2.tuned, false);
+  assert.match(learningResult2.noOpReason ?? '', /idempotent no-op/i);
+
+  // 6) Guardrail tidak boleh tersentuh.
+  const afterTune = settingsService.get();
   assert.deepEqual(afterTune.risk, originalRisk);
   assert.equal(afterTune.tradingMode, originalTradingMode);
 
-  // 6) tuning persist + terbaca setelah reload service baru.
+  // 7) Tuning persist setelah reload.
   const reloadedSettingsService = new SettingsService(persistence);
   const reloaded = await reloadedSettingsService.load();
-  for (const change of learningResult.changes) {
+  for (const change of learningResult1.changes) {
     assert.equal(reloaded.strategy[change.key], change.after);
   }
 
-  // 7) observability operator menampilkan status learning.
+  // 8) Observability operator menampilkan learning status/no-op.
   const statusText = new ReportService().statusText({
     health: {
       status: 'healthy',
@@ -252,11 +276,11 @@ async function main() {
       notes: [],
     },
     activeAccounts: 1,
-    runtimePolicyLearning: learningResult,
+    runtimePolicyLearning: learningResult2,
   });
 
-  assert.match(statusText, /policyLearning status=/);
-  assert.match(statusText, /policyLearningReasons=/);
+  assert.match(statusText, /policyLearning status=NO_OP/);
+  assert.match(statusText, /policyLearningNoOp=/);
 
   console.log('batch_d_learning_loop_probe: ok');
 }

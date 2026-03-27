@@ -588,9 +588,16 @@ export interface PolicyEvaluationRecord {
     StrategySettings,
     'minScoreToBuy' | 'minConfidence' | 'minPumpProbability' | 'spoofRiskBlockThreshold'
   >;
-  status: 'PENDING_OUTCOME' | 'RESOLVED';
+  executionAnchor?: {
+    orderId: string;
+    positionId?: string;
+    source: 'AUTO_RUNTIME_POLICY';
+  };
+  status: 'PENDING_EXECUTION' | 'EXECUTION_SKIPPED' | 'EXECUTION_FAILED' | 'PENDING_OUTCOME' | 'RESOLVED';
+  statusReason?: string;
   resolution?: {
     outcomeId: string;
+    positionId: string;
     outcomeAccuracy: SummaryAccuracy;
     outcomeNetPnl: number | null;
     outcomeReturnPct: number | null;
@@ -598,6 +605,7 @@ export interface PolicyEvaluationRecord {
     resolvedAt: string;
     eligibleForTuning: boolean;
     ineligibleReason?: string;
+    sharedPositionLifecycle: boolean;
   };
 }
 
@@ -618,6 +626,9 @@ export interface PolicyLearningReadModel {
   reasons: string[];
   changes: PolicyLearningTuningChange[];
   laneSample: Record<DecisionPolicyEntryLane, number>;
+  eligibleOutcomeIdsFingerprint: string;
+  lastAppliedLearningSignature?: string;
+  appliedEligibleOutcomeIds: string[];
 }
 
 export interface OrderRecord {

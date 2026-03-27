@@ -387,6 +387,7 @@ export async function createApp(): Promise<AppRuntime> {
     orderManager,
     journal,
     summary,
+    policyLearning,
   );
 
   const callbackServer = new IndodaxCallbackServer(
@@ -662,9 +663,6 @@ export async function createApp(): Promise<AppRuntime> {
       currentSettings.tradingMode === 'FULL_AUTO'
     ) {
       try {
-        if (defaultAccount && selectedRuntimeCandidate.policyDecision.action === 'ENTER') {
-          await policyLearning.recordPolicyEntry(selectedRuntimeCandidate, currentSettings, defaultAccount.id);
-        }
         await executionEngine.attemptAutoBuy(selectedRuntimeCandidate);
       } catch (error) {
         const message =
@@ -695,7 +693,10 @@ export async function createApp(): Promise<AppRuntime> {
     await executionEngine.evaluateOpenPositions();
 
     const linkage = await policyLearning.resolveOutcomesWithEvaluations();
-    const learningDecision = await policyLearning.runConservativeLearningCycle(settings.get());
+    const learningDecision = await policyLearning.runConservativeLearningCycle(
+      settings.get(),
+      state.get().lastPolicyLearning ?? null,
+    );
 
     if (learningDecision.tuned && learningDecision.changes.length > 0) {
       const patch: Partial<BotSettings['strategy']> = {};
