@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type {
+  ExecutionPlanReadModel,
   OrderRecord,
   OrderSide,
   OrderType,
@@ -27,6 +28,7 @@ export interface CreateOrderInput {
   referencePrice?: number | null;
   closeReason?: PositionCloseReason;
   entryStyle?: PositionEntryStyle;
+  executionPlan?: ExecutionPlanReadModel;
   notes?: string;
 }
 
@@ -103,6 +105,7 @@ export class OrderManager {
       relatedPositionId: input.relatedPositionId,
       closeReason: input.closeReason,
       entryStyle: input.entryStyle,
+      executionPlan: input.executionPlan,
       notes: input.notes,
     };
 

@@ -130,6 +130,7 @@ export class SummaryService {
       feeAsset: order.feeAsset ?? null,
       exchangeOrderId: order.exchangeOrderId,
       slippageVsReferencePricePct: this.calcSlippagePct(order.referencePrice, fillPrice ?? order.price),
+      executionPlan: order.executionPlan,
       timestamp: nowIso(),
       reason: reason ?? order.notes,
     };

@@ -42,6 +42,8 @@ export type OpportunityAction =
 export type DecisionPolicyAction = 'ENTER' | 'SKIP' | 'WAIT';
 export type DecisionPolicyAggressiveness = 'LOW' | 'NORMAL' | 'HIGH';
 export type DecisionPolicyEntryLane = 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
+export type ExecutionStressMode = 'NORMAL' | 'THIN_BOOK_STRESS';
+export type ExecutionOrderStyle = 'LIMIT_MARKETABLE';
 export type SummaryAccuracy =
   | 'SIMULATED'
   | 'OPTIMISTIC_LIVE'
@@ -534,6 +536,29 @@ export interface RuntimeEntryCandidate {
   aggressiveness: DecisionPolicyAggressiveness;
 }
 
+export interface ExecutionPlanReadModel {
+  pair: string;
+  policyAction: DecisionPolicyAction;
+  policyAggressiveness: DecisionPolicyAggressiveness;
+  entryLane: DecisionPolicyEntryLane;
+  allocatedNotionalIdr: number;
+  orderStyle: ExecutionOrderStyle;
+  stressMode: ExecutionStressMode;
+  baselineSlippageBps: number;
+  finalSlippageBps: number;
+  slippageReasons: string[];
+  partialFillExpected: boolean;
+  partialFillRatio: number;
+  keepRemainderOpen: boolean;
+  cancelAfterTimeoutMs: number;
+  marketContext: {
+    spreadPct: number | null;
+    depthScore: number | null;
+    liquidityScore: number | null;
+    quoteFlowAccelerationScore: number | null;
+  };
+}
+
 export interface RuntimePolicyReadModel {
   pair: string;
   action: DecisionPolicyAction;
@@ -657,6 +682,7 @@ export interface OrderRecord {
   relatedPositionId?: string;
   closeReason?: PositionCloseReason;
   entryStyle?: PositionEntryStyle;
+  executionPlan?: ExecutionPlanReadModel;
   notes?: string;
 }
 
@@ -752,6 +778,7 @@ export interface ExecutionSummary {
   feeAsset?: string | null;
   exchangeOrderId?: string;
   slippageVsReferencePricePct: number | null;
+  executionPlan?: ExecutionPlanReadModel;
   timestamp: string;
   reason?: string;
 }
