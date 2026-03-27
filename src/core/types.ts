@@ -459,6 +459,18 @@ export interface RuntimeEntryCandidate {
   aggressiveness: DecisionPolicyAggressiveness;
 }
 
+export interface RuntimePolicyReadModel {
+  pair: string;
+  action: DecisionPolicyAction;
+  reasons: string[];
+  entryLane: DecisionPolicyEntryLane;
+  sizeMultiplier: number;
+  aggressiveness: DecisionPolicyAggressiveness;
+  riskAllowed: boolean;
+  riskReasons: string[];
+  updatedAt: string;
+}
+
 export interface OrderRecord {
   id: string;
   pair: string;
@@ -710,6 +722,7 @@ export interface RuntimeState {
   lastHotlist: HotlistEntry[];
   lastSignals: SignalCandidate[];
   lastOpportunities: OpportunityAssessment[];
+  lastRuntimePolicyDecision: RuntimePolicyReadModel | null;
   tradeCount: number;
   lastTradeAt: string | null;
   pollingStats: {

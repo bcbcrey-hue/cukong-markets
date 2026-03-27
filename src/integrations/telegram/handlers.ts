@@ -451,6 +451,7 @@ async function replyStatus(ctx: Context, deps: HandlerDeps): Promise<void> {
       activeAccounts: deps.accounts.listEnabled().length,
       topSignal: deps.state.get().lastHotlist[0],
       topOpportunity: deps.state.get().lastOpportunities[0],
+      runtimePolicyDecision: deps.state.get().lastRuntimePolicyDecision,
     }),
     executeTradeKeyboard,
   );

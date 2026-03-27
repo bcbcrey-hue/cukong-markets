@@ -40,6 +40,7 @@ import type {
   OpportunityAssessment,
   PairClass,
   PositionRecord,
+  RuntimePolicyReadModel,
   RuntimeEntryCandidate,
   StoredAccount,
 } from './core/types';
@@ -96,6 +97,65 @@ function sortRuntimeCandidates(
   }
 
   return sortByPairClassThenScore(a.opportunity, b.opportunity);
+}
+
+export interface RuntimePolicyDecisionEvidence {
+  pair: RuntimePolicyReadModel['pair'];
+  selected: boolean;
+  action: RuntimePolicyReadModel['action'];
+  reasons: RuntimePolicyReadModel['reasons'];
+  sizeMultiplier: RuntimePolicyReadModel['sizeMultiplier'];
+  aggressiveness: RuntimePolicyReadModel['aggressiveness'];
+  entryLane: RuntimePolicyReadModel['entryLane'];
+  riskAllowed: RuntimePolicyReadModel['riskAllowed'];
+  riskReasons: RuntimePolicyReadModel['riskReasons'];
+  riskWarnings: string[];
+  discoveryBucket?: OpportunityAssessment['discoveryBucket'];
+  marketRegime: OpportunityAssessment['marketRegime'];
+  timingState: OpportunityAssessment['entryTiming']['state'];
+  recommendedAction: OpportunityAssessment['recommendedAction'];
+}
+
+function toRuntimePolicyReadModel(
+  evidence: RuntimePolicyDecisionEvidence | undefined,
+): RuntimePolicyReadModel | null {
+  if (!evidence) {
+    return null;
+  }
+
+  return {
+    pair: evidence.pair,
+    action: evidence.action,
+    reasons: evidence.reasons,
+    entryLane: evidence.entryLane,
+    sizeMultiplier: evidence.sizeMultiplier,
+    aggressiveness: evidence.aggressiveness,
+    riskAllowed: evidence.riskAllowed,
+    riskReasons: evidence.riskReasons,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function buildRuntimePolicyDecisionEvidence(
+  candidates: RuntimeEntryCandidate[],
+  selectedPair?: string,
+): RuntimePolicyDecisionEvidence[] {
+  return candidates.map((candidate) => ({
+    pair: candidate.pair,
+    selected: candidate.pair === selectedPair,
+    action: candidate.policyDecision.action,
+    reasons: candidate.policyDecision.reasons,
+    sizeMultiplier: candidate.policyDecision.sizeMultiplier,
+    aggressiveness: candidate.policyDecision.aggressiveness,
+    entryLane: candidate.policyDecision.entryLane,
+    riskAllowed: candidate.riskCheckResult.allowed,
+    riskReasons: candidate.riskCheckResult.reasons,
+    riskWarnings: candidate.riskCheckResult.warnings,
+    discoveryBucket: candidate.opportunity.discoveryBucket,
+    marketRegime: candidate.opportunity.marketRegime,
+    timingState: candidate.opportunity.entryTiming.state,
+    recommendedAction: candidate.opportunity.recommendedAction,
+  }));
 }
 
 export function buildRuntimeEntryCandidates(
@@ -491,9 +551,45 @@ export async function createApp(): Promise<AppRuntime> {
       )
       : [];
     const selectedRuntimeCandidate = selectRuntimeEntryCandidate(runtimeCandidates);
+    const runtimePolicyEvidence = buildRuntimePolicyDecisionEvidence(
+      runtimeCandidates,
+      selectedRuntimeCandidate?.pair,
+    );
+    const canonicalPolicyDecision =
+      runtimePolicyEvidence.find((item) => item.selected)
+      ?? runtimePolicyEvidence[0];
+
+    await state.setRuntimePolicyDecision(toRuntimePolicyReadModel(canonicalPolicyDecision));
 
     if (selectedRuntimeCandidate) {
       await state.markSignal(selectedRuntimeCandidate.pair);
+    }
+
+    if (runtimePolicyEvidence.length > 0) {
+      const actionCount = runtimePolicyEvidence.reduce<Record<string, number>>((acc, item) => {
+        acc[item.action] = (acc[item.action] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      logger.info(
+        {
+          kind: 'runtime_policy_decisions',
+          selectedPair: selectedRuntimeCandidate?.pair ?? null,
+          decisions: runtimePolicyEvidence,
+          actionCount,
+        },
+        'runtime policy decisions evaluated',
+      );
+
+      await journal.info(
+        'RUNTIME_POLICY_DECISIONS',
+        `runtime policy decisions evaluated (ENTER=${actionCount.ENTER ?? 0}, WAIT=${actionCount.WAIT ?? 0}, SKIP=${actionCount.SKIP ?? 0})`,
+        {
+          selectedPair: selectedRuntimeCandidate?.pair ?? null,
+          actionCount,
+          decisions: runtimePolicyEvidence,
+        },
+      );
     }
 
     if (
@@ -509,7 +605,12 @@ export async function createApp(): Promise<AppRuntime> {
         await journal.error('AUTO_BUY_FAILED', message, {
           pair: selectedRuntimeCandidate.pair,
           action: selectedRuntimeCandidate.policyDecision.action,
+          policyReasons: selectedRuntimeCandidate.policyDecision.reasons,
+          sizeMultiplier: selectedRuntimeCandidate.policyDecision.sizeMultiplier,
+          aggressiveness: selectedRuntimeCandidate.policyDecision.aggressiveness,
           entryLane: selectedRuntimeCandidate.policyDecision.entryLane,
+          riskAllowed: selectedRuntimeCandidate.riskCheckResult.allowed,
+          riskReasons: selectedRuntimeCandidate.riskCheckResult.reasons,
         });
       }
     }
