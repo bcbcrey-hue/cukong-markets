@@ -148,6 +148,20 @@ Audit permanen untuk pemetaan jalur keputusan runtime aktual disimpan di:
 
 Dokumen ini khusus Tahap 0A: memetakan keputusan yang saat ini masih tersebar (`opportunityEngine`/`app.ts`/`executionEngine`/`riskEngine`) tanpa mengklaim DecisionPolicyEngine final sudah terimplementasi.
 
+## Tahap 0B — Kunci kontrak Decision Policy (aktif)
+
+Tahap 0B mengunci **kontrak keputusan tunggal** untuk downstream, bukan implementasi policy engine penuh:
+
+- `DecisionPolicyInput`
+- `DecisionPolicyOutput` (minimal wajib: `action`, `sizeMultiplier`, `aggressiveness`, `reasons`)
+
+Implementasi `decision policy v1` saat ini bersifat **rule-based** (tanpa ML, tanpa model prediksi baru, tanpa learning loop baru), dan dipakai sinkronisasi minimum di runtime selector / execution / risk.
+
+Status jujur Tahap 0B:
+
+- yang sudah dikerjakan: kontrak type resmi + adapter/sinkronisasi downstream minimum;
+- yang belum dikerjakan: policy engine final lintas seluruh business flow.
+
 ## Yang sudah terbukti dari source/probe
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.

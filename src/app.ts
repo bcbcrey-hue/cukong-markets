@@ -34,7 +34,7 @@ import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
 import { SummaryService } from './services/summaryService';
 import { AppServer } from './server/appServer';
-import type { BotSettings, OpportunityAssessment, PairClass } from './core/types';
+import type { BotSettings, DecisionPolicyOutput, OpportunityAssessment, PairClass } from './core/types';
 
 export interface AppRuntime {
   start(): Promise<void>;
@@ -69,41 +69,73 @@ function isRuntimeEntryEligible(
   candidate: OpportunityAssessment,
   settings: BotSettings,
 ): boolean {
-  return (
-    candidate.edgeValid &&
-    ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(candidate.recommendedAction) &&
-    candidate.pumpProbability >= settings.strategy.minPumpProbability &&
-    candidate.confidence >= settings.strategy.minConfidence
-  );
+  const decision = buildRuntimeDecision(candidate, settings);
+  return decision.action === 'ENTER';
+}
+
+function buildRuntimeDecision(
+  candidate: OpportunityAssessment,
+  settings: BotSettings,
+): DecisionPolicyOutput {
+  const isLaneScout = candidate.recommendedAction === 'SCOUT_ENTER';
+  const isLaneAddOn = candidate.recommendedAction === 'ADD_ON_CONFIRM';
+  const eligible =
+    candidate.edgeValid
+    && ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(candidate.recommendedAction)
+    && candidate.pumpProbability >= settings.strategy.minPumpProbability
+    && candidate.confidence >= settings.strategy.minConfidence;
+
+  if (!eligible) {
+    return {
+      action: 'SKIP',
+      sizeMultiplier: 0,
+      aggressiveness: 'LOW',
+      reasons: ['Tidak lolos gate runtime entry selector'],
+      entryLane: 'DEFAULT',
+    };
+  }
+
+  return {
+    action: 'ENTER',
+    sizeMultiplier: isLaneScout ? 0.3 : isLaneAddOn ? 0.55 : 1,
+    aggressiveness: isLaneScout ? 'LOW' : isLaneAddOn ? 'NORMAL' : 'HIGH',
+    reasons: ['Lolos gate runtime entry selector'],
+    entryLane: isLaneScout ? 'SCOUT' : isLaneAddOn ? 'ADD_ON_CONFIRM' : 'DEFAULT',
+  };
 }
 
 export function selectRuntimeEntryCandidate(
   opportunities: OpportunityAssessment[],
   settings: BotSettings,
 ): OpportunityAssessment | undefined {
-  const eligible = opportunities.filter((item) => isRuntimeEntryEligible(item, settings));
+  const eligible = opportunities
+    .map((item) => ({ item, decision: buildRuntimeDecision(item, settings) }))
+    .filter(({ item }) => isRuntimeEntryEligible(item, settings));
   const scoutAnomaly = eligible
-    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'ANOMALY')
+    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'ANOMALY')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (scoutAnomaly[0]) {
     return scoutAnomaly[0];
   }
 
   const scoutStealth = eligible
-    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'STEALTH')
+    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'STEALTH')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (scoutStealth[0]) {
     return scoutStealth[0];
   }
 
   const addOn = eligible
-    .filter((item) => item.recommendedAction === 'ADD_ON_CONFIRM')
+    .filter(({ decision }) => decision.entryLane === 'ADD_ON_CONFIRM')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (addOn[0]) {
     return addOn[0];
   }
 
-  return [...eligible].sort(sortByPairClassThenScore)[0];
+  return eligible.map(({ item }) => item).sort(sortByPairClassThenScore)[0];
 }
 
 async function runStartupPhase<T>(phase: string, task: () => Promise<T>): Promise<T> {

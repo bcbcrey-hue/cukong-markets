@@ -39,6 +39,9 @@ export type OpportunityAction =
   | 'EMERGENCY_EXIT'
   | 'DUMP_EXIT'
   | 'TAKE_PROFIT_EXIT';
+export type DecisionPolicyAction = 'ENTER' | 'SKIP' | 'WAIT';
+export type DecisionPolicyAggressiveness = 'LOW' | 'NORMAL' | 'HIGH';
+export type DecisionPolicyEntryLane = 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
 export type SummaryAccuracy =
   | 'SIMULATED'
   | 'OPTIMISTIC_LIVE'
@@ -408,6 +411,29 @@ export interface OpportunityAssessment {
   timestamp: number;
 }
 
+export interface DecisionPolicyInput {
+  pair: string;
+  source: 'OPPORTUNITY' | 'SIGNAL';
+  score: number;
+  confidence: number;
+  recommendedAction?: OpportunityAction;
+  edgeValid?: boolean;
+  pumpProbability?: number;
+  minScoreToAlert: number;
+  minScoreToBuy: number;
+  minConfidence: number;
+  minPumpProbability?: number;
+  tradingMode: TradingMode;
+}
+
+export interface DecisionPolicyOutput {
+  action: DecisionPolicyAction;
+  sizeMultiplier: number;
+  aggressiveness: DecisionPolicyAggressiveness;
+  reasons: string[];
+  entryLane: DecisionPolicyEntryLane;
+}
+
 export interface OrderRecord {
   id: string;
   pair: string;
@@ -748,24 +774,7 @@ export interface ManualOrderRequest {
   type: OrderType;
 }
 
-export interface AutoExecutionDecision {
-  shouldEnter: boolean;
-  shouldExit: boolean;
-  action:
-    | 'NONE'
-    | 'WATCH'
-    | 'PREPARE_ENTRY'
-    | 'CONFIRM_ENTRY'
-    | 'ENTER'
-    | 'EXIT'
-    | 'AVOID'
-    | 'SCOUT_ENTER'
-    | 'ADD_ON_CONFIRM'
-    | 'EMERGENCY_EXIT'
-    | 'DUMP_EXIT'
-    | 'TAKE_PROFIT_EXIT';
-  reasons: string[];
-}
+export type AutoExecutionDecision = DecisionPolicyOutput;
 
 export interface BacktestRunConfig {
   pair?: string;
