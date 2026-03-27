@@ -36,7 +36,7 @@ Workflow CI resmi ada di `.github/workflows/ci.yml` dan dijalankan pada `push` +
 - `npm run probe:audit`
 - `npm run test:probes`
 - `npm run verify`
-- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch_e_current.json`)
+- `npm run runtime:contract` (beserta upload artifact `test_reports/runtime_contract_batch_f_current.json`)
 
 Job/check utama workflow bernama `verify-runtime-contract`.
 Workflow juga mempublikasikan commit status context `verify-runtime-contract/combined` yang mengikuti hasil job utama (success/failure) agar status gabungan commit tidak kosong.
@@ -79,6 +79,12 @@ Jika hanya ingin mengarsipkan evidence tanpa menggagalkan command (mode audit ek
 ```bash
 SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live
 ```
+
+Batch F menambah evidence shadow-live khusus policy layer (non-destruktif, tanpa submit order):
+
+- `policy_runtime_decision`: bukti runtime read-model final policy (`action`, `reasons`, `entryLane`, `riskAllowed`) tersedia.
+- `policy_vs_hint_consistency`: bukti komparasi `recommendedAction` (hint) vs `finalAction` policy terlihat eksplisit.
+- `policy_guardrail_enforced`: bukti guardrail bahwa `riskAllowed=false` tidak boleh berakhir pada `finalAction=ENTER`.
 
 ## Batch A — Real Trade Feed Truth Layer (aktif di runtime)
 
@@ -247,6 +253,25 @@ Probe resmi Batch E:
   - membuktikan thin-book stress dapat memicu partial fill + remainder + timeout cancel,
   - membuktikan execution observability baru muncul di summary/report.
 
+## Batch F — Validation & Shadow Live for New Brain (aktif sebagai bukti integrasi)
+
+Batch F fokus sempit pada **pembuktian integrasi**, bukan redesign logic baru:
+
+1. sinkronisasi lintas layer A/B/C/D/E terhadap kontrak arsitektur final,
+2. proof eksplisit bahwa `DecisionPolicyEngine` adalah final source (`ENTER/WAIT/SKIP`),
+3. proof bahwa `recommendedAction` tetap hint/context (bukan keputusan final),
+4. proof bahwa risk/capital/execution tetap pada peran upstream/downstream yang benar,
+5. proof observability operator/runtime/shadow-live menampilkan alasan final policy.
+
+Probe resmi Batch F:
+
+- `tests/batch_f_new_brain_validation_probe.ts`
+  - memvalidasi flow runtime `opportunity -> risk -> policy -> capital -> execution`;
+  - memvalidasi `risk block` tidak bisa bypass;
+  - memvalidasi execution hanya mengeksekusi output policy final;
+  - memvalidasi operator summary tetap membedakan `hintAction` vs `runtimePolicy action`;
+  - memvalidasi evidence policy reasons tersedia di journal runtime.
+
 ## Bukti runtime worker production/build
 
 Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_runtime_probe.ts` menjalankan **Node terhadap artifact build** (`dist/services/workerPoolService.js`) dari direktori kerja sementara (bukan root repo), lalu memverifikasi:
@@ -258,7 +283,7 @@ Worker tidak hanya diuji dari `tsx` dev runtime. Probe `tests/worker_production_
 Probe ini ikut di jalur `npm run verify`.
 
 
-## Runtime verifier contract (Phase 2 Batch E)
+## Runtime verifier contract (Phase 2 Batch F)
 
 Untuk membekukan target proof runtime VPS, gunakan:
 
@@ -266,7 +291,7 @@ Untuk membekukan target proof runtime VPS, gunakan:
 npm run runtime:contract
 ```
 
-Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch_e_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
+Command ini memakai source-of-truth env canonical dari `src/config/env.ts`, mencetak JSON kontrak target runtime ke stdout, dan otomatis menulis artefak ke `test_reports/runtime_contract_batch_f_current.json` (start command, target endpoint `/`, `/healthz`, `/livez`, target callback bind/host/port/path/allowed-host/auth-mode, direktori runtime, target startup phase, target Telegram runtime marker, dan target worker build path).
 
 Dokumen canonical checklist evidence VPS: `docs/runtime_vps_verifier_contract.md`.
 

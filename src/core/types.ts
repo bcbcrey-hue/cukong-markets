@@ -847,7 +847,13 @@ export interface IndodaxCallbackState {
 }
 
 export interface ShadowRunCheckResult {
-  check: 'private_auth' | 'public_market' | 'reconciliation_read_model';
+  check:
+    | 'private_auth'
+    | 'public_market'
+    | 'reconciliation_read_model'
+    | 'policy_runtime_decision'
+    | 'policy_vs_hint_consistency'
+    | 'policy_guardrail_enforced';
   endpoint: string;
   pass: boolean;
   account: string;
@@ -883,6 +889,9 @@ export interface ShadowRunTelegramSummary {
   publicMarket: ShadowCheckStatus;
   privateAuth: ShadowCheckStatus;
   reconciliation: ShadowCheckStatus;
+  policyRuntimeDecision?: ShadowCheckStatus;
+  policyVsHintConsistency?: ShadowCheckStatus;
+  policyGuardrailEnforced?: ShadowCheckStatus;
   hotlistSignalOpportunity: 'TERSEDIA' | 'TIDAK TERSEDIA';
   intelligenceSpoofPattern: 'TERSEDIA' | 'TIDAK TERSEDIA';
   evidenceArchive: 'TERSIMPAN' | 'GAGAL TERSIMPAN' | 'TIDAK DIUJI';

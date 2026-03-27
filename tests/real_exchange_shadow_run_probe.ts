@@ -89,6 +89,18 @@ async function main() {
   );
 
   const failed = evidences.flatMap((item) => item.checks.filter((check) => !check.pass));
+  const requiredPolicyChecks: Array<
+    'policy_runtime_decision' | 'policy_vs_hint_consistency' | 'policy_guardrail_enforced'
+  > = ['policy_runtime_decision', 'policy_vs_hint_consistency', 'policy_guardrail_enforced'];
+  const hasEnabledAccountEvidence = evidences.every((item) => item.account !== 'no-enabled-account');
+  if (hasEnabledAccountEvidence) {
+    for (const checkName of requiredPolicyChecks) {
+      assert.ok(
+        evidences.every((item) => item.checks.some((check) => check.check === checkName)),
+        `Shadow-run evidence must include ${checkName}`,
+      );
+    }
+  }
   const allowFailedChecks = process.env.SHADOW_RUN_ALLOW_FAILED_CHECKS === '1';
   console.log(
     JSON.stringify(

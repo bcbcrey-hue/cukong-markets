@@ -90,6 +90,9 @@ interface ShadowRunLifecycleState {
     publicMarket: ShadowRunTelegramSummary['publicMarket'];
     privateAuth: ShadowRunTelegramSummary['privateAuth'];
     reconciliation: ShadowRunTelegramSummary['reconciliation'];
+    policyRuntimeDecision: ShadowRunTelegramSummary['policyRuntimeDecision'];
+    policyVsHintConsistency: ShadowRunTelegramSummary['policyVsHintConsistency'];
+    policyGuardrailEnforced: ShadowRunTelegramSummary['policyGuardrailEnforced'];
   };
 }
 
@@ -109,6 +112,9 @@ export class ExecutionEngine {
       publicMarket: 'TIDAK DIUJI',
       privateAuth: 'TIDAK DIUJI',
       reconciliation: 'TIDAK DIUJI',
+      policyRuntimeDecision: 'TIDAK DIUJI',
+      policyVsHintConsistency: 'TIDAK DIUJI',
+      policyGuardrailEnforced: 'TIDAK DIUJI',
     },
   };
 
@@ -2296,6 +2302,9 @@ export class ExecutionEngine {
       | 'publicMarket'
       | 'privateAuth'
       | 'reconciliation'
+      | 'policyRuntimeDecision'
+      | 'policyVsHintConsistency'
+      | 'policyGuardrailEnforced'
       | 'evidenceArchive'
       | 'hotlistSignalOpportunity'
       | 'intelligenceSpoofPattern'
@@ -2314,6 +2323,15 @@ export class ExecutionEngine {
     }
     if (summary.reconciliation === 'GAGAL') {
       steps.push('Periksa endpoint read-model (openOrders/orderHistory) dan pair uji.');
+    }
+    if (summary.policyRuntimeDecision === 'GAGAL') {
+      steps.push('Jalankan runtime market scan agar read-model policy final tersedia.');
+    }
+    if (summary.policyVsHintConsistency === 'GAGAL') {
+      steps.push('Pastikan evidence membandingkan recommendedAction (hint) vs final policy action.');
+    }
+    if (summary.policyGuardrailEnforced === 'GAGAL') {
+      steps.push('Periksa guardrail risk: policy action tidak boleh ENTER saat riskAllowed=false.');
     }
     if (summary.evidenceArchive === 'GAGAL TERSIMPAN') {
       steps.push('Periksa permission/storage data/history untuk arsip evidence.');
@@ -2355,6 +2373,9 @@ export class ExecutionEngine {
       checks.publicMarket === 'LULUS' &&
       checks.privateAuth === 'LULUS' &&
       checks.reconciliation === 'LULUS' &&
+      checks.policyRuntimeDecision === 'LULUS' &&
+      checks.policyVsHintConsistency === 'LULUS' &&
+      checks.policyGuardrailEnforced === 'LULUS' &&
       this.shadowRunState.evidenceArchive === 'TERSIMPAN'
     ) {
       verdict = 'SIAP SHADOW-RUN AMAN';
@@ -2374,6 +2395,9 @@ export class ExecutionEngine {
       publicMarket: checks.publicMarket,
       privateAuth: checks.privateAuth,
       reconciliation: checks.reconciliation,
+      policyRuntimeDecision: checks.policyRuntimeDecision,
+      policyVsHintConsistency: checks.policyVsHintConsistency,
+      policyGuardrailEnforced: checks.policyGuardrailEnforced,
       hotlistSignalOpportunity,
       intelligenceSpoofPattern,
       evidenceArchive: this.shadowRunState.evidenceArchive,
@@ -2397,6 +2421,9 @@ export class ExecutionEngine {
           publicMarket: 'DIBLOK',
           privateAuth: 'DIBLOK',
           reconciliation: 'DIBLOK',
+          policyRuntimeDecision: 'DIBLOK',
+          policyVsHintConsistency: 'DIBLOK',
+          policyGuardrailEnforced: 'DIBLOK',
         },
       };
       return this.getShadowRunTelegramSummary();
@@ -2419,6 +2446,9 @@ export class ExecutionEngine {
         publicMarket: 'TIDAK DIUJI',
         privateAuth: 'TIDAK DIUJI',
         reconciliation: 'TIDAK DIUJI',
+        policyRuntimeDecision: 'TIDAK DIUJI',
+        policyVsHintConsistency: 'TIDAK DIUJI',
+        policyGuardrailEnforced: 'TIDAK DIUJI',
       },
     };
 
@@ -2436,6 +2466,9 @@ export class ExecutionEngine {
             publicMarket: this.aggregateShadowCheckStatus(evidences, 'public_market'),
             privateAuth: this.aggregateShadowCheckStatus(evidences, 'private_auth'),
             reconciliation: this.aggregateShadowCheckStatus(evidences, 'reconciliation_read_model'),
+            policyRuntimeDecision: this.aggregateShadowCheckStatus(evidences, 'policy_runtime_decision'),
+            policyVsHintConsistency: this.aggregateShadowCheckStatus(evidences, 'policy_vs_hint_consistency'),
+            policyGuardrailEnforced: this.aggregateShadowCheckStatus(evidences, 'policy_guardrail_enforced'),
           },
         };
       } catch (error) {
@@ -2516,6 +2549,8 @@ export class ExecutionEngine {
       const accountLabel = this.safeAccountLabel(account.id);
       const privateApi = this.indodax.forAccount(account);
       const checks: ShadowRunCheckResult[] = [publicCheck];
+      const runtimePolicy = this.state.get().lastRuntimePolicyDecision;
+      const topOpportunity = this.state.get().lastOpportunities[0] ?? null;
 
       try {
         const info = await privateApi.getInfo<{ balance?: Record<string, string | number> }>({
@@ -2544,6 +2579,74 @@ export class ExecutionEngine {
           }),
         );
       }
+
+      checks.push(
+        this.buildShadowCheck({
+          check: 'policy_runtime_decision',
+          endpoint: 'runtime read-model lastRuntimePolicyDecision',
+          account: accountLabel,
+          summary: runtimePolicy
+            ? {
+              pair: runtimePolicy.pair,
+              action: runtimePolicy.action,
+              entryLane: runtimePolicy.entryLane,
+              aggressiveness: runtimePolicy.aggressiveness,
+              reasonCount: runtimePolicy.reasons.length,
+              riskAllowed: runtimePolicy.riskAllowed,
+            }
+            : { available: false },
+          pass: Boolean(runtimePolicy && runtimePolicy.reasons.length > 0),
+          error:
+            runtimePolicy && runtimePolicy.reasons.length > 0
+              ? undefined
+              : { message: 'Runtime policy decision belum tersedia dari jalur runtime nyata' },
+        }),
+      );
+
+      checks.push(
+        this.buildShadowCheck({
+          check: 'policy_vs_hint_consistency',
+          endpoint: 'runtime opportunity recommendedAction vs final policy action',
+          account: accountLabel,
+          summary:
+            runtimePolicy && topOpportunity
+              ? {
+                pairPolicy: runtimePolicy.pair,
+                pairHint: topOpportunity.pair,
+                hintAction: topOpportunity.recommendedAction,
+                finalAction: runtimePolicy.action,
+                finalReasons: runtimePolicy.reasons,
+                samePair: runtimePolicy.pair === topOpportunity.pair,
+              }
+              : { available: false },
+          pass: Boolean(runtimePolicy && topOpportunity),
+          error:
+            runtimePolicy && topOpportunity
+              ? undefined
+              : { message: 'Bukti perbandingan hint vs final policy belum tersedia' },
+        }),
+      );
+
+      checks.push(
+        this.buildShadowCheck({
+          check: 'policy_guardrail_enforced',
+          endpoint: 'runtime policy riskAllowed guardrail',
+          account: accountLabel,
+          summary: runtimePolicy
+            ? {
+              pair: runtimePolicy.pair,
+              action: runtimePolicy.action,
+              riskAllowed: runtimePolicy.riskAllowed,
+              riskReasons: runtimePolicy.riskReasons,
+            }
+            : { available: false },
+          pass: runtimePolicy ? runtimePolicy.riskAllowed || runtimePolicy.action !== 'ENTER' : false,
+          error:
+            runtimePolicy
+              ? undefined
+              : { message: 'Bukti guardrail policy belum tersedia dari runtime read-model' },
+        }),
+      );
 
       try {
         const openOrders = await privateApi.openOrders(undefined, {
