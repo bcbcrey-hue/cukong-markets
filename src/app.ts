@@ -21,6 +21,7 @@ import { ExecutionEngine } from './domain/trading/executionEngine';
 import { OrderManager } from './domain/trading/orderManager';
 import { PositionManager } from './domain/trading/positionManager';
 import { RiskEngine } from './domain/trading/riskEngine';
+import { evaluateOpportunityPolicyV1 } from './domain/decision/decisionPolicyEngine';
 
 import { IndodaxClient } from './integrations/indodax/client';
 import { IndodaxCallbackServer } from './integrations/indodax/callbackServer';
@@ -34,7 +35,7 @@ import { ReportService } from './services/reportService';
 import { StateService } from './services/stateService';
 import { SummaryService } from './services/summaryService';
 import { AppServer } from './server/appServer';
-import type { BotSettings, OpportunityAssessment, PairClass } from './core/types';
+import type { BotSettings, DecisionPolicyOutput, OpportunityAssessment, PairClass } from './core/types';
 
 export interface AppRuntime {
   start(): Promise<void>;
@@ -65,45 +66,45 @@ function sortByPairClassThenScore(
   return b.finalScore - a.finalScore;
 }
 
-function isRuntimeEntryEligible(
+function buildRuntimeDecision(
   candidate: OpportunityAssessment,
   settings: BotSettings,
-): boolean {
-  return (
-    candidate.edgeValid &&
-    ['ENTER', 'SCOUT_ENTER', 'ADD_ON_CONFIRM'].includes(candidate.recommendedAction) &&
-    candidate.pumpProbability >= settings.strategy.minPumpProbability &&
-    candidate.confidence >= settings.strategy.minConfidence
-  );
+): DecisionPolicyOutput {
+  return evaluateOpportunityPolicyV1(candidate, settings);
 }
 
 export function selectRuntimeEntryCandidate(
   opportunities: OpportunityAssessment[],
   settings: BotSettings,
 ): OpportunityAssessment | undefined {
-  const eligible = opportunities.filter((item) => isRuntimeEntryEligible(item, settings));
+  const eligible = opportunities
+    .map((item) => ({ item, decision: buildRuntimeDecision(item, settings) }))
+    .filter(({ decision }) => decision.action === 'ENTER');
   const scoutAnomaly = eligible
-    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'ANOMALY')
+    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'ANOMALY')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (scoutAnomaly[0]) {
     return scoutAnomaly[0];
   }
 
   const scoutStealth = eligible
-    .filter((item) => item.recommendedAction === 'SCOUT_ENTER' && item.discoveryBucket === 'STEALTH')
+    .filter(({ item, decision }) => decision.entryLane === 'SCOUT' && item.discoveryBucket === 'STEALTH')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (scoutStealth[0]) {
     return scoutStealth[0];
   }
 
   const addOn = eligible
-    .filter((item) => item.recommendedAction === 'ADD_ON_CONFIRM')
+    .filter(({ decision }) => decision.entryLane === 'ADD_ON_CONFIRM')
+    .map(({ item }) => item)
     .sort(sortByPairClassThenScore);
   if (addOn[0]) {
     return addOn[0];
   }
 
-  return [...eligible].sort(sortByPairClassThenScore)[0];
+  return eligible.map(({ item }) => item).sort(sortByPairClassThenScore)[0];
 }
 
 async function runStartupPhase<T>(phase: string, task: () => Promise<T>): Promise<T> {

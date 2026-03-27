@@ -35,6 +35,7 @@ import { AccountRegistry } from '../accounts/accountRegistry';
 import { OrderManager } from './orderManager';
 import { PositionManager } from './positionManager';
 import { RiskEngine } from './riskEngine';
+import { evaluateOpportunityPolicyV1, evaluateSignalPolicyV1 } from '../decision/decisionPolicyEngine';
 
 type ExecutionCandidate = SignalCandidate | OpportunityAssessment;
 
@@ -1568,108 +1569,16 @@ export class ExecutionEngine {
 
   decideAutoExecution(candidate: ExecutionCandidate): AutoExecutionDecision {
     const settings = this.settings.get();
-
-    if (settings.tradingMode === 'OFF') {
-      return {
-        shouldEnter: false,
-        shouldExit: false,
-        action: 'NONE',
-        reasons: ['Trading mode OFF'],
-      };
-    }
-
-    if (this.getCandidateScore(candidate) < settings.strategy.minScoreToAlert) {
-      return {
-        shouldEnter: false,
-        shouldExit: false,
-        action: 'WATCH',
-        reasons: ['Score masih di bawah threshold alert'],
-      };
-    }
-
-    if (this.getCandidateScore(candidate) < settings.strategy.minScoreToBuy) {
-      return {
-        shouldEnter: false,
-        shouldExit: false,
-        action: 'PREPARE_ENTRY',
-        reasons: ['Score sudah menarik tetapi belum cukup untuk entry'],
-      };
-    }
-
-    if (candidate.confidence < settings.strategy.minConfidence) {
-      return {
-        shouldEnter: false,
-        shouldExit: false,
-        action: 'AVOID',
-        reasons: ['Confidence belum cukup'],
-      };
-    }
-
-    if ('finalScore' in candidate) {
-      if (candidate.recommendedAction === 'SCOUT_ENTER') {
-        return {
-          shouldEnter: true,
-          shouldExit: false,
-          action: 'SCOUT_ENTER',
-          reasons: ['Opportunity scout lane aktif'],
-        };
-      }
-
-      if (candidate.recommendedAction === 'ADD_ON_CONFIRM') {
-        return {
-          shouldEnter: true,
-          shouldExit: false,
-          action: 'ADD_ON_CONFIRM',
-          reasons: ['Opportunity continuation mengizinkan add-on'],
-        };
-      }
-
-      if (!candidate.edgeValid) {
-        return {
-          shouldEnter: false,
-          shouldExit: false,
-          action: 'AVOID',
-          reasons: ['Opportunity belum lolos edge validation'],
-        };
-      }
-
-      if (candidate.pumpProbability < settings.strategy.minPumpProbability) {
-        return {
-          shouldEnter: false,
-          shouldExit: false,
-          action: 'PREPARE_ENTRY',
-          reasons: ['Pump probability belum cukup tinggi'],
-        };
-      }
-
-      if (
-        candidate.entryTiming.state === 'LATE' ||
-        candidate.entryTiming.state === 'AVOID' ||
-        candidate.entryTiming.state === 'CHASING' ||
-        candidate.entryTiming.state === 'DEAD'
-      ) {
-        return {
-          shouldEnter: false,
-          shouldExit: false,
-          action: 'AVOID',
-          reasons: ['Timing entry tidak layak'],
-        };
-      }
-    }
-
-    return {
-      shouldEnter: true,
-      shouldExit: false,
-      action: settings.tradingMode === 'FULL_AUTO' ? 'ENTER' : 'CONFIRM_ENTRY',
-      reasons: ['Signal memenuhi syarat entry'],
-    };
+    return 'finalScore' in candidate
+      ? evaluateOpportunityPolicyV1(candidate, settings)
+      : evaluateSignalPolicyV1(candidate, settings);
   }
 
   async attemptAutoBuy(signal: ExecutionCandidate): Promise<string> {
     const settings = this.settings.get();
     const decision = this.decideAutoExecution(signal);
 
-    if (!decision.shouldEnter || settings.tradingMode !== 'FULL_AUTO') {
+    if (decision.action !== 'ENTER' || settings.tradingMode !== 'FULL_AUTO') {
       return `skip auto-buy ${signal.pair}: ${decision.reasons.join('; ')}`;
     }
 
@@ -1713,6 +1622,7 @@ export class ExecutionEngine {
       openPositions: accountOpenPositions,
       amountIdr,
       cooldownUntil: this.state.get().pairCooldowns[signal.pair] ?? null,
+      policyDecision: this.decideAutoExecution(signal),
     });
 
     if (!riskResult.allowed) {

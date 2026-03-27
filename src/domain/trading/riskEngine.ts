@@ -1,5 +1,6 @@
 import type {
   BotSettings,
+  DecisionPolicyOutput,
   ExitDecisionResult,
   OpportunityAssessment,
   PositionRecord,
@@ -8,6 +9,7 @@ import type {
   StoredAccount,
 } from '../../core/types';
 import { ExitDecisionEngine } from '../intelligence/exitDecisionEngine';
+import { evaluateOpportunityPolicyV1, evaluateSignalPolicyV1 } from '../decision/decisionPolicyEngine';
 
 export interface RiskEntryCheckInput {
   account: StoredAccount;
@@ -16,6 +18,7 @@ export interface RiskEntryCheckInput {
   openPositions: PositionRecord[];
   amountIdr: number;
   cooldownUntil?: number | null;
+  policyDecision?: DecisionPolicyOutput;
 }
 
 type EntryLane = 'DEFAULT' | 'SCOUT' | 'ADD_ON_CONFIRM';
@@ -37,24 +40,21 @@ export class RiskEngine {
     adjustedAmountIdr: number;
   } {
     const baseAmountIdr = input.amountIdr;
-    const signal = 'finalScore' in input.signal ? input.signal : null;
-    const action = signal?.recommendedAction;
-    let lane: EntryLane = 'DEFAULT';
-    let multiplier = 1;
-
-    if (action === 'SCOUT_ENTER') {
-      lane = 'SCOUT';
-      multiplier = 0.3;
-    } else if (action === 'ADD_ON_CONFIRM') {
-      lane = 'ADD_ON_CONFIRM';
-      multiplier = 0.55;
-    }
+    const policy = input.policyDecision ?? this.resolvePolicyDecision(input);
+    const lane: EntryLane = policy.entryLane;
+    const multiplier = policy.sizeMultiplier;
 
     return {
       lane,
       baseAmountIdr,
       adjustedAmountIdr: Math.max(0, baseAmountIdr * multiplier),
     };
+  }
+
+  private resolvePolicyDecision(input: RiskEntryCheckInput): DecisionPolicyOutput {
+    return 'finalScore' in input.signal
+      ? evaluateOpportunityPolicyV1(input.signal, input.settings)
+      : evaluateSignalPolicyV1(input.signal, input.settings);
   }
 
   private getPair(signal: SignalCandidate | OpportunityAssessment): string {

@@ -44,6 +44,7 @@ const officialProbes = [
   'tests/add_on_confirm_probe.ts',
   'tests/add_on_confirm_account_scope_probe.ts',
   'tests/scout_lane_sizing_probe.ts',
+  'tests/decision_policy_semantic_sync_probe.ts',
   'tests/runtime_selector_prefers_scout_anomaly_probe.ts',
   'tests/runtime_selector_prefers_scout_stealth_probe.ts',
   'tests/runtime_selector_prefers_add_on_after_scout_probe.ts',
