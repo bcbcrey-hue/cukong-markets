@@ -80,6 +80,38 @@ Jika hanya ingin mengarsipkan evidence tanpa menggagalkan command (mode audit ek
 SHADOW_RUN_ALLOW_FAILED_CHECKS=1 npm run verify:shadow-live
 ```
 
+## Batch A — Real Trade Feed Truth Layer (aktif di runtime)
+
+Jalur market scan sekarang memakai trade feed publik exchange (Indodax `GET /api/trades/$pair_id`) sebagai sumber truth utama untuk `recentTrades`, bukan hanya inference dari delta ticker.
+
+Kontrak source-level yang dipaksa hidup:
+
+- `MarketSnapshot.recentTradesSource` diisi jujur per pair:
+  - `EXCHANGE_TRADE_FEED` saat tape trade tersedia dari exchange,
+  - `INFERRED_PROXY` saat trade feed gagal/kosong lalu fallback ke inferred snapshot delta,
+  - `MIXED` saat tape ada tetapi coverage tipis dan masih ditambah inferred fallback terukur,
+  - `NONE` saat tidak ada truth maupun proxy.
+- `TradePrint.source` dan `TradePrint.quality` juga dipaksa eksplisit:
+  - truth = `EXCHANGE_TRADE_FEED` + `TAPE`
+  - proxy = `INFERRED_SNAPSHOT_DELTA` + `PROXY`
+
+Impact downstream yang sudah tersambung:
+
+- `FeaturePipeline` membaca `recentTradesSource` untuk menetapkan `tradeFlowSource` + `tradeFlowQuality`.
+- `ProbabilityEngine` memberi confidence penalty saat quality masih `PROXY`, sehingga truth feed meningkatkan confidence secara nyata saat tersedia.
+- `DecisionPolicyEngine` tetap single source final decision; efek Batch A masuk lewat confidence/trap context yang dipakai policy, bukan lewat bypass ke execution.
+
+Probe resmi yang membuktikan jalur Batch A:
+
+- `tests/batch_a_trade_truth_layer_probe.ts`
+  - truth exchange dipakai saat tersedia,
+  - fallback proxy aktif jujur saat truth tidak tersedia,
+  - labeling `recentTradesSource` / `TradePrint.source` / `TradePrint.quality` benar,
+  - feature + probability + policy menerima dampak nyata dari truth vs proxy,
+  - runtime contract tidak memalsukan `TAPE` saat sumber sebenarnya proxy.
+- `tests/market_watcher_selection_probe.ts`
+  - validasi kombinasi source-level `MIXED` (truth tipis + inferred) dan fallback `INFERRED_PROXY`.
+
 Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
 
 - `test_reports/typecheck_probes_final.txt`
@@ -287,6 +319,7 @@ Lolos source/build/probe tidak otomatis berarti siap live trading nyata. Pembukt
 - Probe Telegram settings membuktikan persistence reload service-level, tetapi belum membuktikan interaksi operator pada chat Telegram production real network end-to-end.
 - Probe Batch 2 saat ini masih fokus ke unit route `OpportunityEngine` + `RiskEngine`, belum mensimulasikan fill/add-on multi-order live exchange end-to-end.
 - Probe Batch 3/0D runtime selector + wiring policy saat ini fokus pada source/probe wiring; belum memvalidasi outcome live exchange end-to-end untuk semua kombinasi lane scout/fallback/policy di market nyata.
+- Batch A saat ini memakai endpoint public recent trades (`/api/trades/$pair_id`) berbasis polling; belum ada stream websocket tape sehingga gap latency antar polling masih mungkin terjadi pada market sangat cepat.
 - Probe Batch 4 exit intelligence sudah menutup logika exit decision + wiring monitor, tetapi belum membuktikan slippage/partial-fill real exchange pada skenario dump ekstrem.
 - End-to-end live exchange tetap berada di `tests/real_exchange_shadow_run_probe.ts` (manual), sehingga hasilnya **tidak** otomatis menjadi bagian PASS `npm run verify`.
 - Validasi branch protection (required status checks) tidak dapat dipaksakan dari source code saja; ini perlu setting GitHub repository.

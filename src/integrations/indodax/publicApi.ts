@@ -18,6 +18,14 @@ export interface IndodaxOrderbook {
   sell: Array<[number, number]>;
 }
 
+export interface IndodaxRecentTrade {
+  tid: string;
+  date: number;
+  price: number;
+  amount: number;
+  type: 'buy' | 'sell' | 'unknown';
+}
+
 function toNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -55,6 +63,36 @@ function mapTickerEntry(name: string, raw: Record<string, unknown>): IndodaxTick
     sell: toNumber(raw.sell),
     server_time: toNumber(raw.server_time),
   };
+}
+
+function normalizePair(pair: string): string {
+  const normalized = pair.trim().toLowerCase().replace(/[\-/]/g, '_');
+  if (normalized.includes('_')) {
+    return normalized;
+  }
+
+  if (normalized.endsWith('idr') && normalized.length > 3) {
+    return `${normalized.slice(0, -3)}_idr`;
+  }
+
+  return normalized;
+}
+
+function toPublicPairId(pair: string): string {
+  return normalizePair(pair).replace(/_/g, '');
+}
+
+function normalizeTradeSide(value: unknown): IndodaxRecentTrade['type'] {
+  if (typeof value !== 'string') {
+    return 'unknown';
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'buy' || normalized === 'sell') {
+    return normalized;
+  }
+
+  return 'unknown';
 }
 
 export class PublicApi {
@@ -148,6 +186,35 @@ export class PublicApi {
     } catch (error) {
       logger.warn({ pair, error }, 'failed to fetch orderbook depth');
       return { buy: [], sell: [] };
+    }
+  }
+
+  async getRecentTrades(pair: string): Promise<IndodaxRecentTrade[]> {
+    const pairId = toPublicPairId(pair);
+    const json = await this.requestJson<Array<Record<string, unknown>> | { trades?: Array<Record<string, unknown>> }>(
+      `${this.baseUrl}/trades/${pairId}`,
+      `trades:${pairId}`,
+    );
+
+    const items = Array.isArray(json) ? json : (json.trades ?? []);
+
+    return items
+      .map((raw) => ({
+        tid: String(raw.tid ?? ''),
+        date: toNumber(raw.date),
+        price: toNumber(raw.price),
+        amount: toNumber(raw.amount),
+        type: normalizeTradeSide(raw.type),
+      }))
+      .filter((trade) => trade.price > 0 && trade.amount > 0 && trade.date > 0);
+  }
+
+  async safeGetRecentTrades(pair: string): Promise<IndodaxRecentTrade[] | null> {
+    try {
+      return await this.getRecentTrades(pair);
+    } catch (error) {
+      logger.warn({ pair, error }, 'failed to fetch recent trades');
+      return null;
     }
   }
 }
