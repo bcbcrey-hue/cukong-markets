@@ -391,6 +391,10 @@ export interface OpportunityAssessment {
   warnings: string[];
   featureBreakdown: ScoreContribution[];
   historicalContext?: HistoricalContext;
+  /**
+   * Pre-decision hint from OpportunityEngine (context-only).
+   * BUKAN keputusan final entry bisnis. Keputusan final tetap dari DecisionPolicyEngine.
+   */
   recommendedAction: OpportunityAction;
   entryStyle?: 'SCOUT' | 'CONFIRM' | 'LATE' | 'DEAD';
   pumpState?: 'PRE_PUMP' | 'CONTINUATION' | 'OVEREXTENDED' | 'DUMP_RISK';
@@ -445,6 +449,10 @@ export interface RuntimeEntryCandidate {
   pair: string;
   opportunity: OpportunityAssessment;
   riskCheckResult: RiskCheckResult;
+  /**
+   * Final decision dari DecisionPolicyEngine yang sudah mempertimbangkan risk guardrail.
+   * ExecutionEngine wajib mengeksekusi kontrak ini apa adanya.
+   */
   policyDecision: DecisionPolicyOutput;
   policyReasons: string[];
   sizeMultiplier: number;

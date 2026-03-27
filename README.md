@@ -193,6 +193,22 @@ Runtime kini mengirim objek kandidat final yang sudah disahkan policy (bukan `Op
 - `sizeMultiplier`
 - `aggressiveness`
 
+## Tahap 0E — Pembersihan peran Opportunity vs Execution (aktif)
+
+Tahap 0E menurunkan peran `recommendedAction` dan membersihkan boundary execution:
+
+- `OpportunityEngine.recommendedAction` diposisikan sebagai **hint pre-decision context**, bukan keputusan final entry.
+- Keputusan final tetap dari `DecisionPolicyEngine` (single source untuk `ENTER | WAIT | SKIP`).
+- `ExecutionEngine.attemptAutoBuy(...)` hanya mengeksekusi `RuntimeEntryCandidate` final (policy + risk sudah disahkan upstream), tidak menghitung ulang policy final dari opportunity mentah.
+- `RiskEngine` tetap guardrail keras (block/cap sizing/lane-aware amount) dan tetap menjadi input keras policy final.
+
+Probe tambahan Tahap 0E:
+
+- `tests/execution_runtime_final_decision_probe.ts`
+  - membuktikan `recommendedAction` tidak dipakai sebagai keputusan final di execution runtime;
+  - membuktikan `policyDecision.action` final yang menentukan eksekusi;
+  - membuktikan risk block tetap menghentikan auto-buy.
+
 ## Yang sudah terbukti dari source/probe
 
 - Worker path untuk runtime production/build sudah dibuktikan lewat probe artifact build (`tests/worker_production_runtime_probe.ts`) yang mengeksekusi Node terhadap `dist`.

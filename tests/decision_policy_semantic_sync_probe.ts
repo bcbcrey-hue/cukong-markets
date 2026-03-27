@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { selectRuntimeEntryCandidate } from '../src/app';
 import type { OpportunityAssessment, RiskCheckResult } from '../src/core/types';
-import { ExecutionEngine } from '../src/domain/trading/executionEngine';
+import { evaluateOpportunityPolicyV1 } from '../src/domain/decision/decisionPolicyEngine';
 import { createDefaultSettings } from '../src/services/persistenceService';
 
 function makeOpportunity(
@@ -45,25 +45,6 @@ function makeOpportunity(
   };
 }
 
-function makeExecution(settingsOverride?: ReturnType<typeof createDefaultSettings>): ExecutionEngine {
-  const settings = settingsOverride ?? createDefaultSettings();
-  const settingsService = {
-    get: () => settings,
-  };
-
-  return new ExecutionEngine(
-    {} as never,
-    settingsService as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-  );
-}
-
 function blockedRiskResult(reason: string): RiskCheckResult {
   return {
     allowed: false,
@@ -78,13 +59,12 @@ function blockedRiskResult(reason: string): RiskCheckResult {
 async function main() {
   const settings = createDefaultSettings();
   settings.tradingMode = 'FULL_AUTO';
-  const execution = makeExecution(settings);
 
   const trapRisk = makeOpportunity('trap_risk_idr', {
     marketRegime: 'TRAP_RISK',
     recommendedAction: 'ENTER',
   });
-  const trapRiskDecision = execution.decideAutoExecution(trapRisk);
+  const trapRiskDecision = evaluateOpportunityPolicyV1(trapRisk, settings);
   assert.equal(trapRiskDecision.action, 'SKIP', 'TRAP_RISK wajib SKIP');
   assert.ok(trapRiskDecision.reasons.some((reason) => reason.includes('TRAP_RISK')));
 
@@ -92,14 +72,14 @@ async function main() {
     marketRegime: 'DISTRIBUTION',
     recommendedAction: 'ENTER',
   });
-  const distributionDecision = execution.decideAutoExecution(distribution);
+  const distributionDecision = evaluateOpportunityPolicyV1(distribution, settings);
   assert.equal(distributionDecision.action, 'SKIP', 'DISTRIBUTION wajib SKIP');
 
   const quiet = makeOpportunity('quiet_idr', {
     marketRegime: 'QUIET',
     finalScore: settings.strategy.minScoreToBuy + 6,
   });
-  const quietDecision = execution.decideAutoExecution(quiet);
+  const quietDecision = evaluateOpportunityPolicyV1(quiet, settings);
   assert.equal(quietDecision.action, 'ENTER', 'QUIET sehat boleh ENTER defensif');
   assert.equal(quietDecision.aggressiveness, 'LOW', 'QUIET wajib defensif');
   assert.ok(quietDecision.sizeMultiplier <= 0.5, 'QUIET wajib sizing kecil');
@@ -109,7 +89,7 @@ async function main() {
     discoveryBucket: 'ANOMALY',
     finalScore: settings.strategy.minScoreToBuy + 8,
   });
-  const expansionDecision = execution.decideAutoExecution(expansion);
+  const expansionDecision = evaluateOpportunityPolicyV1(expansion, settings);
   assert.equal(expansionDecision.action, 'ENTER', 'EXPANSION aman boleh ENTER');
   assert.equal(expansionDecision.aggressiveness, 'HIGH', 'EXPANSION full-auto wajib lebih agresif');
   assert.ok(expansionDecision.sizeMultiplier >= 1, 'EXPANSION sizing minimal normal');
@@ -119,15 +99,16 @@ async function main() {
     finalScore: settings.strategy.minScoreToBuy + 1,
     confidence: settings.strategy.minConfidence + 0.01,
   });
-  const weakDiscoveryDecision = execution.decideAutoExecution(weakDiscovery);
+  const weakDiscoveryDecision = evaluateOpportunityPolicyV1(weakDiscovery, settings);
   assert.equal(weakDiscoveryDecision.action, 'WAIT', 'Discovery lemah tidak boleh lolos mudah');
 
   const riskBlocked = makeOpportunity('risk_block_idr', {
     marketRegime: 'EXPANSION',
     discoveryBucket: 'ANOMALY',
   });
-  const riskBlockedDecision = execution.decideAutoExecution(
+  const riskBlockedDecision = evaluateOpportunityPolicyV1(
     riskBlocked,
+    settings,
     blockedRiskResult('max open positions reached'),
   );
   assert.equal(riskBlockedDecision.action, 'SKIP', 'Risk block tidak boleh dioverride jadi ENTER');

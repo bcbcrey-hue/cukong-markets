@@ -80,6 +80,7 @@ export class OpportunityEngine {
       100,
     );
 
+    // Tahap 0E: ini hanya hint context (pre-decision), bukan final business decision entry.
     let recommendedAction: OpportunityAssessment['recommendedAction'] = 'WATCH';
     let entryStyle: OpportunityAssessment['entryStyle'];
     let pumpState: OpportunityAssessment['pumpState'] = 'PRE_PUMP';
