@@ -175,8 +175,10 @@ Makna metrik utama:
 
 - `overallDirectionAccuracy`: akurasi arah prediction vs outcome resolve horizon.
 - `confidenceBucketAccuracy`: akurasi per bucket confidence (`LOW/MID/HIGH`).
-- `calibrationSummary.meanCalibrationError`: gap intensitas move prediksi vs outcome.
+- `calibrationSummary.meanAbsoluteConfidenceCalibrationGap`: gap absolut antara confidence prediksi vs realised hit outcome.
+- `calibrationSummary.expectedCalibrationError`: ECE sederhana (weighted bucket gap confidence vs realised hit-rate).
 - `expectedMoveError`: error absolut prediksi magnitude move.
+- `moveMagnitudeGap`: gap intensitas move prediksi vs outcome (dipisahkan dari calibration confidence agar labeling jujur).
 - `horizonErrorSummary`: drift resolve timestamp terhadap target horizon.
 - `regime/pair-class/prediction-strength breakdown`: area performa yang relatif kuat/lemah.
 - `conservativeThresholdRecommendation`: rekomendasi threshold confidence berbasis hasil resolved run aktual (bukan hardcoded).

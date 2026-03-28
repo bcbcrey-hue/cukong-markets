@@ -1069,6 +1069,7 @@ export interface BatchBPredictionValidationRow {
   predictionConfidence: number;
   predictionStrength: FutureTrendingPrediction['strength'];
   calibrationTag: FutureTrendingPrediction['calibrationTag'];
+  outcomeGrounding: NonNullable<HistoricalContext['outcomeGrounding']>;
   confidenceBucket: BatchBPredictionConfidenceBucket;
   tradeFlowSource: FutureTrendingPrediction['tradeFlowSource'];
   tradeFlowQuality: FutureTrendingPrediction['tradeFlowQuality'];
@@ -1078,6 +1079,14 @@ export interface BatchBPredictionValidationRow {
   actualMovePct: number | null;
   isDirectionMatch: boolean | null;
   moveErrorPct: number | null;
+}
+
+export interface BatchBPredictionConfidenceReliabilityBucket {
+  bucket: BatchBPredictionConfidenceBucket;
+  sampleCount: number;
+  averageConfidence: number;
+  realisedHitRate: number;
+  absoluteCalibrationGap: number;
 }
 
 export interface BatchBPredictionBreakdown<T extends string> {
@@ -1090,7 +1099,9 @@ export interface BatchBPredictionBreakdown<T extends string> {
 }
 
 export interface BatchBPredictionCalibrationSummary {
-  meanCalibrationError: number;
+  meanAbsoluteConfidenceCalibrationGap: number;
+  expectedCalibrationError: number;
+  confidenceReliabilityByBucket: BatchBPredictionConfidenceReliabilityBucket[];
   byCalibrationTag: BatchBPredictionBreakdown<FutureTrendingPrediction['calibrationTag']>[];
 }
 
@@ -1119,6 +1130,10 @@ export interface BatchBPredictionPhase1Metrics {
   overallDirectionAccuracy: number;
   confidenceBucketAccuracy: BatchBPredictionBreakdown<BatchBPredictionConfidenceBucket>[];
   calibrationSummary: BatchBPredictionCalibrationSummary;
+  moveMagnitudeGap: {
+    meanNormalizedMoveGap: number;
+    p95NormalizedMoveGap: number;
+  };
   expectedMoveError: {
     meanAbsoluteErrorPct: number;
     p95AbsoluteErrorPct: number;
@@ -1155,6 +1170,7 @@ export interface BatchBPredictionPhase1Report {
   accuracySummary: {
     overallDirectionAccuracy: number;
     confidenceBucketAccuracy: BatchBPredictionBreakdown<BatchBPredictionConfidenceBucket>[];
+    moveMagnitudeGap: BatchBPredictionPhase1Metrics['moveMagnitudeGap'];
     expectedMoveError: BatchBPredictionPhase1Metrics['expectedMoveError'];
     horizonErrorSummary: BatchBPredictionHorizonErrorSummary;
   };

@@ -63,10 +63,21 @@ function markdownFromReport(report: BatchBPredictionPhase1Report): string {
     bucketLines || '- (tidak ada data)',
     '',
     '## Calibration Summary',
-    `- Mean calibration error: ${report.calibrationSummary.meanCalibrationError.toFixed(5)}`,
+    `- Mean absolute confidence calibration gap: ${report.calibrationSummary.meanAbsoluteConfidenceCalibrationGap.toFixed(5)}`,
+    `- Expected calibration error (ECE sederhana): ${report.calibrationSummary.expectedCalibrationError.toFixed(5)}`,
+    '### Confidence Reliability by Bucket',
+    ...report.calibrationSummary.confidenceReliabilityByBucket.map(
+      (item) =>
+        `- ${item.bucket}: avgConf=${asPct(item.averageConfidence)} realisedHitRate=${asPct(item.realisedHitRate)} absGap=${asPct(item.absoluteCalibrationGap)} sample=${item.sampleCount}`,
+    ),
+    '### Calibration Tag Breakdown',
     ...report.calibrationSummary.byCalibrationTag.map((item) =>
       `- ${item.key}: acc=${asPct(item.directionAccuracy)} resolved=${item.resolved}`,
     ),
+    '',
+    '## Move Magnitude Gap (bukan confidence calibration)',
+    `- Mean normalized move gap: ${report.accuracySummary.moveMagnitudeGap.meanNormalizedMoveGap.toFixed(5)}`,
+    `- P95 normalized move gap: ${report.accuracySummary.moveMagnitudeGap.p95NormalizedMoveGap.toFixed(5)}`,
     '',
     '## Regime Breakdown',
     regimeLines || '- (tidak ada data)',
@@ -99,24 +110,50 @@ function markdownFromReport(report: BatchBPredictionPhase1Report): string {
 }
 
 function simplePdfFromText(lines: string[]): Buffer {
-  const escapedLines = lines.map((line) => escapePdfText(line));
-  let y = 800;
-  const textOps = escapedLines
-    .flatMap((line) => {
-      const currentY = y;
-      y -= 14;
-      return [`1 0 0 1 50 ${currentY} Tm (${line}) Tj`];
-    })
-    .join('\n');
+  const linesPerPage = 52;
+  const pages: string[][] = [];
+  for (let index = 0; index < lines.length; index += linesPerPage) {
+    pages.push(lines.slice(index, index + linesPerPage));
+  }
+  if (pages.length === 0) {
+    pages.push(['Batch B Phase 1 report kosong.']);
+  }
 
-  const stream = `BT\n/F1 10 Tf\n${textOps}\nET`;
-  const objects = [
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
-    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    `5 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`,
-  ];
+  const objects: string[] = [];
+  const catalogId = 1;
+  const pagesId = 2;
+  const fontId = 3;
+  let nextObjectId = 4;
+  const pageObjectIds: number[] = [];
+
+  for (const pageLines of pages) {
+    const pageId = nextObjectId;
+    const contentId = nextObjectId + 1;
+    nextObjectId += 2;
+
+    const escapedLines = pageLines.map((line) => escapePdfText(line));
+    let y = 800;
+    const textOps = escapedLines
+      .map((line) => {
+        const currentY = y;
+        y -= 14;
+        return `1 0 0 1 50 ${currentY} Tm (${line}) Tj`;
+      })
+      .join('\n');
+
+    const stream = `BT\n/F1 10 Tf\n${textOps}\nET`;
+    objects.push(
+      `${pageId} 0 obj << /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >> endobj`,
+    );
+    objects.push(`${contentId} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`);
+    pageObjectIds.push(pageId);
+  }
+
+  objects.unshift(`${fontId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj`);
+  objects.unshift(
+    `${pagesId} 0 obj << /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >> endobj`,
+  );
+  objects.unshift(`${catalogId} 0 obj << /Type /Catalog /Pages ${pagesId} 0 R >> endobj`);
 
   let content = '%PDF-1.4\n';
   const offsets: number[] = [0];
@@ -131,7 +168,7 @@ function simplePdfFromText(lines: string[]): Buffer {
   for (let i = 1; i <= objects.length; i += 1) {
     content += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
   }
-  content += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  content += `trailer << /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
   return Buffer.from(content, 'utf8');
 }
@@ -167,8 +204,7 @@ export async function writeBatchBPhase1Artifacts(input: {
   const pdfLines = markdown
     .split('\n')
     .map((line) => line.replace(/^#+\s*/g, '').trim())
-    .filter((line) => line.length > 0)
-    .slice(0, 52);
+    .filter((line) => line.length > 0);
   const pdf = simplePdfFromText(pdfLines);
   await writeFile(pdfPath, pdf);
 

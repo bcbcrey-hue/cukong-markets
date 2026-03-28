@@ -3,6 +3,7 @@ import type {
   BacktestRunConfig,
   BatchBPredictionBreakdown,
   BatchBPredictionCalibrationSummary,
+  BatchBPredictionConfidenceReliabilityBucket,
   BatchBPredictionConfidenceBucket,
   BatchBPredictionConservativeThresholdRecommendation,
   BatchBPredictionHorizonErrorSummary,
@@ -57,6 +58,16 @@ function average(values: number[]): number {
     return 0;
   }
   return values.reduce((sum, item) => sum + item, 0) / values.length;
+}
+
+function resolveOutcomeGrounding(sampleCount: number): 'PROXY_FALLBACK' | 'MIXED' | 'OUTCOME_GROUNDED' {
+  if (sampleCount >= 12) {
+    return 'OUTCOME_GROUNDED';
+  }
+  if (sampleCount >= 3) {
+    return 'MIXED';
+  }
+  return 'PROXY_FALLBACK';
 }
 
 function findConservativeThresholdRecommendation(
@@ -161,27 +172,45 @@ function calculateMetrics(
 
   const expectedMoveErrors = resolved.map((row) => Math.abs(row.moveErrorPct ?? 0));
   const horizonErrors = resolved.map((row) => Math.abs((row.resolvedAt ?? row.referenceTimestamp) - row.horizonTargetTimestamp) / 60_000);
-  const calibrationErrors = resolved.map((row) => {
+  const moveMagnitudeGaps = resolved.map((row) => {
     const predictedDirectional = Math.min(1, Math.max(0, Math.abs(row.predictedExpectedMovePct) / 4.5));
     const actualDirectional = Math.min(1, Math.max(0, Math.abs(row.actualMovePct ?? 0) / 4.5));
     return Math.abs(predictedDirectional - actualDirectional);
   });
 
-  const failures = resolved
-    .filter((row) => !row.isDirectionMatch)
-    .sort((a, b) => Math.abs(b.moveErrorPct ?? 0) - Math.abs(a.moveErrorPct ?? 0))
-    .slice(0, 7)
-    .map((row) => ({
-      pair: row.pair,
-      regime: row.regime,
-      pairClass: pairClassKey(row.pairClass),
-      predictionStrength: row.predictionStrength,
-      confidence: row.predictionConfidence,
-      predictedDirection: row.predictedDirection,
-      actualDirection: row.actualDirection,
-      moveErrorPct: row.moveErrorPct ?? 0,
-      note: `resolvedAt=${row.resolvedAt ? new Date(row.resolvedAt).toISOString() : 'n/a'}`,
-    }));
+  const confidenceCalibrationGaps = resolved.map((row) =>
+    Math.abs(row.predictionConfidence - (row.isDirectionMatch ? 1 : 0)),
+  );
+  const confidenceReliabilityByBucket: BatchBPredictionConfidenceReliabilityBucket[] = (
+    ['LOW', 'MID', 'HIGH'] as const
+  ).map((bucket) => {
+    const bucketRows = resolved.filter((row) => row.confidenceBucket === bucket);
+    const sampleCount = bucketRows.length;
+    const averageConfidence = average(bucketRows.map((row) => row.predictionConfidence));
+    const realisedHitRate =
+      sampleCount > 0
+        ? bucketRows.filter((row) => row.isDirectionMatch).length / sampleCount
+        : 0;
+
+    return {
+      bucket,
+      sampleCount,
+      averageConfidence,
+      realisedHitRate,
+      absoluteCalibrationGap: Math.abs(averageConfidence - realisedHitRate),
+    };
+  });
+  const totalReliabilitySamples = confidenceReliabilityByBucket.reduce(
+    (sum, item) => sum + item.sampleCount,
+    0,
+  );
+  const expectedCalibrationError =
+    totalReliabilitySamples > 0
+      ? confidenceReliabilityByBucket.reduce(
+          (sum, item) => sum + (item.sampleCount / totalReliabilitySamples) * item.absoluteCalibrationGap,
+          0,
+        )
+      : 0;
 
   return {
     totalPredictionCount: rows.length,
@@ -190,8 +219,19 @@ function calculateMetrics(
     overallDirectionAccuracy: resolved.length > 0 ? directionMatchCount / resolved.length : 0,
     confidenceBucketAccuracy: bucketBreakdown,
     calibrationSummary: {
-      meanCalibrationError: average(calibrationErrors),
+      meanAbsoluteConfidenceCalibrationGap: average(confidenceCalibrationGaps),
+      expectedCalibrationError,
+      confidenceReliabilityByBucket,
       byCalibrationTag: calibrationByTag,
+    },
+    moveMagnitudeGap: {
+      meanNormalizedMoveGap: average(moveMagnitudeGaps),
+      p95NormalizedMoveGap:
+        moveMagnitudeGaps.length > 0
+          ? [...moveMagnitudeGaps].sort((a, b) => a - b)[
+              Math.min(moveMagnitudeGaps.length - 1, Math.floor(moveMagnitudeGaps.length * 0.95))
+            ]
+          : 0,
     },
     expectedMoveError: {
       meanAbsoluteErrorPct: average(expectedMoveErrors),
@@ -255,15 +295,10 @@ export class BatchBPredictionPhase1Validator {
     }
 
     const pairStats = new Map<string, { wins: number; losses: number; sample: number }>();
-    const pairSignals = new Map<string, ReturnType<typeof signalEngine.score>[]>();
     const rows: BatchBPredictionValidationRow[] = [];
 
     for (const snapshot of snapshots) {
       const signal = signalEngine.score(snapshot);
-      const pairSignalHistory = pairSignals.get(snapshot.pair) ?? [];
-      const recentSignals = [...pairSignalHistory.slice(-25), signal];
-      pairSignalHistory.push(signal);
-      pairSignals.set(snapshot.pair, pairSignalHistory);
 
       const pairSnapshots = snapshotsByPair.get(snapshot.pair) ?? [];
       const recentSnapshots = pairSnapshots.filter((item) => item.timestamp <= snapshot.timestamp).slice(-25);
@@ -272,17 +307,21 @@ export class BatchBPredictionPhase1Validator {
       const stats = pairStats.get(snapshot.pair) ?? { wins: 0, losses: 0, sample: 0 };
       const recentWinRate = stats.sample > 0 ? stats.wins / stats.sample : 0;
       const recentFalseBreakRate = stats.sample > 0 ? stats.losses / stats.sample : 0;
+      const outcomeGrounding = resolveOutcomeGrounding(stats.sample);
       const historicalContext = {
         pair: snapshot.pair,
         snapshotCount: recentSnapshots.length,
         anomalyCount: 0,
         recentWinRate,
         recentFalseBreakRate,
-        outcomeGrounding: 'PROXY_FALLBACK' as const,
+        outcomeGrounding,
         outcomeSampleSize: stats.sample,
         regime: signal.regime,
         patternMatches: [],
-        contextNotes: ['phase1 validation menggunakan replay historis snapshot/proxy path yang tersedia'],
+        contextNotes: [
+          'phase1 validation menggunakan replay historis snapshot/proxy path yang tersedia',
+          `outcomeGrounding=${outcomeGrounding} berdasarkan rolling resolved sample`,
+        ],
         timestamp: snapshot.timestamp,
       };
 
@@ -328,6 +367,7 @@ export class BatchBPredictionPhase1Validator {
         predictionConfidence: prediction.confidence,
         predictionStrength: prediction.strength,
         calibrationTag: prediction.calibrationTag,
+        outcomeGrounding,
         confidenceBucket: confidenceBucket(prediction.confidence),
         tradeFlowSource: prediction.tradeFlowSource,
         tradeFlowQuality: prediction.tradeFlowQuality,
@@ -372,6 +412,7 @@ export function buildBatchBPredictionPhase1Report(
     accuracySummary: {
       overallDirectionAccuracy: m.overallDirectionAccuracy,
       confidenceBucketAccuracy: m.confidenceBucketAccuracy,
+      moveMagnitudeGap: m.moveMagnitudeGap,
       expectedMoveError: m.expectedMoveError,
       horizonErrorSummary: m.horizonErrorSummary,
     },
