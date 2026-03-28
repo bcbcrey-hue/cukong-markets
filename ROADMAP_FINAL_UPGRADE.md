@@ -1,58 +1,5 @@
-ROADMAP_VERIFICATION_UPGRADE_NORMALIZED_FOR_REPO.txt
+ROADMAP_FINAL_UPGRADE
 
-ROADMAP NORMALISASI UNTUK REWRITE `ROADMAP_VERIFICATION_UPGRADE.md`
-Repository source of truth:
-https://github.com/masreykangtrade-oss/cukong-markets
-
-TUJUAN FILE INI
-- BUKAN implementasi kode.
-- Ini adalah arah rewrite roadmap repo agar sinkron dengan source aktual DAN sinkron dengan dokumen lampiran operator.
-- Setelah roadmap repo ditulis ulang dengan arah ini, baru implementasi per fase boleh dilanjutkan.
-
-======================================================================
-A. AUDIT KERAS SINGKAT TERHADAP SOURCE REPO AKTUAL
-======================================================================
-
-1. Repo saat ini SUDAH melewati level “source deploy ready” biasa.
-   - Prediction Batch B sudah hidup.
-   - Capital/portfolio Batch C sudah hidup.
-   - Strict shadow-live baseline sudah hidup.
-   - Backtest engine sudah ada.
-   - Command validasi fase 1/2/3 sudah ada.
-   - Shadow run Telegram sudah ada.
-
-2. Karena itu, dokumen operator yang menulis beberapa area sebagai “file baru dari nol”
-   TIDAK bisa dipindahkan mentah ke repo.
-
-3. Konflik paling nyata dengan source aktual:
-   - `src/domain/backtest/backtestEngine.ts` sudah ada, jadi tidak boleh lagi ditulis
-     sebagai file baru dari nol.
-   - Shadow run lama / strict shadow-live sudah ada, jadi Fase 2 tidak boleh ditulis
-     seolah shadow-live belum ada sama sekali.
-   - Repo sudah punya command:
-     - validate:batch-b:phase1
-     - validate:batch-b:phase2
-     - validate:phase3
-     - validate:phase3:shadow-proof
-     - validate:phase3:market-real-check
-     Maka roadmap baru harus mengakui ini sebagai baseline existing, bukan nol total.
-   - Telegram sudah punya menu shadow run.
-     Maka Fase 2 harus dibangun di atas itu, bukan sistem shadow baru yang terpisah total.
-
-4. Masalah arah saat ini:
-   - Implementasi validasi fase 1/2/3 yang sekarang sudah ada berguna sebagai SUPPORT LAYER,
-     tetapi belum boleh diperlakukan otomatis sebagai bentuk final roadmap operator.
-   - Fase 3 terutama masih cenderung berupa readiness/validation layer yang reuse evidence existing,
-     bukan suite end-to-end exchange penuh seperti yang diinginkan dokumen operator.
-
-5. Kesimpulan audit:
-   - Arah implementasi verifikasi yang berjalan sekarang tidak boleh diteruskan tanpa rewrite roadmap.
-   - Langkah benar pertama adalah rewrite `ROADMAP_VERIFICATION_UPGRADE.md`.
-   - Setelah roadmap sinkron, implementasi per fase dilanjutkan secara bertahap.
-
-======================================================================
-B. PRINSIP NORMALISASI ROADMAP BARU
-======================================================================
 
 Roadmap repo yang baru WAJIB mengikuti prinsip ini:
 
