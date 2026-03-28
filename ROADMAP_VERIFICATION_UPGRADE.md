@@ -262,9 +262,6 @@ Isi PDF Fase 3:
 * batas yang masih belum terbukti
 * keputusan readiness yang jujur
 Belum ada **shadow-live khusus Batch C** dan belum ada bukti operasional exchange yang lebih lengkap untuk area itu. 
-
-### Data Lifecycle & Cleanup Policy
-
 ---
 
 ## 6. FASE 1 — QUANTITATIVE VALIDATION FOR EXISTING PREDICTION LAYER
