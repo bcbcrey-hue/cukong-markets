@@ -900,6 +900,51 @@ export interface ShadowRunTelegramSummary {
   nextSteps: string[];
 }
 
+
+export type ValidationProofLevel = 'SOURCE_PROBE' | 'SHADOW_LIVE' | 'MARKET_REAL';
+
+export interface Phase3ValidationCheck {
+  id: string;
+  description: string;
+  proofLevel: ValidationProofLevel;
+  automated: boolean;
+  pass: boolean;
+  evidenceRefs: string[];
+  notes?: string[];
+}
+
+export interface Phase3ValidationSection {
+  name: 'capital_exposure' | 'exchange_reconciliation_resilience' | 'emergency_recovery';
+  checks: Phase3ValidationCheck[];
+  summary: string;
+}
+
+export interface Phase3ReadinessChecklistItem {
+  id: string;
+  description: string;
+  requiredProofLevel: ValidationProofLevel;
+  status: 'PASS' | 'FAIL' | 'MANUAL_REQUIRED';
+  notes?: string;
+}
+
+export interface Phase3ReadinessReport {
+  runId: string;
+  generatedAt: string;
+  sourceOfTruth: {
+    repository: string;
+    roadmapVerification: string;
+  };
+  sections: Phase3ValidationSection[];
+  checklist: Phase3ReadinessChecklistItem[];
+  limitations: string[];
+  readinessVerdict: 'SIAP_MERGE' | 'BELUM_SIAP_MERGE';
+  boundaryNotes: {
+    sourceProbeProof: string;
+    shadowLiveProof: string;
+    marketRealProof: string;
+  };
+}
+
 export interface PairRuntimeState {
   pair: string;
   lastSeenAt: number;
