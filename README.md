@@ -276,6 +276,18 @@ Command probe resmi Fase 3 (seeded/source-level, non-destruktif):
 npm run validate:phase3
 ```
 
+`validate:phase3` sekarang memanggil **service validasi Fase 3** (`Phase3ValidationService`) untuk mengagregasi evidence runtime/persistence (`execution summaries`, `trade outcomes`, `shadow evidence`, manual evidence jika tersedia) lalu menghitung checklist + verdict readiness secara rule-based.
+
+Jalur operasional eksplisit tambahan untuk boundary proof:
+
+```bash
+npm run validate:phase3:shadow-proof
+npm run validate:phase3:market-real-check -- <manual-evidence.json>
+```
+
+- `validate:phase3:shadow-proof` mengecek reuse evidence strict shadow-live existing dari archive.
+- `validate:phase3:market-real-check` meng-ingest evidence manual exchange nyata ke store dan mengevaluasi status proof market-real.
+
 Probe ini juga ikut registry `npm run test:probes` melalui `tests/phase3_market_real_validation_probe.ts`.
 
 Artifact output stabil default:

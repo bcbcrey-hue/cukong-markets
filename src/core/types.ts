@@ -903,6 +903,41 @@ export interface ShadowRunTelegramSummary {
 
 export type ValidationProofLevel = 'SOURCE_PROBE' | 'SHADOW_LIVE' | 'MARKET_REAL';
 
+
+export interface Phase3ManualMarketRealCheck {
+  id: string;
+  description: string;
+  pass: boolean;
+  observedAt: string;
+  notes?: string[];
+}
+
+export interface Phase3MarketRealManualEvidence {
+  runId: string;
+  recordedAt: string;
+  source: 'MANUAL_EXCHANGE_RUN';
+  checks: Phase3ManualMarketRealCheck[];
+  notes?: string[];
+}
+
+export interface Phase3RuntimeValidationEvidence {
+  capital: {
+    policyIntentNotionalIdr: number;
+    allowedNotionalIdr: number;
+    allocatedNotionalIdr: number;
+    pairClassLimitRespected: boolean;
+    discoveryBucketLimitRespected: boolean;
+  };
+  exchangeOps: {
+    cancelSummary: string;
+    unresolvedSubmissionUncertain: boolean;
+    recoveryMessagesCount: number;
+  };
+  emergencyRecovery: {
+    emergencySummarySeen: boolean;
+  };
+}
+
 export interface Phase3ValidationCheck {
   id: string;
   description: string;

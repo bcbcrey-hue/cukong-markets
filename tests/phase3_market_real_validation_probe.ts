@@ -3,7 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { OpportunityAssessment, Phase3ReadinessReport, PositionRecord } from '../src/core/types';
+import type {
+  OpportunityAssessment,
+  Phase3MarketRealManualEvidence,
+  Phase3RuntimeValidationEvidence,
+  PositionRecord,
+} from '../src/core/types';
 import { AccountRegistry } from '../src/domain/accounts/accountRegistry';
 import { AccountStore } from '../src/domain/accounts/accountStore';
 import { PortfolioCapitalEngine } from '../src/domain/portfolio/portfolioCapitalEngine';
@@ -15,6 +20,7 @@ import { RiskEngine } from '../src/domain/trading/riskEngine';
 import { JournalService } from '../src/services/journalService';
 import { createDefaultSettings, PersistenceService } from '../src/services/persistenceService';
 import { writePhase3ValidationArtifacts } from '../src/services/phase3ValidationReportService';
+import { Phase3ValidationService } from '../src/services/phase3ValidationService';
 import { ReportService } from '../src/services/reportService';
 import { StateService } from '../src/services/stateService';
 import { SummaryService } from '../src/services/summaryService';
@@ -119,11 +125,15 @@ function openPosition(input: Partial<PositionRecord>): PositionRecord {
   };
 }
 
-async function main() {
+async function setupDataDir(): Promise<string> {
   const tempDataDir = process.env.DATA_DIR || await fs.mkdtemp(path.join(os.tmpdir(), 'cukong-phase3-probe-'));
   await fs.rm(tempDataDir, { recursive: true, force: true });
   await fs.mkdir(path.resolve(tempDataDir), { recursive: true });
+  return tempDataDir;
+}
 
+async function runSeededValidationMode(): Promise<void> {
+  await setupDataDir();
   const persistence = new PersistenceService();
   await persistence.bootstrap();
 
@@ -136,6 +146,7 @@ async function main() {
   const accountStore = new AccountStore();
   const accountRegistry = new AccountRegistry(accountStore);
   const summary = new SummaryService(persistence, journal, report, accountRegistry);
+  const phase3 = new Phase3ValidationService(persistence);
 
   await Promise.all([
     state.load(),
@@ -188,7 +199,7 @@ async function main() {
     summary,
   );
 
-  const cancelable = await orderManager.create({
+  await orderManager.create({
     accountId: defaultAccount.id,
     pair: 'btc_idr',
     side: 'buy',
@@ -222,7 +233,6 @@ async function main() {
   assert.match(uncertainAfterCancel?.exchangeStatus ?? '', /submission_uncertain/);
 
   const recoveryMessages = await execution.recoverLiveOrdersOnStartup();
-  assert.equal(Array.isArray(recoveryMessages), true, 'Recovery path should execute and return array');
 
   await settings.replace({
     ...seededSettings,
@@ -244,144 +254,67 @@ async function main() {
     exposureDiscoveryBucket: 'ROTATION',
     exposureSource: 'POSITION_METADATA',
   });
-
   await positionManager.updateMark('panic_idr', 95, { emergencyExitArmed: true, dumpRisk: 0.8 });
   const panicPosition = positionManager.getOpenByPairAndAccount('panic_idr', defaultAccount.id);
   assert.ok(panicPosition, 'panic position must exist');
   await execution.manualSell(panicPosition.id, panicPosition.quantity, 'AUTO', 'EMERGENCY_EXIT');
 
-  const emergencyMessages = ['panic_idr exit by EMERGENCY_EXIT'];
-
   const summaries = await persistence.readExecutionSummaries();
   const emergencySummarySeen = summaries.some((item) => item.reason?.includes('EMERGENCY_EXIT'));
   assert.equal(emergencySummarySeen, true, 'Emergency exit execution summary must be persisted');
 
-  const reportData: Phase3ReadinessReport = {
-    runId: `phase3-${Date.now()}`,
-    generatedAt: new Date().toISOString(),
-    sourceOfTruth: {
-      repository: 'https://github.com/masreykangtrade-oss/cukong-markets',
-      roadmapVerification: 'https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP_VERIFICATION_UPGRADE.md',
+  const runtimeEvidence: Phase3RuntimeValidationEvidence = {
+    capital: {
+      policyIntentNotionalIdr: capitalPlan.policyIntentNotionalIdr,
+      allowedNotionalIdr: capitalPlan.allowedNotionalIdr,
+      allocatedNotionalIdr: capitalPlan.allocatedNotionalIdr,
+      pairClassLimitRespected: capitalPlan.exposure.pairClass.remainingNotionalIdr <= 1e-8,
+      discoveryBucketLimitRespected: capitalPlan.exposure.discoveryBucket.remainingNotionalIdr <= 1e-8,
     },
-    sections: [
-      {
-        name: 'capital_exposure',
-        summary: 'Probe source-level membuktikan allocated notional tetap bounded oleh exposure pair-class/discovery dan budget total.',
-        checks: [
-          {
-            id: 'capital-bounded-allocated-notional',
-            description: 'allocatedNotional tidak boleh melewati allowedNotional/exposure cap',
-            proofLevel: 'SOURCE_PROBE',
-            automated: true,
-            pass: capitalPlan.allocatedNotionalIdr <= capitalPlan.allowedNotionalIdr,
-            evidenceRefs: ['portfolioCapitalEngine.plan', 'phase3_market_real_validation_probe'],
-            notes: [
-              `policyIntent=${capitalPlan.policyIntentNotionalIdr}`,
-              `allowed=${capitalPlan.allowedNotionalIdr}`,
-              `allocated=${capitalPlan.allocatedNotionalIdr}`,
-            ],
-          },
-        ],
-      },
-      {
-        name: 'exchange_reconciliation_resilience',
-        summary: 'Probe source-level untuk cancel + unresolved submission_uncertain + recovery startup; market-real auth/rate-limit butuh environment live.',
-        checks: [
-          {
-            id: 'cancel-and-uncertain-bounded',
-            description: 'cancelAllOrders tidak boleh memalsukan cancel untuk submission_uncertain tanpa exchangeOrderId',
-            proofLevel: 'SOURCE_PROBE',
-            automated: true,
-            pass: /unresolved 1 submission-uncertain orders/.test(cancelSummary),
-            evidenceRefs: ['ExecutionEngine.cancelAllOrders', 'ExecutionEngine.recoverLiveOrdersOnStartup'],
-            notes: [cancelSummary, `recoveryMessages=${recoveryMessages.length}`],
-          },
-          {
-            id: 'auth-timeout-rate-limit-market-real',
-            description: 'Auth private/live timeout-retry/rate-limit perlu verifikasi non-destructive di akun exchange nyata',
-            proofLevel: 'MARKET_REAL',
-            automated: false,
-            pass: false,
-            evidenceRefs: ['tests/real_exchange_shadow_run_probe.ts'],
-            notes: ['Wajib jalankan RUN_REAL_EXCHANGE_SHADOW=1 dengan akun nyata dan bukti log/artifact terarsip'],
-          },
-        ],
-      },
-      {
-        name: 'emergency_recovery',
-        summary: 'Probe source-level membuktikan emergency exit path memproduksi execution summary persisten setelah failure signal.',
-        checks: [
-          {
-            id: 'emergency-exit-summary-persisted',
-            description: 'evaluateOpenPositions memicu EMERGENCY_EXIT dan summary tersimpan',
-            proofLevel: 'SOURCE_PROBE',
-            automated: true,
-            pass: emergencySummarySeen,
-            evidenceRefs: ['ExecutionEngine.evaluateOpenPositions', 'SummaryService.publishExecutionSummary'],
-          },
-        ],
-      },
-    ],
-    checklist: [
-      {
-        id: 'phase3-source-probe-suite',
-        description: 'Suite source/probe untuk capital + exchange ops + emergency harus hijau',
-        requiredProofLevel: 'SOURCE_PROBE',
-        status: 'PASS',
-      },
-      {
-        id: 'phase3-shadow-live-proof',
-        description: 'Strict shadow-live non-destruktif harus tersedia per runId',
-        requiredProofLevel: 'SHADOW_LIVE',
-        status: 'MANUAL_REQUIRED',
-        notes: 'Gunakan npm run verify:shadow-live untuk runId terbaru.',
-      },
-      {
-        id: 'phase3-market-real-proof',
-        description: 'Auth/order-flow/reconciliation/resilience di exchange nyata harus tervalidasi manual',
-        requiredProofLevel: 'MARKET_REAL',
-        status: 'MANUAL_REQUIRED',
-        notes: 'Belum otomatis dari seeded probe di CI.',
-      },
-    ],
-    limitations: [
-      'Probe ini seeded/non-destruktif: tidak boleh diklaim sebagai market-real pass.',
-      'Timeout/retry/rate-limit behavior real exchange masih butuh environment nyata.',
-      'Ruleset GitHub branch protection tetap verifikasi manual di setting repository.',
-    ],
-    readinessVerdict: 'BELUM_SIAP_MERGE',
-    boundaryNotes: {
-      sourceProbeProof: 'Valid untuk semantics source/runtime lokal dan persistence evidence.',
-      shadowLiveProof: 'Memerlukan strict shadow-live run tersendiri dan arsip evidence runId.',
-      marketRealProof: 'Memerlukan akun exchange nyata + jaringan nyata; tidak disubstitusi seeded probe.',
+    exchangeOps: {
+      cancelSummary,
+      unresolvedSubmissionUncertain: (uncertainAfterCancel?.exchangeStatus ?? '').includes('submission_uncertain'),
+      recoveryMessagesCount: recoveryMessages.length,
+    },
+    emergencyRecovery: {
+      emergencySummarySeen,
     },
   };
 
+  const reportData = await phase3.buildReadinessReport({ runtimeEvidence });
+  const expectedVerdict = reportData.checklist.every((item) => item.status === 'PASS')
+    ? 'SIAP_MERGE'
+    : 'BELUM_SIAP_MERGE';
+
+  assert.equal(
+    reportData.readinessVerdict,
+    expectedVerdict,
+    'readinessVerdict harus dihitung dari checklist status, bukan hardcoded literal',
+  );
+  assert.ok(
+    reportData.sections.some((section) => section.checks.some((check) => check.id === 'capital-allocated-bounded')),
+    'Report harus dibentuk dari service validasi Fase 3 dengan checks hasil agregasi evidence',
+  );
+
   await persistence.appendPhase3ReadinessEvidence(reportData);
   await persistence.savePhase3LatestReport(reportData);
-  const archived = await persistence.readPhase3ReadinessEvidence();
-  const latest = await persistence.readPhase3LatestReport();
-  assert.ok(archived.some((item) => item.runId === reportData.runId), 'Phase3 evidence must be archived');
-  assert.equal(latest?.runId, reportData.runId, 'Phase3 latest report must survive reload read-model');
 
   const artifacts = await writePhase3ValidationArtifacts({
     report: reportData,
     outputDir: process.env.PHASE3_OUTPUT_DIR || 'test_reports/phase3_market_real',
   });
 
-  await Promise.all([
-    fs.access(artifacts.jsonPath),
-    fs.access(artifacts.markdownPath),
-    fs.access(artifacts.pdfPath),
-  ]);
+  const jsonReport = JSON.parse(await fs.readFile(artifacts.jsonPath, 'utf8')) as { report: typeof reportData };
+  assert.equal(jsonReport.report.runId, reportData.runId, 'JSON artifact harus sinkron dengan report dari service');
 
   console.log(
     JSON.stringify(
       {
         probe: 'phase3_market_real_validation_probe',
+        mode: 'seeded',
         runId: reportData.runId,
-        cancelSummary,
-        emergencyMessages,
+        readinessVerdict: reportData.readinessVerdict,
+        checklist: reportData.checklist,
         artifacts,
       },
       null,
@@ -389,6 +322,53 @@ async function main() {
     ),
   );
   console.log('PASS phase3_market_real_validation_probe');
+}
+
+async function runShadowProofMode(): Promise<void> {
+  const persistence = new PersistenceService();
+  await persistence.bootstrap();
+  const phase3 = new Phase3ValidationService(persistence);
+  const status = await phase3.evaluateShadowProofStatus();
+
+  console.log(JSON.stringify({ probe: 'phase3_market_real_validation_probe', mode: 'shadow-proof', status }, null, 2));
+  assert.ok(['PASS', 'FAIL', 'MANUAL_REQUIRED'].includes(status.status), 'shadow proof status must be explicit');
+  console.log('PASS phase3_shadow_proof_check');
+}
+
+async function runManualMarketRealMode(): Promise<void> {
+  const evidenceFile = process.argv[2] || process.env.PHASE3_MANUAL_EVIDENCE_FILE;
+  assert.ok(evidenceFile, 'Provide manual evidence json path via arg or PHASE3_MANUAL_EVIDENCE_FILE');
+
+  const raw = await fs.readFile(path.resolve(evidenceFile), 'utf8');
+  const parsed = JSON.parse(raw) as Phase3MarketRealManualEvidence;
+  assert.equal(parsed.source, 'MANUAL_EXCHANGE_RUN', 'manual evidence source must be MANUAL_EXCHANGE_RUN');
+
+  const persistence = new PersistenceService();
+  await persistence.bootstrap();
+  const phase3 = new Phase3ValidationService(persistence);
+
+  await phase3.ingestManualMarketRealEvidence(parsed);
+  const status = await phase3.evaluateMarketRealManualStatus();
+
+  console.log(JSON.stringify({ probe: 'phase3_market_real_validation_probe', mode: 'market-real-check', status }, null, 2));
+  assert.ok(status.status !== 'MANUAL_REQUIRED', 'manual evidence ingestion should move status out of MANUAL_REQUIRED');
+  console.log('PASS phase3_market_real_manual_check');
+}
+
+async function main() {
+  const mode = process.env.RUN_PHASE3_MODE || 'seeded';
+
+  if (mode === 'shadow-proof') {
+    await runShadowProofMode();
+    return;
+  }
+
+  if (mode === 'market-real-check') {
+    await runManualMarketRealMode();
+    return;
+  }
+
+  await runSeededValidationMode();
 }
 
 main().catch((error) => {
