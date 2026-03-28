@@ -155,6 +155,37 @@ Probe Batch B resmi:
 - `tests/prediction_horizon_calibration_probe.ts`
 - `tests/prediction_policy_input_probe.ts`
 - `tests/runtime_prediction_policy_wiring_probe.ts`
+- `tests/batch_b_phase1_quant_validation_probe.ts` (validasi runner historis Fase 1 + metrics + artifact JSON/Markdown/PDF)
+
+### Batch B Fase 1 — Quantitative Historical Validation
+
+Jalankan validasi historis kuantitatif prediction Batch B (horizon `H5_15M`) dengan:
+
+```bash
+npm run validate:batch-b:phase1
+```
+
+Artifact output stabil default:
+
+- `test_reports/batch_b_phase1/batch_b_phase1_report.json` (source-of-truth machine-readable)
+- `test_reports/batch_b_phase1/batch_b_phase1_report.md` (human-readable)
+- `test_reports/batch_b_phase1/batch_b_phase1_report.pdf` (render dari source report yang sama)
+
+Makna metrik utama:
+
+- `overallDirectionAccuracy`: akurasi arah prediction vs outcome resolve horizon.
+- `confidenceBucketAccuracy`: akurasi per bucket confidence (`LOW/MID/HIGH`).
+- `calibrationSummary.meanCalibrationError`: gap intensitas move prediksi vs outcome.
+- `expectedMoveError`: error absolut prediksi magnitude move.
+- `horizonErrorSummary`: drift resolve timestamp terhadap target horizon.
+- `regime/pair-class/prediction-strength breakdown`: area performa yang relatif kuat/lemah.
+- `conservativeThresholdRecommendation`: rekomendasi threshold confidence berbasis hasil resolved run aktual (bukan hardcoded).
+
+Batas jujur Fase 1:
+
+- ini validasi historis dari jalur replay/persistence source, **bukan** bukti live readiness.
+- belum membuktikan kualitas fill/execution exchange nyata, latency market live, atau robustness post-deploy VPS.
+- jika coverage snapshot historis tidak cukup panjang/konsisten, sebagian prediction akan tercatat unresolved/skip.
 
 Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
 

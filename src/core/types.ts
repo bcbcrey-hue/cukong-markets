@@ -1047,6 +1047,132 @@ export interface BacktestRunResult {
   notes: string[];
 }
 
+export interface BatchBPredictionRunConfig {
+  pair?: string;
+  startTime?: number;
+  endTime?: number;
+  maxEvents?: number;
+}
+
+export type BatchBPredictionConfidenceBucket = 'LOW' | 'MID' | 'HIGH';
+
+export interface BatchBPredictionValidationRow {
+  pair: string;
+  pairClass?: PairClass;
+  regime: MarketRegime;
+  referenceTimestamp: number;
+  horizonLabel: 'H5_15M';
+  horizonMinutes: number;
+  horizonTargetTimestamp: number;
+  predictedDirection: FutureTrendingPrediction['direction'];
+  predictedExpectedMovePct: number;
+  predictionConfidence: number;
+  predictionStrength: FutureTrendingPrediction['strength'];
+  calibrationTag: FutureTrendingPrediction['calibrationTag'];
+  confidenceBucket: BatchBPredictionConfidenceBucket;
+  tradeFlowSource: FutureTrendingPrediction['tradeFlowSource'];
+  tradeFlowQuality: FutureTrendingPrediction['tradeFlowQuality'];
+  resolved: boolean;
+  resolvedAt?: number;
+  actualDirection: FutureTrendingPrediction['direction'] | null;
+  actualMovePct: number | null;
+  isDirectionMatch: boolean | null;
+  moveErrorPct: number | null;
+}
+
+export interface BatchBPredictionBreakdown<T extends string> {
+  key: T;
+  total: number;
+  resolved: number;
+  unresolved: number;
+  directionAccuracy: number;
+  meanAbsoluteMoveErrorPct: number;
+}
+
+export interface BatchBPredictionCalibrationSummary {
+  meanCalibrationError: number;
+  byCalibrationTag: BatchBPredictionBreakdown<FutureTrendingPrediction['calibrationTag']>[];
+}
+
+export interface BatchBPredictionHorizonErrorSummary {
+  targetHorizonMinutes: number;
+  meanAbsoluteResolutionDriftMinutes: number;
+  p95ResolutionDriftMinutes: number;
+}
+
+export interface BatchBPredictionConservativeThresholdRecommendation {
+  confidenceThreshold: number;
+  expectedDirectionAccuracy: number;
+  resolvedSampleCount: number;
+  meanAbsoluteMoveErrorPct: number;
+  rationale: string;
+}
+
+export type BatchBPredictionRegimeBreakdown = BatchBPredictionBreakdown<MarketRegime>;
+export type BatchBPredictionStrengthBreakdown = BatchBPredictionBreakdown<FutureTrendingPrediction['strength']>;
+export type BatchBPredictionSourceQualityBreakdown = BatchBPredictionBreakdown<string>;
+
+export interface BatchBPredictionPhase1Metrics {
+  totalPredictionCount: number;
+  resolvedPredictionCount: number;
+  unresolvedOrSkippedCount: number;
+  overallDirectionAccuracy: number;
+  confidenceBucketAccuracy: BatchBPredictionBreakdown<BatchBPredictionConfidenceBucket>[];
+  calibrationSummary: BatchBPredictionCalibrationSummary;
+  expectedMoveError: {
+    meanAbsoluteErrorPct: number;
+    p95AbsoluteErrorPct: number;
+  };
+  horizonErrorSummary: BatchBPredictionHorizonErrorSummary;
+  regimeBreakdown: BatchBPredictionRegimeBreakdown[];
+  pairClassBreakdown: BatchBPredictionBreakdown<'MAJOR' | 'MID' | 'MICRO' | 'UNKNOWN'>[];
+  predictionStrengthBreakdown: BatchBPredictionStrengthBreakdown[];
+  sourceQualityBreakdown: BatchBPredictionSourceQualityBreakdown[];
+  conservativeThresholdRecommendation: BatchBPredictionConservativeThresholdRecommendation;
+  caveats: string[];
+}
+
+export interface BatchBPredictionValidationResult {
+  runId: string;
+  generatedAt: string;
+  config: BatchBPredictionRunConfig;
+  totalSnapshotsEvaluated: number;
+  rows: BatchBPredictionValidationRow[];
+  metrics: BatchBPredictionPhase1Metrics;
+}
+
+export interface BatchBPredictionPhase1Report {
+  runId: string;
+  generatedAt: string;
+  executiveSummary: {
+    headline: string;
+    totalPredictions: number;
+    resolvedPredictions: number;
+    unresolvedPredictions: number;
+    directionAccuracy: number;
+    caveat: string;
+  };
+  accuracySummary: {
+    overallDirectionAccuracy: number;
+    confidenceBucketAccuracy: BatchBPredictionBreakdown<BatchBPredictionConfidenceBucket>[];
+    expectedMoveError: BatchBPredictionPhase1Metrics['expectedMoveError'];
+    horizonErrorSummary: BatchBPredictionHorizonErrorSummary;
+  };
+  calibrationSummary: BatchBPredictionCalibrationSummary;
+  regimeBreakdown: BatchBPredictionRegimeBreakdown[];
+  pairClassBreakdown: BatchBPredictionBreakdown<'MAJOR' | 'MID' | 'MICRO' | 'UNKNOWN'>[];
+  predictionStrengthBreakdown: BatchBPredictionStrengthBreakdown[];
+  sourceQualityBreakdown: BatchBPredictionSourceQualityBreakdown[];
+  failureZones: Array<{
+    dimension: 'regime' | 'pairClass' | 'strength';
+    key: string;
+    resolved: number;
+    directionAccuracy: number;
+  }>;
+  conservativeThresholdRecommendation: BatchBPredictionConservativeThresholdRecommendation;
+  limitations: string[];
+}
+
 export interface StartStopApp {
   start: () => Promise<void>;
   stop: () => Promise<void>;
