@@ -20,7 +20,10 @@
     "probe:list": "node scripts/run-probes.mjs --list",
     "runtime:contract": "node --import tsx scripts/runtime-verifier-contract.mjs",
     "validate:batch-b:phase1": "node --import tsx scripts/run-batch-b-phase1-validation.mjs",
-    "validate:batch-b:phase2": "node --import tsx scripts/run-batch-b-phase2-shadow-calibration.mjs"
+    "validate:batch-b:phase2": "node --import tsx scripts/run-batch-b-phase2-shadow-calibration.mjs",
+    "validate:phase3": "tsx tests/phase3_market_real_validation_probe.ts",
+    "validate:phase3:shadow-proof": "RUN_PHASE3_MODE=shadow-proof tsx tests/phase3_market_real_validation_probe.ts",
+    "validate:phase3:market-real-check": "RUN_PHASE3_MODE=market-real-check tsx tests/phase3_market_real_validation_probe.ts"
   },
   "engines": {
     "node": ">=20"

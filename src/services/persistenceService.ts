@@ -18,6 +18,8 @@ import type {
   PositionRecord,
   RuntimeState,
   ShadowRunEvidence,
+  Phase3MarketRealManualEvidence,
+  Phase3ReadinessReport,
   TradeOutcomeSummary,
   TradeRecord,
 } from '../core/types';
@@ -255,6 +257,18 @@ export class PersistenceService {
   private readonly batchBPhase2TrackingStore = new JsonLinesStore<BatchBPhase2PredictionTrackingRecord>(
     path.resolve(env.historyDir, 'batch-b-phase2-tracking.jsonl'),
   );
+
+  private readonly phase3EvidenceStore = new JsonLinesStore<Phase3ReadinessReport>(
+    path.resolve(env.historyDir, 'phase3-market-real-evidence.jsonl'),
+  );
+  private readonly phase3ManualEvidenceStore = new JsonLinesStore<Phase3MarketRealManualEvidence>(
+    path.resolve(env.historyDir, 'phase3-market-real-manual-evidence.jsonl'),
+  );
+  private readonly phase3LatestReportStore = new JsonStore<Phase3ReadinessReport | null>({
+    filePath: path.resolve(env.historyDir, 'phase3-market-real-latest-report.json'),
+    fallback: null,
+  });
+
   private readonly batchBPhase2LatestReportStore = new JsonStore<BatchBPhase2CalibrationReport | null>({
     filePath: path.resolve(env.historyDir, 'batch-b-phase2-latest-report.json'),
     fallback: null,
@@ -280,6 +294,9 @@ export class PersistenceService {
       this.shadowRunEvidenceStore.ensureDir(),
       this.batchBPhase2TrackingStore.ensureDir(),
       this.batchBPhase2LatestReportStore.read(),
+      this.phase3EvidenceStore.ensureDir(),
+      this.phase3ManualEvidenceStore.ensureDir(),
+      this.phase3LatestReportStore.read(),
     ]);
   }
 
@@ -451,6 +468,31 @@ export class PersistenceService {
 
   readBatchBPhase2LatestReport(): Promise<BatchBPhase2CalibrationReport | null> {
     return this.batchBPhase2LatestReportStore.read();
+  }
+
+
+  appendPhase3ReadinessEvidence(entry: Phase3ReadinessReport): Promise<void> {
+    return this.phase3EvidenceStore.append(entry);
+  }
+
+  readPhase3ReadinessEvidence(): Promise<Phase3ReadinessReport[]> {
+    return this.phase3EvidenceStore.readAll();
+  }
+
+  appendPhase3ManualMarketRealEvidence(entry: Phase3MarketRealManualEvidence): Promise<void> {
+    return this.phase3ManualEvidenceStore.append(entry);
+  }
+
+  readPhase3ManualMarketRealEvidence(): Promise<Phase3MarketRealManualEvidence[]> {
+    return this.phase3ManualEvidenceStore.readAll();
+  }
+
+  savePhase3LatestReport(report: Phase3ReadinessReport): Promise<void> {
+    return this.phase3LatestReportStore.write(report);
+  }
+
+  readPhase3LatestReport(): Promise<Phase3ReadinessReport | null> {
+    return this.phase3LatestReportStore.read();
   }
 
   async saveHotlistSnapshot(hotlist: HotlistEntry[]): Promise<void> {

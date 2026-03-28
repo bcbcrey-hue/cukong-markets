@@ -61,6 +61,7 @@ const officialProbes = [
   'tests/runtime_capital_final_sync_probe.ts',
   'tests/execution_uses_final_allocated_notional_probe.ts',
   'tests/operator_capital_observability_probe.ts',
+  'tests/phase3_market_real_validation_probe.ts',
   'tests/decision_policy_semantic_sync_probe.ts',
   'tests/runtime_policy_wiring_probe.ts',
   'tests/runtime_policy_observability_probe.ts',

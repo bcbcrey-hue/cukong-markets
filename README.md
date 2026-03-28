@@ -264,7 +264,50 @@ Probe resmi Batch C:
 - `tests/execution_uses_final_allocated_notional_probe.ts`
 - `tests/operator_capital_observability_probe.ts`
 
-Catatan jujur: bukti saat ini masih source/probe-level. Belum ada shadow-live atau real-exchange evidence khusus Batch C.
+Catatan jujur: bukti saat ini naik menjadi source/probe-level + readiness artifact Fase 3, tetapi market-real exchange proof tetap butuh environment nyata (manual non-destruktif).
+
+### Fase 3 — Market-Real Validation (capital/exposure + exchange ops)
+
+Fase 3 menambah lapisan **pembuktian** di atas capability Batch C/exchange ops yang sudah ada, tanpa redesign engine policy/execution.
+
+Command probe resmi Fase 3 (seeded/source-level, non-destruktif):
+
+```bash
+npm run validate:phase3
+```
+
+`validate:phase3` sekarang memanggil **service validasi Fase 3** (`Phase3ValidationService`) untuk mengagregasi evidence runtime/persistence (`execution summaries`, `trade outcomes`, `shadow evidence`, manual evidence jika tersedia) lalu menghitung checklist + verdict readiness secara rule-based.
+
+Jalur operasional eksplisit tambahan untuk boundary proof:
+
+```bash
+npm run validate:phase3:shadow-proof
+npm run validate:phase3:market-real-check -- <manual-evidence.json>
+```
+
+- `validate:phase3:shadow-proof` mengecek reuse evidence strict shadow-live existing dari archive.
+- `validate:phase3:market-real-check` meng-ingest evidence manual exchange nyata ke store dan mengevaluasi status proof market-real.
+
+Probe ini juga ikut registry `npm run test:probes` melalui `tests/phase3_market_real_validation_probe.ts`.
+
+Artifact output stabil default:
+
+- `test_reports/phase3_market_real/phase3_market_real_validation_report.json` (machine-readable source-of-truth)
+- `test_reports/phase3_market_real/phase3_market_real_validation_report.md` (operator-readable)
+- `test_reports/phase3_market_real/phase3_market_real_validation_report.pdf` (Bahasa Indonesia, dari source report yang sama)
+
+Evidence minimum yang dibawa report Fase 3:
+
+- validasi capital/exposure bounded (allocated/pair-class/discovery cap),
+- validasi exchange ops seeded (cancel + unresolved submission uncertain + recovery path),
+- validasi emergency/recovery seeded (emergency exit + summary persistence),
+- checklist readiness jujur + limitation notes + batas proof source/shadow-live/market-real.
+
+Batas jujur Fase 3:
+
+- seeded probe **tidak** boleh diklaim sebagai market-real pass,
+- proof auth/timeouts/rate-limit/degraded/reconciliation di exchange nyata tetap perlu verifikasi manual environment real exchange,
+- verdict readiness bisa tetap `BELUM_SIAP_MERGE` walau CI hijau bila bukti market-real belum lengkap.
 
 ## Batch D — Self-Evaluation / Learning Loop (aktif konservatif di runtime)
 
