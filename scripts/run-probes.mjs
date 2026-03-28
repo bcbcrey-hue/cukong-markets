@@ -39,6 +39,7 @@ const officialProbes = [
   'tests/prediction_horizon_calibration_probe.ts',
   'tests/prediction_policy_input_probe.ts',
   'tests/batch_b_phase1_quant_validation_probe.ts',
+  'tests/batch_b_phase2_shadow_calibration_probe.ts',
   'tests/runtime_prediction_policy_wiring_probe.ts',
   'tests/runtime_prediction_reachable_lane_probe.ts',
   'tests/ticker_quote_flow_features_probe.ts',
