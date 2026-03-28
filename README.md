@@ -189,6 +189,48 @@ Batas jujur Fase 1:
 - belum membuktikan kualitas fill/execution exchange nyata, latency market live, atau robustness post-deploy VPS.
 - jika coverage snapshot historis tidak cukup panjang/konsisten, sebagian prediction akan tercatat unresolved/skip.
 
+### Batch B Fase 2 — Shadow-Live Calibration (lanjutan di atas strict shadow-run existing)
+
+Fase 2 tidak membangun shadow-run baru dari nol. Fase ini menempel ke evidence `runId` shadow-live existing dan melakukan:
+
+- linkage eksplisit runId -> prediction via `phase2PredictionLinkage` pada evidence strict shadow-run,
+- tracking prediction `H5_15M` dari jalur runtime opportunity,
+- outcome resolution jujur (`PENDING | RESOLVED | INSUFFICIENT_DATA`),
+- calibration + drift summary,
+- operator summary,
+- artifact JSON/Markdown/PDF dari source report yang sama.
+
+Command:
+
+```bash
+BATCH_B_PHASE2_RUN_ID=<runId-shadow-existing> npm run validate:batch-b:phase2
+```
+
+Catatan linkage runId:
+
+- `runId` harus berasal dari strict shadow-run existing yang sudah menyimpan `phase2PredictionLinkage`.
+- bila linkage tidak tersedia untuk runId tersebut, Fase 2 akan jujur menghasilkan tracking kosong (tidak fallback pair-match lintas waktu).
+
+Artifact output stabil default:
+
+- `test_reports/batch_b_phase2/batch_b_phase2_report.json`
+- `test_reports/batch_b_phase2/batch_b_phase2_report.md`
+- `test_reports/batch_b_phase2/batch_b_phase2_report.pdf`
+
+Metrik utama Fase 2:
+
+- jumlah prediction total + resolved/pending/insufficient-data,
+- akurasi per confidence bucket,
+- confidence calibration gap + ECE,
+- drift horizon + confidence mismatch count,
+- rekomendasi adjustment konservatif.
+
+Batas jujur Fase 2:
+
+- ini kalibrasi shadow-live prediction Batch B, **bukan** pengganti strict shadow-live Batch F,
+- **bukan** bukti market-real capital validation Batch C,
+- hasil tidak boleh dipakai untuk mengklaim Fase 3 tertutup.
+
 Artefak bukti eksekusi final terbaru (timestamp + command literal + exit code + stdout/stderr) disimpan di:
 
 - `test_reports/typecheck_probes_final.txt`

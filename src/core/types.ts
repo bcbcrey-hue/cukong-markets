@@ -869,6 +869,7 @@ export interface ShadowRunEvidence {
   timestamp: string;
   exchange: 'indodax';
   account: string;
+  phase2PredictionLinkage?: BatchBPhase2ShadowRunPredictionEvidence;
   checks: ShadowRunCheckResult[];
   allPassed: boolean;
 }
@@ -1187,6 +1188,97 @@ export interface BatchBPredictionPhase1Report {
   }>;
   conservativeThresholdRecommendation: BatchBPredictionConservativeThresholdRecommendation;
   limitations: string[];
+}
+
+export type BatchBPhase2OutcomeStatus = 'PENDING' | 'RESOLVED' | 'EXPIRED' | 'SKIPPED' | 'INSUFFICIENT_DATA';
+
+export interface BatchBPhase2PredictionTrackingRecord {
+  trackingId: string;
+  runId: string;
+  pair: string;
+  predictionTimestamp: number;
+  horizonLabel: 'H5_15M';
+  horizonMinutes: number;
+  horizonTargetTimestamp: number;
+  predictedDirection: FutureTrendingPrediction['direction'];
+  predictedExpectedMovePct: number;
+  confidence: number;
+  predictionStrength: FutureTrendingPrediction['strength'];
+  calibrationTag: FutureTrendingPrediction['calibrationTag'];
+  tradeFlowSource: FutureTrendingPrediction['tradeFlowSource'];
+  tradeFlowQuality: FutureTrendingPrediction['tradeFlowQuality'];
+  marketPolicyContextSummary: string;
+  confidenceBucket: BatchBPredictionConfidenceBucket;
+  outcomeStatus: BatchBPhase2OutcomeStatus;
+  actualDirection: FutureTrendingPrediction['direction'] | null;
+  actualMovePct: number | null;
+  resolvedAt: number | null;
+  confidenceCalibrationGap: number | null;
+  driftMinutes: number | null;
+  regime?: MarketRegime;
+  pairClass?: PairClass;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BatchBPhase2CalibrationSummary {
+  runId: string;
+  generatedAt: string;
+  totalPredictionCount: number;
+  resolvedPredictionCount: number;
+  pendingPredictionCount: number;
+  expiredPredictionCount: number;
+  insufficientDataCount: number;
+  confidenceBucketAccuracy: BatchBPredictionBreakdown<BatchBPredictionConfidenceBucket>[];
+  confidenceReliabilityByBucket: BatchBPredictionConfidenceReliabilityBucket[];
+  meanAbsoluteConfidenceCalibrationGap: number;
+  expectedCalibrationError: number;
+  driftSummary: {
+    meanAbsoluteDriftMinutes: number;
+    p95AbsoluteDriftMinutes: number;
+    confidenceMismatchCount: number;
+  };
+  warningAreas: string[];
+  conservativeAdjustmentRecommendation: string;
+  weakPerformanceAreas: Array<{
+    dimension: 'regime' | 'pairClass' | 'strength' | 'calibrationTag';
+    key: string;
+    resolved: number;
+    directionAccuracy: number;
+  }>;
+}
+
+export interface BatchBPhase2OperatorSummary {
+  title: string;
+  runId: string;
+  generatedAt: string;
+  lines: string[];
+  honestBoundary: string;
+}
+
+export interface BatchBPhase2CalibrationReport {
+  tracking: {
+    totalRecords: number;
+    resolvedRecords: number;
+    pendingRecords: number;
+    expiredRecords: number;
+    insufficientDataRecords: number;
+  };
+  calibration: BatchBPhase2CalibrationSummary;
+  operatorSummary: BatchBPhase2OperatorSummary;
+  limitations: string[];
+}
+
+export interface BatchBPhase2ShadowRunPredictionEvidence {
+  evidenceId: string;
+  runId: string;
+  pair: string;
+  capturedAt: string;
+  linkageStatus: 'CAPTURED' | 'NO_PREDICTION_AVAILABLE';
+  opportunityTimestamp?: number;
+  runtimePolicyUpdatedAt?: string | null;
+  prediction?: FutureTrendingPrediction;
+  contextSummary?: string;
 }
 
 export interface StartStopApp {

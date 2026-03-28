@@ -2494,11 +2494,13 @@ export class ExecutionEngine {
     const accounts = this.accounts.listEnabled();
 
     if (accounts.length === 0) {
+      const predictionLinkage = this.buildPhase2PredictionLinkage(runId, pair);
       const evidence: ShadowRunEvidence = {
         runId,
         timestamp: now,
         exchange: 'indodax',
         account: 'no-enabled-account',
+        phase2PredictionLinkage: predictionLinkage,
         allPassed: false,
         checks: [
           this.buildShadowCheck({
@@ -2544,6 +2546,7 @@ export class ExecutionEngine {
     })();
 
     const results: ShadowRunEvidence[] = [];
+    const predictionLinkage = this.buildPhase2PredictionLinkage(runId, pair);
 
     for (const account of accounts) {
       const accountLabel = this.safeAccountLabel(account.id);
@@ -2698,6 +2701,7 @@ export class ExecutionEngine {
         timestamp: now,
         exchange: 'indodax',
         account: accountLabel,
+        phase2PredictionLinkage: predictionLinkage,
         checks,
         allPassed: checks.every((check) => check.pass),
       };
@@ -2718,6 +2722,33 @@ export class ExecutionEngine {
     }
 
     return results;
+  }
+
+  private buildPhase2PredictionLinkage(runId: string, pair: string): ShadowRunEvidence['phase2PredictionLinkage'] {
+    const opportunity = this.state
+      .get()
+      .lastOpportunities
+      .find((item) => item.pair.toLowerCase() === pair.toLowerCase());
+    const prediction = opportunity?.prediction;
+    const runtimePolicy = this.state.get().lastRuntimePolicyDecision;
+
+    return {
+      evidenceId: crypto.randomUUID(),
+      runId,
+      pair,
+      capturedAt: new Date().toISOString(),
+      linkageStatus: prediction && prediction.horizonLabel === 'H5_15M'
+        ? 'CAPTURED'
+        : 'NO_PREDICTION_AVAILABLE',
+      opportunityTimestamp: opportunity?.timestamp,
+      runtimePolicyUpdatedAt: runtimePolicy?.pair?.toLowerCase() === pair.toLowerCase()
+        ? runtimePolicy.updatedAt
+        : null,
+      prediction: prediction && prediction.horizonLabel === 'H5_15M' ? prediction : undefined,
+      contextSummary: opportunity
+        ? `marketRegime=${opportunity.marketRegime};recommended=${opportunity.recommendedAction};warnings=${opportunity.warnings.slice(0, 2).join(';') || '-'}`
+        : 'opportunity-not-available-on-runtime-state',
+    };
   }
 
   async syncActiveOrders(): Promise<string[]> {

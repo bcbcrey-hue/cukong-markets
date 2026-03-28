@@ -14,6 +14,7 @@ import type {
   StoredAccount,
   TradeOutcomeSummary,
   TradeRecord,
+  BatchBPhase2OperatorSummary,
 } from '../core/types';
 import { evaluateHotlistUiDecision } from '../core/hotlistDecision';
 
@@ -162,6 +163,16 @@ export class ReportService {
     }
 
     return lines.join('\n');
+  }
+
+  batchBPhase2OperatorSummaryText(summary: BatchBPhase2OperatorSummary): string {
+    return [
+      '📘 BATCH B FASE 2 — SHADOW-LIVE CALIBRATION',
+      `- Run ID: ${summary.runId}`,
+      `- Generated: ${summary.generatedAt}`,
+      ...summary.lines.map((line) => `- ${line}`),
+      `- Batas jujur: ${summary.honestBoundary}`,
+    ].join('\n');
   }
 
   hotlistText(hotlist: HotlistEntry[]): string {

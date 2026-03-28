@@ -12,6 +12,8 @@ import type {
   JournalEntry,
   OpportunityAssessment,
   OrderRecord,
+  BatchBPhase2CalibrationReport,
+  BatchBPhase2PredictionTrackingRecord,
   PolicyEvaluationRecord,
   PositionRecord,
   RuntimeState,
@@ -250,6 +252,13 @@ export class PersistenceService {
   private readonly shadowRunEvidenceStore = new JsonLinesStore<ShadowRunEvidence>(
     env.shadowRunEvidenceFile,
   );
+  private readonly batchBPhase2TrackingStore = new JsonLinesStore<BatchBPhase2PredictionTrackingRecord>(
+    path.resolve(env.historyDir, 'batch-b-phase2-tracking.jsonl'),
+  );
+  private readonly batchBPhase2LatestReportStore = new JsonStore<BatchBPhase2CalibrationReport | null>({
+    filePath: path.resolve(env.historyDir, 'batch-b-phase2-latest-report.json'),
+    fallback: null,
+  });
 
   async bootstrap(): Promise<void> {
     await Promise.all([
@@ -269,6 +278,8 @@ export class PersistenceService {
       this.policyEvaluationStore.read(),
       this.callbackEventsStore.ensureDir(),
       this.shadowRunEvidenceStore.ensureDir(),
+      this.batchBPhase2TrackingStore.ensureDir(),
+      this.batchBPhase2LatestReportStore.read(),
     ]);
   }
 
@@ -424,6 +435,22 @@ export class PersistenceService {
 
   readShadowRunEvidence(): Promise<ShadowRunEvidence[]> {
     return this.shadowRunEvidenceStore.readAll();
+  }
+
+  appendBatchBPhase2Tracking(entry: BatchBPhase2PredictionTrackingRecord): Promise<void> {
+    return this.batchBPhase2TrackingStore.append(entry);
+  }
+
+  readBatchBPhase2Tracking(): Promise<BatchBPhase2PredictionTrackingRecord[]> {
+    return this.batchBPhase2TrackingStore.readAll();
+  }
+
+  saveBatchBPhase2LatestReport(report: BatchBPhase2CalibrationReport): Promise<void> {
+    return this.batchBPhase2LatestReportStore.write(report);
+  }
+
+  readBatchBPhase2LatestReport(): Promise<BatchBPhase2CalibrationReport | null> {
+    return this.batchBPhase2LatestReportStore.read();
   }
 
   async saveHotlistSnapshot(hotlist: HotlistEntry[]): Promise<void> {

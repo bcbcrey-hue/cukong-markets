@@ -19,7 +19,8 @@
     "probe:audit": "node scripts/run-probes.mjs --audit",
     "probe:list": "node scripts/run-probes.mjs --list",
     "runtime:contract": "node --import tsx scripts/runtime-verifier-contract.mjs",
-    "validate:batch-b:phase1": "node --import tsx scripts/run-batch-b-phase1-validation.mjs"
+    "validate:batch-b:phase1": "node --import tsx scripts/run-batch-b-phase1-validation.mjs",
+    "validate:batch-b:phase2": "node --import tsx scripts/run-batch-b-phase2-shadow-calibration.mjs"
   },
   "engines": {
     "node": ">=20"
