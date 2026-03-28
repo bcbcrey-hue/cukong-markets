@@ -119,21 +119,69 @@ Yang belum ada saat ini:
 2. **Fase 2 — Shadow-Live Calibration for Prediction Layer**
 3. **Fase 3 — Market-Real Validation for Capital and Exchange Operations**
 4. **Data Lifecycle & Cleanup Policy** sebagai **operational support layer**
-Di bagian lifecycle, PDF justru **harus ditulis eksplisit**:
-* **Summary/Report PDF = permanen**
-* tidak dihapus
-* jadi arsip operator / baseline audit
-Sedangkan:
-* raw JSON boleh 7–14 hari
-* log detail 24–48 jam
-* aggregate metrics permanen
-* **setiap fase wajib punya PDF report**
-* lalu di lifecycle ditulis bahwa **PDF disimpan permanen**
-## Ringkasnya
-**PDF wajib ditulis eksplisit**, dan harus muncul di output tiap fase + policy retention.
-
    
+## Data Lifecycle & Report Retention Policy
 
+Setiap fase **wajib menghasilkan report** yang ringkas, eksplisit, dan mudah diaudit.
+
+* minimal setelah Fase 1 mulai menghasilkan artifact nyata
+* dirapikan setelah format output/report Fase 1 sudah stabil
+
+**Isi yang tulis**
+
+* retention JSON
+* retention log detail
+* report permanen
+* aggregate metrics permanen
+* cleanup otomatis
+* cleanup manual via command   
+
+### Format minimum report per fase
+
+* **JSON** untuk artifact machine-readable
+* **Markdown / ringkasan operator** untuk pembacaan cepat
+* **PDF Bahasa Indonesia** untuk arsip operator dan baseline audit
+
+### Fungsi report PDF
+
+Setiap **PDF final** berfungsi sebagai:
+
+* arsip operator
+* baseline audit
+* bukti ringkas hasil fase
+
+### Kebijakan retensi
+
+| Data Type                       |  Retention | Cleanup Trigger                                                                                    |
+| ------------------------------- | ---------: | -------------------------------------------------------------------------------------------------- |
+| Raw JSON / validation artifacts |  7–14 hari | Otomatis setelah periode berlalu                                                                   |
+| Log detail per run              |  24–48 jam | Otomatis setelah analisis selesai                                                                  |
+| PDF draft / intermediate        | 30–90 hari | Otomatis setelah fase final stabil / digantikan PDF final                                          |
+| PDF final (Bahasa Indonesia)    |   Permanen | Tidak dihapus otomatis; hanya boleh dihapus manual oleh operator bila benar-benar tidak dibutuhkan |
+| Aggregate metrics               |   Permanen | Disimpan untuk baseline kalibrasi dan audit berikutnya                                             |
+
+### Aturan penting
+
+1. **Setiap fase wajib punya PDF report secara ringkas dan eksplisit.**
+2. **PDF final disimpan permanen** sebagai arsip utama.
+3. **PDF draft/intermediate tidak permanen**; boleh dibersihkan otomatis dalam 30–90 hari.
+4. **Raw JSON dan log detail tidak disimpan lama**, agar storage tidak membengkak.
+5. **Aggregate metrics disimpan permanen**, karena ukurannya kecil tetapi penting untuk baseline kalibrasi.
+6. **PDF final boleh dihapus hanya secara manual oleh operator**, bukan cleanup otomatis.
+
+### Mekanisme ringkas
+
+`Run validation/backtest/shadow-live -> hasil raw JSON + log detail -> generate Markdown + PDF draft -> finalisasi hasil -> simpan PDF final permanen -> cleanup otomatis raw/log/draft sesuai retensi`
+
+### Ringkasan akhir
+
+* **PDF wajib ditulis eksplisit di output tiap fase**
+* **PDF final disimpan permanen**
+* **PDF draft/intermediate disimpan 30–90 hari lalu cleanup**
+* **raw JSON disimpan 7–14 hari**
+* **log detail disimpan 24–48 jam**
+* **aggregate metrics disimpan permanen**
+  
 ### Fase 1 — Quantitative Validation for Existing Prediction Layer
 
 **Fokus**
@@ -217,17 +265,6 @@ Belum ada **shadow-live khusus Batch C** dan belum ada bukti operasional exchang
 
 ### Data Lifecycle & Cleanup Policy
 
-* minimal setelah Fase 1 mulai menghasilkan artifact nyata
-* paling aman dirapikan setelah format output/report Fase 1 sudah stabil
-
-**Isi yang tulis**
-
-* retention JSON
-* retention log detail
-* report permanen
-* aggregate metrics permanen
-* cleanup otomatis
-* cleanup manual via command   
 ---
 
 ## 6. FASE 1 — QUANTITATIVE VALIDATION FOR EXISTING PREDICTION LAYER
