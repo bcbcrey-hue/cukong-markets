@@ -110,26 +110,124 @@ Yang belum ada saat ini:
 
 ## 5. STRUKTUR ROADMAP BARU YANG BENAR
 
-Roadmap verifikasi ini dibagi menjadi 3 fase:
+* backtest kuantitatif horizon panjang untuk Batch B,
+* shadow-live khusus kalibrasi prediction Batch B,
+* shadow-live / market-real validation khusus Batch C,
+  bukan membangun ulang Batch B/C dari nol.
+
+1. **Fase 1 — Quantitative Validation for Existing Prediction Layer**
+2. **Fase 2 — Shadow-Live Calibration for Prediction Layer**
+3. **Fase 3 — Market-Real Validation for Capital and Exchange Operations**
+4. **Data Lifecycle & Cleanup Policy** sebagai **operational support layer**
+Di bagian lifecycle, PDF justru **harus ditulis eksplisit**:
+* **Summary/Report PDF = permanen**
+* tidak dihapus
+* jadi arsip operator / baseline audit
+Sedangkan:
+* raw JSON boleh 7–14 hari
+* log detail 24–48 jam
+* aggregate metrics permanen
+* **setiap fase wajib punya PDF report**
+* lalu di lifecycle ditulis bahwa **PDF disimpan permanen**
+## Ringkasnya
+**PDF wajib ditulis eksplisit**, dan harus muncul di output tiap fase + policy retention.
+
+   
 
 ### Fase 1 — Quantitative Validation for Existing Prediction Layer
 
-Fokus:
+**Fokus**
+* validasi kuantitatif prediction Batch B secara historis
+* backtest kuantitatif horizon panjang untuk Batch B
+* jangan sentuh shadow-live baru
+* jangan sentuh exchange validation dulu
 
-* validasi kuantitatif prediction Batch B secara historis.
+**Status target**
+* prediction Batch B sudah punya validation historis kuantitatif
+
+**Output yang dicari**
+
+Output:
+* runner validation historis
+* metrics
+* report JSON
+* report Markdown
+* **report PDF**
+* probe fase 1
+
+Isi PDF Fase 1:
+* ringkasan akurasi prediction
+* calibration summary
+* regime breakdown
+* pair-class breakdown
+* rekomendasi threshold konservatif
+* keterbatasan pengujian
+Yang belum ada adalah backtest kuantitatif horizon panjang Batch B, sementara prediction layer sendiri sudah hidup di repo.
 
 ### Fase 2 — Shadow-Live Calibration for Prediction Layer
 
-Fokus:
+**Fokus**
+* kalibrasi prediction Batch B di market real tanpa trading live destruktif
+* shadow-live khusus kalibrasi prediction Batch B
+* jangan sentuh market-real capital validation dulu
 
-* kalibrasi prediction Batch B di market real tanpa trading live destruktif.
+**Status target**
+* prediction Batch B sudah punya calibration shadow-live yang bisa dibaca operator
+
+**Output**
+* tracker prediction
+* outcome resolution
+* calibration report JSON
+* operator summary
+* **report PDF**
+* drift monitoring
+
+Isi PDF Fase 2:
+* jumlah prediction
+* resolved vs pending
+* akurasi per confidence bucket
+* drift/confidence mismatch
+* rekomendasi adjustment
+* warning area prediction
+Karena repo sudah punya strict shadow-live Batch F sebagai proof dasar, tetapi belum punya **shadow-live khusus kalibrasi prediction Batch B**. Jadi Fase 2 ini adalah lapisan lanjutan, bukan pengganti Batch F.
 
 ### Fase 3 — Market-Real Validation for Capital and Exchange Operations
 
-Fokus:
+**Fokus**
+* validasi lebih dalam untuk Batch C dan exchange/ops behavior di lingkungan real
+* market-real validation untuk Batch C
+* exchange operational suite lanjutan
 
-* validasi lebih dalam untuk Batch C dan exchange/ops behavior di lingkungan real.
+**Status target**
+* Batch C + exchange ops punya level bukti market-real yang lebih tinggi
 
+**Output**
+* capital/exposure validation evidence
+* exchange resilience/reconciliation proof
+* readiness docs yang jujur
+* **report PDF**
+
+Isi PDF Fase 3:
+* hasil validation capital/exposure
+* hasil reconciliation
+* hasil resilience/error handling
+* batas yang masih belum terbukti
+* keputusan readiness yang jujur
+Belum ada **shadow-live khusus Batch C** dan belum ada bukti operasional exchange yang lebih lengkap untuk area itu. 
+
+### Data Lifecycle & Cleanup Policy
+
+* minimal setelah Fase 1 mulai menghasilkan artifact nyata
+* paling aman dirapikan setelah format output/report Fase 1 sudah stabil
+
+**Isi yang tulis**
+
+* retention JSON
+* retention log detail
+* report permanen
+* aggregate metrics permanen
+* cleanup otomatis
+* cleanup manual via command   
 ---
 
 ## 6. FASE 1 — QUANTITATIVE VALIDATION FOR EXISTING PREDICTION LAYER
