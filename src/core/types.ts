@@ -869,6 +869,7 @@ export interface ShadowRunEvidence {
   timestamp: string;
   exchange: 'indodax';
   account: string;
+  phase2PredictionLinkage?: BatchBPhase2ShadowRunPredictionEvidence;
   checks: ShadowRunCheckResult[];
   allPassed: boolean;
 }
@@ -1266,6 +1267,18 @@ export interface BatchBPhase2CalibrationReport {
   calibration: BatchBPhase2CalibrationSummary;
   operatorSummary: BatchBPhase2OperatorSummary;
   limitations: string[];
+}
+
+export interface BatchBPhase2ShadowRunPredictionEvidence {
+  evidenceId: string;
+  runId: string;
+  pair: string;
+  capturedAt: string;
+  linkageStatus: 'CAPTURED' | 'NO_PREDICTION_AVAILABLE';
+  opportunityTimestamp?: number;
+  runtimePolicyUpdatedAt?: string | null;
+  prediction?: FutureTrendingPrediction;
+  contextSummary?: string;
 }
 
 export interface StartStopApp {

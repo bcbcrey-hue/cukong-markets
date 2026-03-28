@@ -3,82 +3,79 @@ import { access, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { BatchBPhase2CalibrationService } from '../src/services/batchBPhase2CalibrationService';
-import type { ShadowRunEvidence } from '../src/core/types';
+import type { FutureTrendingPrediction, ShadowRunEvidence } from '../src/core/types';
 import { PersistenceService } from '../src/services/persistenceService';
 import { writeBatchBPhase2Artifacts } from '../src/services/batchBPhase2ReportService';
 import { ReportService } from '../src/services/reportService';
 
-async function seedRuntimeEvidence(persistence: PersistenceService, runId: string): Promise<void> {
-  const now = Date.now();
-  const pair = 'btc_idr';
+function buildPrediction(generatedAt: number, direction: FutureTrendingPrediction['direction']): FutureTrendingPrediction {
+  return {
+    target: 'TREND_DIRECTIONAL_MOVE',
+    horizonLabel: 'H5_15M',
+    horizonMinutes: 15,
+    direction,
+    expectedMovePct: direction === 'DOWN' ? -1.2 : 1.2,
+    confidence: 0.78,
+    strength: 'STRONG',
+    calibrationTag: 'OUTCOME_AND_TRADE_TRUTH',
+    reasons: ['momentum valid'],
+    caveats: [],
+    tradeFlowSource: 'EXCHANGE_TRADE_FEED',
+    tradeFlowQuality: 'TAPE',
+    generatedAt,
+  };
+}
 
+async function seedRunEvidence(
+  persistence: PersistenceService,
+  input: { runId: string; pair: string; generatedAt: number; direction: FutureTrendingPrediction['direction'] },
+): Promise<void> {
   const shadowEvidence: ShadowRunEvidence = {
-    runId,
-    timestamp: new Date(now).toISOString(),
+    runId: input.runId,
+    timestamp: new Date(input.generatedAt + 60_000).toISOString(),
     exchange: 'indodax',
     account: 'probe-account',
     allPassed: true,
+    phase2PredictionLinkage: {
+      evidenceId: `${input.runId}-evidence`,
+      runId: input.runId,
+      pair: input.pair,
+      capturedAt: new Date(input.generatedAt + 30_000).toISOString(),
+      linkageStatus: 'CAPTURED',
+      opportunityTimestamp: input.generatedAt,
+      runtimePolicyUpdatedAt: new Date(input.generatedAt + 45_000).toISOString(),
+      prediction: buildPrediction(input.generatedAt, input.direction),
+      contextSummary: `run=${input.runId}`,
+    },
     checks: [
       {
         check: 'public_market',
-        endpoint: `GET /api/depth/${pair}`,
+        endpoint: `GET /api/depth/${input.pair}`,
         account: 'probe-account',
         pass: true,
-        summary: { pair },
+        summary: { pair: input.pair },
       },
     ],
   };
   await persistence.appendShadowRunEvidence(shadowEvidence);
+}
 
-  const predictionTs = now - 20 * 60_000;
-
-  await persistence.appendPairHistory({
-    type: 'opportunity',
-    pair,
-    recordedAt: new Date(predictionTs).toISOString(),
-    opportunity: {
-      pair,
-      pairClass: 'MAJOR',
-      marketRegime: 'EXPANSION',
-      warnings: ['spread meningkat tipis'],
-      prediction: {
-        target: 'TREND_DIRECTIONAL_MOVE',
-        horizonLabel: 'H5_15M',
-        horizonMinutes: 15,
-        direction: 'UP',
-        expectedMovePct: 1.2,
-        confidence: 0.78,
-        strength: 'STRONG',
-        calibrationTag: 'OUTCOME_AND_TRADE_TRUTH',
-        reasons: ['momentum naik'],
-        caveats: [],
-        tradeFlowSource: 'EXCHANGE_TRADE_FEED',
-        tradeFlowQuality: 'TAPE',
-        generatedAt: predictionTs,
-      },
-    },
-  });
-
+async function seedSnapshots(
+  persistence: PersistenceService,
+  pair: string,
+  predictionTs: number,
+  basePrice: number,
+  horizonPrice: number,
+): Promise<void> {
   await persistence.appendPairHistory({
     type: 'snapshot',
     pair,
-    recordedAt: new Date(predictionTs).toISOString(),
-    snapshot: {
-      pair,
-      ticker: { lastPrice: 100 },
-      timestamp: predictionTs,
-    },
+    snapshot: { pair, ticker: { lastPrice: basePrice }, timestamp: predictionTs },
   });
-
   await persistence.appendPairHistory({
     type: 'snapshot',
     pair,
-    recordedAt: new Date(predictionTs + 15 * 60_000).toISOString(),
-    snapshot: {
-      pair,
-      ticker: { lastPrice: 103 },
-      timestamp: predictionTs + 15 * 60_000,
-    },
+    snapshot: { pair, ticker: { lastPrice: horizonPrice }, timestamp: predictionTs + 15 * 60_000 },
   });
 }
 
@@ -87,22 +84,53 @@ async function main() {
   await persistence.bootstrap();
 
   const service = new BatchBPhase2CalibrationService(persistence);
-  const runId = `shadow-phase2-probe-${Date.now()}`;
-  await seedRuntimeEvidence(persistence, runId);
+  const now = Date.now();
+  const targetRunId = `shadow-phase2-target-${now}`;
+  const otherRunId = `shadow-phase2-other-${now}`;
+  const missingLinkRunId = `shadow-phase2-missing-link-${now}`;
 
-  const report = await service.runPhase2ForRunId(runId);
+  const pair = 'btc_idr';
+  const targetTs = now - 20 * 60_000;
+  const otherTs = now - 200 * 60_000;
 
-  assert.equal(report.tracking.totalRecords > 0, true, 'tracking store harus berisi prediction dari path runtime');
-  assert.equal(report.tracking.resolvedRecords > 0, true, 'outcome resolution harus menghasilkan status RESOLVED');
+  await seedRunEvidence(persistence, { runId: targetRunId, pair, generatedAt: targetTs, direction: 'UP' });
+  await seedRunEvidence(persistence, { runId: otherRunId, pair, generatedAt: otherTs, direction: 'DOWN' });
+
+  await persistence.appendShadowRunEvidence({
+    runId: missingLinkRunId,
+    timestamp: new Date(now).toISOString(),
+    exchange: 'indodax',
+    account: 'probe-account',
+    allPassed: true,
+    checks: [{ check: 'public_market', endpoint: `GET /api/depth/${pair}`, account: 'probe-account', pass: true, summary: { pair } }],
+  });
+
+  await seedSnapshots(persistence, pair, targetTs, 100, 103);
+  await seedSnapshots(persistence, pair, otherTs, 200, 190);
+
+  // noise opportunity pada pair yang sama namun bukan linkage target
+  await persistence.appendPairHistory({
+    type: 'opportunity',
+    pair,
+    opportunity: { pair, prediction: buildPrediction(now - 5 * 60_000, 'UP') },
+  });
+
+  const report = await service.runPhase2ForRunId(targetRunId);
+  const otherReport = await service.runPhase2ForRunId(otherRunId);
+  const missingLinkReport = await service.runPhase2ForRunId(missingLinkRunId);
+
+  assert.equal(report.tracking.totalRecords, 1, 'target run hanya boleh melacak prediction milik runId target');
+  assert.equal(report.tracking.resolvedRecords, 1, 'target run harus resolve prediction target');
+  assert.equal(otherReport.tracking.totalRecords, 1, 'run lain harus diproses terpisah tanpa kontaminasi');
   assert.equal(
-    report.calibration.confidenceBucketAccuracy.some((item) => item.resolved > 0),
+    report.calibration.runId === targetRunId && otherReport.calibration.runId === otherRunId,
     true,
-    'calibration bucket harus terhitung dari sample resolved',
+    'report harus mempertahankan ownership runId masing-masing',
   );
   assert.equal(
-    report.calibration.driftSummary.confidenceMismatchCount >= 0,
-    true,
-    'drift/confidence mismatch wajib terhitung',
+    missingLinkReport.tracking.totalRecords,
+    0,
+    'jika linkage eksplisit runId tidak ada maka tracking harus kosong (tidak boleh pair-match liar)',
   );
 
   const outputDir = path.resolve(process.cwd(), 'test_reports', 'batch_b_phase2_probe');
@@ -120,13 +148,9 @@ async function main() {
     };
   };
 
-  assert.equal(json.report.tracking.totalRecords >= 1, true, 'json report harus sinkron dengan tracking');
-  assert.equal(json.report.tracking.resolvedRecords >= 1, true, 'json report harus memuat resolved count');
-  assert.equal(
-    typeof json.report.calibration.expectedCalibrationError,
-    'number',
-    'json report wajib memuat metrik calibration',
-  );
+  assert.equal(json.report.tracking.totalRecords, 1, 'json report harus sinkron dengan tracking target run');
+  assert.equal(json.report.tracking.resolvedRecords, 1, 'json report harus memuat resolved target run');
+  assert.equal(typeof json.report.calibration.expectedCalibrationError, 'number');
   assert.match(json.report.operatorSummary.honestBoundary, /shadow-live prediction/i);
 
   const pdf = await readFile(artifacts.pdfPath);
@@ -142,8 +166,12 @@ async function main() {
     JSON.stringify(
       {
         probe: 'batch_b_phase2_shadow_calibration_probe',
-        runId,
-        tracking: report.tracking,
+        targetRunId,
+        otherRunId,
+        missingLinkRunId,
+        targetTracking: report.tracking,
+        otherTracking: otherReport.tracking,
+        missingLinkTracking: missingLinkReport.tracking,
         artifacts,
       },
       null,

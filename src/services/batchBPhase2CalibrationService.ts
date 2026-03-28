@@ -9,7 +9,6 @@ import type {
   BatchBPredictionConfidenceReliabilityBucket,
   BatchBPredictionBreakdown,
   FutureTrendingPrediction,
-  PairClass,
 } from '../core/types';
 import { PersistenceService } from './persistenceService';
 
@@ -39,35 +38,6 @@ function asDirection(movePct: number): FutureTrendingPrediction['direction'] {
   return 'SIDEWAYS';
 }
 
-function parsePairHistoryOpportunity(entry: Record<string, unknown>): null | {
-  pair: string;
-  timestamp: number;
-  pairClass?: PairClass;
-  regime?: string;
-  prediction: FutureTrendingPrediction;
-  contextSummary: string;
-} {
-  if (entry.type !== 'opportunity') return null;
-  const pair = typeof entry.pair === 'string' ? entry.pair : null;
-  const opportunity = (entry.opportunity ?? {}) as Record<string, unknown>;
-  const prediction = (opportunity.prediction ?? null) as FutureTrendingPrediction | null;
-  if (!pair || !prediction || prediction.horizonLabel !== HORIZON_LABEL) return null;
-
-  const reasons = Array.isArray(prediction.reasons) ? prediction.reasons.slice(0, 2).join('; ') : '-';
-  const warnings = Array.isArray(opportunity.warnings)
-    ? (opportunity.warnings as string[]).slice(0, 2).join('; ')
-    : '-';
-
-  return {
-    pair,
-    timestamp: typeof prediction.generatedAt === 'number' ? prediction.generatedAt : Date.now(),
-    pairClass: typeof opportunity.pairClass === 'string' ? (opportunity.pairClass as PairClass) : undefined,
-    regime: typeof opportunity.marketRegime === 'string' ? opportunity.marketRegime : undefined,
-    prediction,
-    contextSummary: `reason=${reasons} | warning=${warnings}`,
-  };
-}
-
 export class BatchBPhase2CalibrationService {
   constructor(private readonly persistence: PersistenceService) {}
 
@@ -86,63 +56,61 @@ export class BatchBPhase2CalibrationService {
     return [...latest.values()];
   }
 
-  private computeTrackingId(runId: string, pair: string, generatedAt: number, direction: string): string {
+  private computeTrackingId(runId: string, ownershipKey: string, generatedAt: number, direction: string): string {
     return createHash('sha256')
-      .update(`${runId}:${pair}:${generatedAt}:${direction}`)
+      .update(`${runId}:${ownershipKey}:${generatedAt}:${direction}`)
       .digest('hex')
       .slice(0, 16);
   }
 
   async trackRunPredictions(runId: string): Promise<BatchBPhase2PredictionTrackingRecord[]> {
-    const [shadowRuns, pairHistory, existingRaw] = await Promise.all([
+    const [shadowRuns, existingRaw] = await Promise.all([
       this.persistence.readShadowRunEvidence(),
-      this.persistence.readPairHistory(),
       this.persistence.readBatchBPhase2Tracking(),
     ]);
     const existing = this.latestTracking(existingRaw);
 
     const runRows = shadowRuns.filter((row) => row.runId === runId);
-    const pairSet = new Set(
-      runRows
-        .flatMap((row) => row.checks)
-        .map((check) => check.summary?.pair)
-        .filter((x): x is string => typeof x === 'string'),
-    );
+    const linkageRows = runRows
+      .map((row) => row.phase2PredictionLinkage)
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
     const tracked = new Map(existing.map((row) => [row.trackingId, row]));
 
-    for (const raw of pairHistory) {
-      const parsed = parsePairHistoryOpportunity(raw);
-      if (!parsed || (pairSet.size > 0 && !pairSet.has(parsed.pair))) {
+    for (const linkage of linkageRows) {
+      if (linkage.linkageStatus !== 'CAPTURED' || !linkage.prediction || linkage.prediction.horizonLabel !== HORIZON_LABEL) {
         continue;
       }
-      const trackingId = this.computeTrackingId(runId, parsed.pair, parsed.timestamp, parsed.prediction.direction);
+      const predictionTs = Number.isFinite(linkage.prediction.generatedAt)
+        ? linkage.prediction.generatedAt
+        : Date.parse(linkage.capturedAt);
+      const trackingId = this.computeTrackingId(runId, linkage.evidenceId, predictionTs, linkage.prediction.direction);
       if (tracked.has(trackingId)) continue;
 
       const record: BatchBPhase2PredictionTrackingRecord = {
         trackingId,
         runId,
-        pair: parsed.pair,
-        predictionTimestamp: parsed.timestamp,
+        pair: linkage.pair,
+        predictionTimestamp: predictionTs,
         horizonLabel: HORIZON_LABEL,
-        horizonMinutes: parsed.prediction.horizonMinutes || HORIZON_MINUTES,
-        horizonTargetTimestamp: parsed.timestamp + (parsed.prediction.horizonMinutes || HORIZON_MINUTES) * 60_000,
-        predictedDirection: parsed.prediction.direction,
-        predictedExpectedMovePct: parsed.prediction.expectedMovePct,
-        confidence: parsed.prediction.confidence,
-        predictionStrength: parsed.prediction.strength,
-        calibrationTag: parsed.prediction.calibrationTag,
-        tradeFlowSource: parsed.prediction.tradeFlowSource,
-        tradeFlowQuality: parsed.prediction.tradeFlowQuality,
-        marketPolicyContextSummary: parsed.contextSummary,
-        confidenceBucket: confidenceBucket(parsed.prediction.confidence),
+        horizonMinutes: linkage.prediction.horizonMinutes || HORIZON_MINUTES,
+        horizonTargetTimestamp: predictionTs + (linkage.prediction.horizonMinutes || HORIZON_MINUTES) * 60_000,
+        predictedDirection: linkage.prediction.direction,
+        predictedExpectedMovePct: linkage.prediction.expectedMovePct,
+        confidence: linkage.prediction.confidence,
+        predictionStrength: linkage.prediction.strength,
+        calibrationTag: linkage.prediction.calibrationTag,
+        tradeFlowSource: linkage.prediction.tradeFlowSource,
+        tradeFlowQuality: linkage.prediction.tradeFlowQuality,
+        marketPolicyContextSummary: linkage.contextSummary ?? 'phase2-shadow-linkage-without-context',
+        confidenceBucket: confidenceBucket(linkage.prediction.confidence),
         outcomeStatus: 'PENDING',
         actualDirection: null,
         actualMovePct: null,
         resolvedAt: null,
         confidenceCalibrationGap: null,
         driftMinutes: null,
-        pairClass: parsed.pairClass,
-        regime: (parsed.regime as BatchBPhase2PredictionTrackingRecord['regime']) ?? undefined,
+        pairClass: undefined,
+        regime: undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

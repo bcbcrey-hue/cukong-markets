@@ -193,6 +193,7 @@ Batas jujur Fase 1:
 
 Fase 2 tidak membangun shadow-run baru dari nol. Fase ini menempel ke evidence `runId` shadow-live existing dan melakukan:
 
+- linkage eksplisit runId -> prediction via `phase2PredictionLinkage` pada evidence strict shadow-run,
 - tracking prediction `H5_15M` dari jalur runtime opportunity,
 - outcome resolution jujur (`PENDING | RESOLVED | INSUFFICIENT_DATA`),
 - calibration + drift summary,
@@ -204,6 +205,11 @@ Command:
 ```bash
 BATCH_B_PHASE2_RUN_ID=<runId-shadow-existing> npm run validate:batch-b:phase2
 ```
+
+Catatan linkage runId:
+
+- `runId` harus berasal dari strict shadow-run existing yang sudah menyimpan `phase2PredictionLinkage`.
+- bila linkage tidak tersedia untuk runId tersebut, Fase 2 akan jujur menghasilkan tracking kosong (tidak fallback pair-match lintas waktu).
 
 Artifact output stabil default:
 
