@@ -18,7 +18,8 @@
     "install:immutable": "npm ci",
     "probe:audit": "node scripts/run-probes.mjs --audit",
     "probe:list": "node scripts/run-probes.mjs --list",
-    "runtime:contract": "node --import tsx scripts/runtime-verifier-contract.mjs"
+    "runtime:contract": "node --import tsx scripts/runtime-verifier-contract.mjs",
+    "validate:batch-b:phase1": "node --import tsx scripts/run-batch-b-phase1-validation.mjs"
   },
   "engines": {
     "node": ">=20"
