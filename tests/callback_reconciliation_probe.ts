@@ -115,6 +115,7 @@ async function main() {
   fakeApi.queueFilled('CB-ORDER-ID', 'matic', 2500, 10);
   fakeApi.queueFilled('CB-ORDERID', 'xrp', 500, 20);
   fakeApi.queueFilled('CB-ID', 'doge', 1000, 30);
+  fakeApi.queueFilled('CB-UNCERTAIN', 'sol', 10000, 1);
 
   const execution = new ExecutionEngine(
     accountRegistry,
@@ -161,6 +162,17 @@ async function main() {
     status: 'OPEN',
     exchangeOrderId: 'CB-ID',
   });
+  await orderManager.create({
+    accountId: defaultAccount.id,
+    pair: 'sol_idr',
+    side: 'buy',
+    type: 'limit',
+    price: 10000,
+    quantity: 1,
+    source: 'AUTO',
+    status: 'OPEN',
+    exchangeStatus: 'submission_uncertain',
+  });
 
   const callbackServer = new IndodaxCallbackServer(
     persistence,
@@ -186,6 +198,7 @@ async function main() {
       { order_id: 'CB-ORDER-ID', pair: 'matic_idr', status: 'filled' },
       { orderId: 'CB-ORDERID', pair: 'xrp_idr', status: 'filled' },
       { id: 'CB-ID', pair: 'doge_idr', status: 'filled' },
+      { order_id: 'CB-UNCERTAIN', pair: 'sol_idr', status: 'filled', type: 'buy' },
     ];
 
     for (const payload of payloads) {
@@ -224,15 +237,15 @@ async function main() {
     const reconciled = orderManager.list();
     assert.equal(
       reconciled.filter((item) => item.status === 'FILLED').length,
-      3,
+      4,
       'All callback payload variants must reconcile active orders to FILLED',
     );
 
     const positions = positionManager.listOpen();
-    assert.equal(positions.length, 3, 'Callback reconciliation must materialize filled positions');
+    assert.equal(positions.length, 4, 'Callback reconciliation must materialize filled positions');
 
     const callbackEvents = await persistence.readIndodaxCallbackEvents();
-    assert.equal(callbackEvents.length, 3, 'Callback events must be persisted for all payload variants');
+    assert.equal(callbackEvents.length, 4, 'Callback events must be persisted for all payload variants');
 
     console.log('PASS callback_reconciliation_probe');
   } finally {

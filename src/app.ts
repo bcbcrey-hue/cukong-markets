@@ -355,6 +355,12 @@ export async function createApp(): Promise<AppRuntime> {
     ]);
   });
 
+  if (state.get().activeTradingMode !== settings.get().tradingMode) {
+    await runStartupPhase('runtime.state.sync-trading-mode', async () => {
+      await state.setTradingMode(settings.get().tradingMode);
+    });
+  }
+
   const pairUniverse = new PairUniverse();
   const indodax = new IndodaxClient();
   const marketWatcher = new MarketWatcher(indodax, pairUniverse, () => settings.get().scanner.discovery);
@@ -399,18 +405,26 @@ export async function createApp(): Promise<AppRuntime> {
         return;
       }
 
+      const rawSide = payload?.type ?? payload?.side ?? payload?.order_type ?? payload?.orderType;
+      const normalizedSide =
+        typeof rawSide === 'string' && ['buy', 'sell'].includes(rawSide.trim().toLowerCase())
+          ? (rawSide.trim().toLowerCase() as 'buy' | 'sell')
+          : null;
+
       await executionEngine.reconcileFromCallback({
         exchangeOrderId: String(exchangeOrderId),
         pair: typeof payload?.pair === 'string' ? payload.pair : null,
         status: typeof payload?.status === 'string' ? payload.status : null,
+        side: normalizedSide,
       });
     },
   );
 
   const startRuntimeFromControl = async (): Promise<void> => {
-    if (settings.get().workers.enabled) {
-      await workerPool.start();
-    }
+    await workerPool.start({
+      enabled: settings.get().workers.enabled,
+      poolSize: settings.get().workers.poolSize,
+    });
 
     polling.start();
     await executionEngine.syncActiveOrders();
@@ -437,6 +451,7 @@ export async function createApp(): Promise<AppRuntime> {
 
   const stopRuntimeFromControl = async (): Promise<void> => {
     polling.stop();
+    await workerPool.stop();
     await state.setStatus('STOPPED');
     const stoppedTelegramSignal = telegram.getConnectionSignal();
     await health.build({
@@ -796,7 +811,10 @@ export async function createApp(): Promise<AppRuntime> {
 
     try {
       if (settings.get().workers.enabled) {
-        await runStartupPhase('worker-pool.start', async () => workerPool.start());
+        await runStartupPhase('worker-pool.start', async () => workerPool.start({
+          enabled: settings.get().workers.enabled,
+          poolSize: settings.get().workers.poolSize,
+        }));
       } else {
         startupLog.info({ phase: 'worker-pool.start', enabled: false }, 'worker pool disabled by settings');
       }

@@ -1,0 +1,159 @@
+{
+  "report": {
+    "runId": "phase3-57bef6bc-3830-489f-b60e-99625cb4bff2",
+    "generatedAt": "2026-03-28T15:17:50.509Z",
+    "sourceOfTruth": {
+      "repository": "https://github.com/masreykangtrade-oss/cukong-markets",
+      "roadmapVerification": "https://github.com/masreykangtrade-oss/cukong-markets/blob/main/ROADMAP_VERIFICATION_UPGRADE.md"
+    },
+    "sections": [
+      {
+        "name": "capital_exposure",
+        "summary": "Validasi batas allocated/allowed + exposure pair-class/discovery dari runtime evidence.",
+        "checks": [
+          {
+            "id": "capital-allocated-bounded",
+            "description": "allocatedNotional harus <= allowedNotional dan <= policyIntentNotional",
+            "proofLevel": "SOURCE_PROBE",
+            "automated": true,
+            "pass": true,
+            "evidenceRefs": [
+              "PortfolioCapitalEngine.plan",
+              "runtime evidence"
+            ],
+            "notes": [
+              "policyIntent=180000",
+              "allowed=0",
+              "allocated=0"
+            ]
+          },
+          {
+            "id": "capital-exposure-limits-respected",
+            "description": "Pair-class limit dan discovery-bucket limit tetap dihormati",
+            "proofLevel": "SOURCE_PROBE",
+            "automated": true,
+            "pass": true,
+            "evidenceRefs": [
+              "PortfolioCapitalEngine.plan.exposure"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "exchange_reconciliation_resilience",
+        "summary": "Validasi cancel/uncertain/recovery seeded + shadow-live evidence + manual market-real boundary.",
+        "checks": [
+          {
+            "id": "exchange-cancel-uncertain-bounded",
+            "description": "cancelAllOrders tidak boleh memalsukan cancel order submission_uncertain tanpa exchangeOrderId",
+            "proofLevel": "SOURCE_PROBE",
+            "automated": true,
+            "pass": true,
+            "evidenceRefs": [
+              "ExecutionEngine.cancelAllOrders"
+            ],
+            "notes": [
+              "Canceled 1 active orders; unresolved 1 submission-uncertain orders"
+            ]
+          },
+          {
+            "id": "exchange-recovery-evidence-present",
+            "description": "Recovery/cancel evidence harus muncul di execution summary persistence",
+            "proofLevel": "SOURCE_PROBE",
+            "automated": true,
+            "pass": true,
+            "evidenceRefs": [
+              "PersistenceService.readExecutionSummaries"
+            ],
+            "notes": [
+              "exchangeCancelEvidence=1"
+            ]
+          },
+          {
+            "id": "shadow-live-proof-reuse",
+            "description": "Evidence shadow-live existing harus bisa direuse sebagai proof layer Fase 3",
+            "proofLevel": "SHADOW_LIVE",
+            "automated": true,
+            "pass": false,
+            "evidenceRefs": [
+              "PersistenceService.readShadowRunEvidence",
+              "tests/real_exchange_shadow_run_probe.ts"
+            ],
+            "notes": [
+              "Belum ada shadow evidence di archive. Jalankan: RUN_REAL_EXCHANGE_SHADOW=1 npm run probe:shadow-live"
+            ]
+          },
+          {
+            "id": "market-real-manual-evidence-ingested",
+            "description": "Bukti market-real manual harus di-ingest untuk auth/order/reconciliation/resilience",
+            "proofLevel": "MARKET_REAL",
+            "automated": false,
+            "pass": false,
+            "evidenceRefs": [
+              "PersistenceService.readPhase3ManualMarketRealEvidence"
+            ],
+            "notes": [
+              "Belum ada evidence manual. Gunakan: npm run validate:phase3:market-real-check -- <json-file>"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "emergency_recovery",
+        "summary": "Validasi emergency exit + consistency evidence summaries/outcomes.",
+        "checks": [
+          {
+            "id": "emergency-summary-persisted",
+            "description": "Emergency path harus menghasilkan execution summary persisten",
+            "proofLevel": "SOURCE_PROBE",
+            "automated": true,
+            "pass": true,
+            "evidenceRefs": [
+              "ExecutionEngine.manualSell/evaluateOpenPositions",
+              "SummaryService.publishExecutionSummary"
+            ],
+            "notes": [
+              "emergencyExecutionSummary=2",
+              "tradeOutcomes=0"
+            ]
+          }
+        ]
+      }
+    ],
+    "checklist": [
+      {
+        "id": "phase3-source-probe-suite",
+        "description": "Suite source/probe untuk capital + exchange ops + emergency harus lulus",
+        "requiredProofLevel": "SOURCE_PROBE",
+        "status": "PASS",
+        "notes": "executionSummaries=3, tradeOutcomes=0"
+      },
+      {
+        "id": "phase3-shadow-live-proof",
+        "description": "Strict shadow-live proof harus tersedia dari evidence archive",
+        "requiredProofLevel": "SHADOW_LIVE",
+        "status": "MANUAL_REQUIRED",
+        "notes": "Jalankan RUN_REAL_EXCHANGE_SHADOW=1 npm run probe:shadow-live"
+      },
+      {
+        "id": "phase3-market-real-proof",
+        "description": "Market-real proof harus berasal dari evidence manual exchange nyata",
+        "requiredProofLevel": "MARKET_REAL",
+        "status": "MANUAL_REQUIRED",
+        "notes": "Ingest evidence manual via npm run validate:phase3:market-real-check -- <json-file>"
+      }
+    ],
+    "limitations": [
+      "Source/probe proof tidak boleh disamakan dengan market-real proof.",
+      "Ruleset GitHub branch protection tetap harus diverifikasi di setting repository.",
+      "Shadow-live proof belum full-pass dari evidence archive latest run.",
+      "Market-real proof masih manual-required atau ada check manual yang gagal."
+    ],
+    "readinessVerdict": "BELUM_SIAP_MERGE",
+    "boundaryNotes": {
+      "sourceProbeProof": "Dibuktikan oleh validate:phase3 seeded/non-destruktif terhadap runtime path lokal.",
+      "shadowLiveProof": "Dibuktikan oleh verify:shadow-live + evidence archive ShadowRunEvidence.",
+      "marketRealProof": "Dibuktikan lewat evidence manual real exchange yang di-ingest, bukan dari seeded probe."
+    }
+  }
+}

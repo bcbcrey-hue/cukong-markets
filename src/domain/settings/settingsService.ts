@@ -79,8 +79,6 @@ export class SettingsService {
       },
     };
 
-    next.strategy.maxBuySlippageBps = defaults.strategy.maxBuySlippageBps;
-
     if (
       input.strategy?.buySlippageBps === undefined ||
       input.strategy.buySlippageBps === LEGACY_DEFAULT_BUY_SLIPPAGE_BPS
@@ -95,6 +93,7 @@ export class SettingsService {
       next.strategy.maxBuySlippageBps = defaults.strategy.maxBuySlippageBps;
     }
 
+    next.strategy.maxBuySlippageBps = Math.max(0, Math.round(next.strategy.maxBuySlippageBps));
     next.strategy.buySlippageBps = Math.max(
       0,
       Math.min(next.strategy.buySlippageBps, next.strategy.maxBuySlippageBps),

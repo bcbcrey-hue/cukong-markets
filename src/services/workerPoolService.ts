@@ -107,14 +107,32 @@ export class WorkerPoolService {
   private readonly featurePipeline = new FeaturePipeline();
   private readonly patternMatcher = new PatternMatcher();
   private started = false;
+  private enabled = env.workerEnabled;
+  private poolSize = env.workerPoolSize;
 
-  constructor(
-    private readonly poolSize = env.workerPoolSize,
-    private readonly enabled = env.workerEnabled,
-  ) {}
+  constructor() {}
 
-  async start(): Promise<void> {
-    if (this.started || !this.enabled) {
+  async start(options?: { enabled?: boolean; poolSize?: number }): Promise<void> {
+    const nextEnabled = options?.enabled ?? this.enabled;
+    const nextPoolSize = options?.poolSize ?? this.poolSize;
+    const effectiveEnabled = nextEnabled && nextPoolSize > 0;
+
+    if (this.started) {
+      const effectiveCurrentlyEnabled = this.enabled && this.poolSize > 0;
+      const unchanged =
+        effectiveEnabled === effectiveCurrentlyEnabled &&
+        nextEnabled === this.enabled &&
+        nextPoolSize === this.poolSize;
+      if (unchanged) {
+        return;
+      }
+      await this.stop();
+    }
+
+    this.enabled = nextEnabled;
+    this.poolSize = nextPoolSize;
+
+    if (!effectiveEnabled) {
       return;
     }
 
@@ -382,7 +400,7 @@ export class WorkerPoolService {
     payload: WorkerTaskPayloadMap[T],
     timeoutMs: number,
   ): Promise<WorkerTaskResultMap[T]> {
-    if (!this.enabled || !this.started) {
+    if (!this.started) {
       return this.runInline(type as never, payload as never) as Promise<WorkerTaskResultMap[T]>;
     }
 

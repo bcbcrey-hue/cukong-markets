@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [4 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+4 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >> endobj
+5 0 obj << /Length 1996 >> stream
+BT
+/F1 10 Tf
+1 0 0 1 50 800 Tm (Batch B Fase 2 — Shadow-Live Calibration Report) Tj
+1 0 0 1 50 786 Tm (Run ID: shadow-phase2-target-1774711044521) Tj
+1 0 0 1 50 772 Tm (Generated At \(UTC\): 2026-03-28T15:17:24.582Z) Tj
+1 0 0 1 50 758 Tm (Ringkasan Tracking) Tj
+1 0 0 1 50 744 Tm (- Total prediction: 1) Tj
+1 0 0 1 50 730 Tm (- Resolved: 1) Tj
+1 0 0 1 50 716 Tm (- Pending: 0) Tj
+1 0 0 1 50 702 Tm (- Expired: 0) Tj
+1 0 0 1 50 688 Tm (- Insufficient-data: 0) Tj
+1 0 0 1 50 674 Tm (Akurasi per Confidence Bucket) Tj
+1 0 0 1 50 660 Tm (- LOW: akurasi=0.00% resolved=0 pending=0) Tj
+1 0 0 1 50 646 Tm (- MID: akurasi=0.00% resolved=0 pending=0) Tj
+1 0 0 1 50 632 Tm (- HIGH: akurasi=100.00% resolved=1 pending=0) Tj
+1 0 0 1 50 618 Tm (Drift & Calibration) Tj
+1 0 0 1 50 604 Tm (- Mean absolute confidence calibration gap: 0.22000) Tj
+1 0 0 1 50 590 Tm (- Expected calibration error \(ECE\): 0.22000) Tj
+1 0 0 1 50 576 Tm (- Mean drift horizon: 0.00 menit) Tj
+1 0 0 1 50 562 Tm (- P95 drift horizon: 0.00 menit) Tj
+1 0 0 1 50 548 Tm (- Confidence mismatch count: 0) Tj
+1 0 0 1 50 534 Tm (Rekomendasi Adjustment) Tj
+1 0 0 1 50 520 Tm (- Pertahankan threshold saat ini; lanjut monitor mismatch confidence harian.) Tj
+1 0 0 1 50 506 Tm (Warning Area Prediction) Tj
+1 0 0 1 50 492 Tm (- Sample resolved masih kecil; rekomendasi threshold bersifat sementara.) Tj
+1 0 0 1 50 478 Tm (Keterbatasan Pengujian) Tj
+1 0 0 1 50 464 Tm (- Outcome hanya bisa di-resolve jika snapshot reference + snapshot horizon tersedia di pair-history runtime.) Tj
+1 0 0 1 50 450 Tm (- Status pending/insufficient-data tidak boleh diartikan sebagai akurasi buruk/baik; hanya menandakan coverage belum cukup.) Tj
+1 0 0 1 50 436 Tm (- Ini kalibrasi shadow-live prediction Batch B, bukan bukti final live-readiness dan bukan market-real capital validation.) Tj
+1 0 0 1 50 422 Tm (> Batas jujur: ini lapisan lanjutan shadow-live calibration prediction Batch B, bukan pengganti Batch F dan bukan market-real capital validation.) Tj
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+2359
+%%EOF

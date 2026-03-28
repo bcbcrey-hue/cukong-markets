@@ -521,7 +521,9 @@ export class PrivateApi {
     amount: number,
     options?: IndodaxPrivateRequestOptions,
   ): Promise<IndodaxPrivateEnvelope<IndodaxTradeReturn>> {
-    const amountField = type === 'buy' ? 'idr' : getSellAssetKey(pair);
+    const normalizedPair = normalizePair(pair) ?? pair;
+    const [, quoteAsset = 'idr'] = normalizedPair.toLowerCase().split('_');
+    const amountField = type === 'buy' ? (quoteAsset || 'idr') : getSellAssetKey(pair);
 
     return this.post<IndodaxTradeReturn>(
       'trade',

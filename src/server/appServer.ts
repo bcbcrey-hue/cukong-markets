@@ -121,6 +121,9 @@ export class AppServer {
         }
       });
     });
+    this.server.on('error', (error) => {
+      log.error({ error }, 'app server error');
+    });
 
     await new Promise<void>((resolve, reject) => {
       this.server?.once('error', reject);

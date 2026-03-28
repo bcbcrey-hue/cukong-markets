@@ -1,0 +1,100 @@
+{
+  "report": {
+    "tracking": {
+      "totalRecords": 1,
+      "resolvedRecords": 1,
+      "pendingRecords": 0,
+      "expiredRecords": 0,
+      "insufficientDataRecords": 0
+    },
+    "calibration": {
+      "runId": "shadow-phase2-target-1774711044521",
+      "generatedAt": "2026-03-28T15:17:24.582Z",
+      "totalPredictionCount": 1,
+      "resolvedPredictionCount": 1,
+      "pendingPredictionCount": 0,
+      "expiredPredictionCount": 0,
+      "insufficientDataCount": 0,
+      "confidenceBucketAccuracy": [
+        {
+          "key": "LOW",
+          "total": 0,
+          "resolved": 0,
+          "unresolved": 0,
+          "directionAccuracy": 0,
+          "meanAbsoluteMoveErrorPct": 0
+        },
+        {
+          "key": "MID",
+          "total": 0,
+          "resolved": 0,
+          "unresolved": 0,
+          "directionAccuracy": 0,
+          "meanAbsoluteMoveErrorPct": 0
+        },
+        {
+          "key": "HIGH",
+          "total": 1,
+          "resolved": 1,
+          "unresolved": 0,
+          "directionAccuracy": 1,
+          "meanAbsoluteMoveErrorPct": 1.8
+        }
+      ],
+      "confidenceReliabilityByBucket": [
+        {
+          "bucket": "LOW",
+          "sampleCount": 0,
+          "averageConfidence": 0,
+          "realisedHitRate": 0,
+          "absoluteCalibrationGap": 0
+        },
+        {
+          "bucket": "MID",
+          "sampleCount": 0,
+          "averageConfidence": 0,
+          "realisedHitRate": 0,
+          "absoluteCalibrationGap": 0
+        },
+        {
+          "bucket": "HIGH",
+          "sampleCount": 1,
+          "averageConfidence": 0.78,
+          "realisedHitRate": 1,
+          "absoluteCalibrationGap": 0.21999999999999997
+        }
+      ],
+      "meanAbsoluteConfidenceCalibrationGap": 0.21999999999999997,
+      "expectedCalibrationError": 0.21999999999999997,
+      "driftSummary": {
+        "meanAbsoluteDriftMinutes": 0,
+        "p95AbsoluteDriftMinutes": 0,
+        "confidenceMismatchCount": 0
+      },
+      "warningAreas": [
+        "Sample resolved masih kecil; rekomendasi threshold bersifat sementara."
+      ],
+      "conservativeAdjustmentRecommendation": "Pertahankan threshold saat ini; lanjut monitor mismatch confidence harian.",
+      "weakPerformanceAreas": []
+    },
+    "operatorSummary": {
+      "title": "Batch B Fase 2 — Shadow-Live Calibration Summary",
+      "runId": "shadow-phase2-target-1774711044521",
+      "generatedAt": "2026-03-28T15:17:24.582Z",
+      "lines": [
+        "Total prediction: 1",
+        "Resolved/Pending: 1/0",
+        "Mean calibration gap: 0.2200",
+        "ECE: 0.2200",
+        "Confidence mismatch count: 0",
+        "Rekomendasi: Pertahankan threshold saat ini; lanjut monitor mismatch confidence harian."
+      ],
+      "honestBoundary": "Ini kalibrasi shadow-live prediction Batch B, bukan bukti final live-readiness dan bukan market-real capital validation."
+    },
+    "limitations": [
+      "Outcome hanya bisa di-resolve jika snapshot reference + snapshot horizon tersedia di pair-history runtime.",
+      "Status pending/insufficient-data tidak boleh diartikan sebagai akurasi buruk/baik; hanya menandakan coverage belum cukup.",
+      "Ini kalibrasi shadow-live prediction Batch B, bukan bukti final live-readiness dan bukan market-real capital validation."
+    ]
+  }
+}

@@ -15,6 +15,7 @@ import { HealthService } from '../../services/healthService';
 import { JournalService } from '../../services/journalService';
 import { ReportService } from '../../services/reportService';
 import { StateService } from '../../services/stateService';
+import { createChildLogger } from '../../core/logger';
 import { denyTelegramAccess } from './auth';
 import type { TelegramCallbackPayload } from './callbackRouter';
 import { parseCallback } from './callbackRouter';
@@ -39,6 +40,7 @@ import {
   shadowRunKeyboard,
   settingsKeyboard,
   strategySettingsKeyboard,
+  toAccountCallbackToken,
   type TelegramMenuId,
 } from './keyboards';
 import { UploadHandler } from './uploadHandler';
@@ -77,7 +79,14 @@ interface UserFlowState {
   pendingBuyBackMenu?: TelegramMenuId;
   pendingConfig?:
     | 'BUY_SLIPPAGE_BPS'
+    | 'MAX_BUY_SLIPPAGE_BPS'
     | 'TAKE_PROFIT_PCT'
+    | 'STOP_LOSS_PCT'
+    | 'TRAILING_STOP_PCT'
+    | 'MAX_DAILY_LOSS_IDR'
+    | 'COOLDOWN_MS'
+    | 'MAX_OPEN_POSITIONS'
+    | 'MAX_POSITION_SIZE_IDR'
     | 'MIN_PUMP_PROBABILITY'
     | 'MIN_CONFIDENCE';
   pendingSlippageConfirmation?: {
@@ -88,6 +97,7 @@ interface UserFlowState {
 
 const userFlows = new Map<number, UserFlowState>();
 const TELEGRAM_SAFE_MESSAGE_LIMIT = 3500;
+const log = createChildLogger({ module: 'telegram-handlers' });
 
 function getUserFlow(userId: number): UserFlowState {
   const current = userFlows.get(userId) ?? { awaitingUpload: false };
@@ -303,7 +313,14 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
     case 'SET':
       return (
         parsed.action === 'BUY_SLIPPAGE' ||
+        parsed.action === 'MAX_BUY_SLIPPAGE' ||
+        parsed.action === 'MAX_DAILY_LOSS' ||
         parsed.action === 'TAKE_PROFIT' ||
+        parsed.action === 'STOP_LOSS' ||
+        parsed.action === 'TRAILING_STOP' ||
+        parsed.action === 'COOLDOWN' ||
+        parsed.action === 'MAX_OPEN_POSITIONS' ||
+        parsed.action === 'MAX_POSITION_SIZE' ||
         parsed.action === 'MIN_PUMP_PROBABILITY' ||
         parsed.action === 'MIN_CONFIDENCE' ||
         (parsed.action === 'EXECUTION_MODE' && ['SIMULATED', 'LIVE'].includes(parsed.value ?? '')) ||
@@ -320,6 +337,7 @@ function callbackIsSupported(parsed: TelegramCallbackPayload): boolean {
       );
     case 'EMG':
       return (
+        parsed.action === 'FREEZE_TOGGLE' ||
         parsed.action === 'CANCEL_ALL' ||
         parsed.action === 'SELL_ALL' ||
         (parsed.action === 'MODE' && isTradingModeValue(parsed.value))
@@ -699,6 +717,30 @@ async function stopRuntime(ctx: Context, deps: HandlerDeps): Promise<void> {
 }
 
 export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
+  bot.catch(async (error, ctx) => {
+    log.error(
+      {
+        error,
+        updateType: ctx.updateType,
+        userId: ctx.from?.id ?? null,
+        chatId: ctx.chat?.id ?? null,
+      },
+      'telegram handler error',
+    );
+
+    try {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery('Terjadi error. Coba ulang.');
+      }
+    } catch {
+    }
+
+    try {
+      await ctx.reply('Terjadi error internal. Coba ulang.');
+    } catch {
+    }
+  });
+
   bot.start(async (ctx) => {
     if (await denyTelegramAccess(ctx)) return;
 
@@ -766,53 +808,54 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
   });
 
   bot.action(/.*/, async (ctx) => {
-    if (await denyTelegramAccess(ctx)) return;
+    try {
+      if (await denyTelegramAccess(ctx)) return;
 
-    const raw =
-      ctx.callbackQuery && 'data' in ctx.callbackQuery
-        ? ctx.callbackQuery.data
-        : '';
+      const raw =
+        ctx.callbackQuery && 'data' in ctx.callbackQuery
+          ? ctx.callbackQuery.data
+          : '';
 
-    const parsed = parseCallback(raw);
-    if (!parsed || !callbackIsSupported(parsed)) {
-      await ctx.answerCbQuery('Callback tidak valid');
-      return;
-    }
-
-    const userId = ctx.from?.id;
-    const userFlow = userId ? getUserFlow(userId) : undefined;
-
-    if (
-      parsed.namespace === 'NAV' &&
-      (parsed.action === 'OPEN' || parsed.action === 'BACK') &&
-      parsed.value &&
-      isTelegramMenuId(parsed.value)
-    ) {
-      if (userFlow) {
-        clearPendingFlow(userFlow);
+      const parsed = parseCallback(raw);
+      if (!parsed || !callbackIsSupported(parsed)) {
+        await ctx.answerCbQuery('Callback tidak valid');
+        return;
       }
-      await openMenu(ctx, deps, parsed.value);
-      await ctx.answerCbQuery();
-      return;
-    }
 
-    if (parsed.namespace === 'RUN' && parsed.action === 'START') {
-      if (userFlow) {
-        clearPendingFlow(userFlow);
-      }
-      await startRuntime(ctx, deps);
-      await ctx.answerCbQuery();
-      return;
-    }
+      const userId = ctx.from?.id;
+      const userFlow = userId ? getUserFlow(userId) : undefined;
 
-    if (parsed.namespace === 'RUN' && parsed.action === 'STOP') {
-      if (userFlow) {
-        clearPendingFlow(userFlow);
+      if (
+        parsed.namespace === 'NAV' &&
+        (parsed.action === 'OPEN' || parsed.action === 'BACK') &&
+        parsed.value &&
+        isTelegramMenuId(parsed.value)
+      ) {
+        if (userFlow) {
+          clearPendingFlow(userFlow);
+        }
+        await openMenu(ctx, deps, parsed.value);
+        await ctx.answerCbQuery();
+        return;
       }
-      await stopRuntime(ctx, deps);
-      await ctx.answerCbQuery();
-      return;
-    }
+
+      if (parsed.namespace === 'RUN' && parsed.action === 'START') {
+        if (userFlow) {
+          clearPendingFlow(userFlow);
+        }
+        await startRuntime(ctx, deps);
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      if (parsed.namespace === 'RUN' && parsed.action === 'STOP') {
+        if (userFlow) {
+          clearPendingFlow(userFlow);
+        }
+        await stopRuntime(ctx, deps);
+        await ctx.answerCbQuery();
+        return;
+      }
 
     if (parsed.namespace === 'RUN' && parsed.action === 'STATUS') {
       await replyStatus(ctx, deps);
@@ -881,7 +924,12 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
     }
 
     if (parsed.namespace === 'ACC' && parsed.action === 'DEL_PICK' && parsed.value) {
-      const account = deps.accounts.getById(parsed.value);
+      const accountId =
+        deps.accounts
+          .listAll()
+          .find((item) => toAccountCallbackToken(item.id) === parsed.value)
+          ?.id ?? null;
+      const account = accountId ? deps.accounts.getById(accountId) : null;
       if (!account) {
         await replyText(ctx, 'Account tidak ditemukan.', accountsKeyboard);
       } else if (userFlow) {
@@ -973,6 +1021,100 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (parsed.namespace === 'SET' && parsed.action === 'MAX_BUY_SLIPPAGE') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MAX_BUY_SLIPPAGE_BPS';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        [
+          'Kirim max buy slippage dalam bps.',
+          `Saat ini: ${deps.settings.get().strategy.maxBuySlippageBps} bps`,
+          `Buy slippage saat ini: ${deps.settings.get().strategy.buySlippageBps} bps`,
+          'Catatan: buySlippage akan otomatis di-cap agar tidak melebihi maxBuySlippage.',
+        ].join('\n'),
+        strategySettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'MAX_DAILY_LOSS') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MAX_DAILY_LOSS_IDR';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        `Kirim max daily loss dalam IDR.\nSaat ini: ${deps.settings.get().risk.maxDailyLossIdr}`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'MAX_OPEN_POSITIONS') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MAX_OPEN_POSITIONS';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        `Kirim max open positions.\nSaat ini: ${deps.settings.get().risk.maxOpenPositions}`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'MAX_POSITION_SIZE') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'MAX_POSITION_SIZE_IDR';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        `Kirim max position size dalam IDR.\nSaat ini: ${deps.settings.get().risk.maxPositionSizeIdr}`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'COOLDOWN') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'COOLDOWN_MS';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        [
+          'Kirim cooldown dalam menit atau ms.',
+          `Saat ini: ${deps.settings.get().risk.cooldownMs} ms (~${Math.round(deps.settings.get().risk.cooldownMs / 60000)} menit)`,
+          'Contoh: 15m atau 900000',
+        ].join('\n'),
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
     if (parsed.namespace === 'SET' && parsed.action === 'TAKE_PROFIT') {
       if (userFlow) {
         userFlow.awaitingUpload = false;
@@ -984,6 +1126,40 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       await replyText(
         ctx,
         `Kirim nilai take profit persen.\nSaat ini: ${deps.settings.get().risk.takeProfitPct}%`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'STOP_LOSS') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'STOP_LOSS_PCT';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        `Kirim nilai stop loss persen.\nSaat ini: ${deps.settings.get().risk.stopLossPct}%`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    if (parsed.namespace === 'SET' && parsed.action === 'TRAILING_STOP') {
+      if (userFlow) {
+        userFlow.awaitingUpload = false;
+        userFlow.pendingBuyPair = undefined;
+        userFlow.pendingBuyBackMenu = undefined;
+        userFlow.pendingConfig = 'TRAILING_STOP_PCT';
+        userFlow.pendingSlippageConfirmation = undefined;
+      }
+      await replyText(
+        ctx,
+        `Kirim nilai trailing stop persen.\nSaat ini: ${deps.settings.get().risk.trailingStopPct}%`,
         riskSettingsKeyboard(deps.settings.get()),
       );
       await ctx.answerCbQuery();
@@ -1158,6 +1334,18 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (parsed.namespace === 'EMG' && parsed.action === 'FREEZE_TOGGLE') {
+      const enabled = !deps.state.get().emergencyStop;
+      await deps.state.setEmergencyStop(enabled);
+      await replyText(
+        ctx,
+        `Emergency freeze ${enabled ? 'AKTIF' : 'NONAKTIF'}.`,
+        emergencyKeyboard,
+      );
+      await ctx.answerCbQuery();
+      return;
+    }
+
     if (parsed.namespace === 'EMG' && parsed.action === 'CANCEL_ALL') {
       await replyText(ctx, await deps.execution.cancelAllOrders(), emergencyKeyboard);
       await ctx.answerCbQuery();
@@ -1204,7 +1392,25 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
-    await ctx.answerCbQuery('Aksi belum dikenali');
+      await ctx.answerCbQuery('Aksi belum dikenali');
+    } catch (error) {
+      log.error(
+        {
+          error,
+          userId: ctx.from?.id ?? null,
+          chatId: ctx.chat?.id ?? null,
+        },
+        'telegram callback handler failed',
+      );
+      try {
+        await ctx.answerCbQuery('Terjadi error. Coba ulang.');
+      } catch {
+      }
+      try {
+        await replyText(ctx, error instanceof Error ? error.message : 'Terjadi error.');
+      } catch {
+      }
+    }
   });
 
   bot.on('document', async (ctx) => {
@@ -1416,6 +1622,28 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       return;
     }
 
+    if (userFlow.pendingConfig === 'MAX_BUY_SLIPPAGE_BPS') {
+      const maxBuySlippageBps = Math.round(Number(text.replace(/[^0-9.]/g, '')));
+      if (!Number.isFinite(maxBuySlippageBps) || maxBuySlippageBps <= 0) {
+        await replyText(ctx, 'Max buy slippage tidak valid. Kirim angka bps, misalnya 150');
+        return;
+      }
+
+      const currentBuySlippage = deps.settings.get().strategy.buySlippageBps;
+      await deps.settings.patchStrategy({
+        maxBuySlippageBps,
+        buySlippageBps: Math.min(currentBuySlippage, maxBuySlippageBps),
+      });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Max buy slippage diubah ke ${deps.settings.get().strategy.maxBuySlippageBps} bps.`,
+        strategySettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
     if (userFlow.pendingConfig === 'TAKE_PROFIT_PCT') {
       const takeProfitPct = Number(text.replace(/[^0-9.]/g, ''));
       if (!Number.isFinite(takeProfitPct) || takeProfitPct <= 0 || takeProfitPct > 100) {
@@ -1429,6 +1657,123 @@ export function registerHandlers(bot: Telegraf, deps: HandlerDeps): void {
       await replyText(
         ctx,
         `Take profit diubah ke ${takeProfitPct}%.`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'STOP_LOSS_PCT') {
+      const stopLossPct = Number(text.replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(stopLossPct) || stopLossPct <= 0 || stopLossPct > 100) {
+        await replyText(ctx, 'Stop loss tidak valid. Kirim angka persen, misalnya 1.5');
+        return;
+      }
+
+      await deps.settings.patchRisk({ stopLossPct });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Stop loss diubah ke ${stopLossPct}%.`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'TRAILING_STOP_PCT') {
+      const trailingStopPct = Number(text.replace(/[^0-9.]/g, ''));
+      if (!Number.isFinite(trailingStopPct) || trailingStopPct < 0 || trailingStopPct > 100) {
+        await replyText(ctx, 'Trailing stop tidak valid. Kirim angka persen, misalnya 1');
+        return;
+      }
+
+      await deps.settings.patchRisk({ trailingStopPct });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Trailing stop diubah ke ${trailingStopPct}%.`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'MAX_DAILY_LOSS_IDR') {
+      const maxDailyLossIdr = Math.round(Number(text.replace(/[^0-9.]/g, '')));
+      if (!Number.isFinite(maxDailyLossIdr) || maxDailyLossIdr <= 0) {
+        await replyText(ctx, 'Max daily loss tidak valid. Kirim angka IDR, misalnya 500000');
+        return;
+      }
+
+      await deps.settings.patchRisk({ maxDailyLossIdr });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Max daily loss diubah ke ${maxDailyLossIdr}.`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'COOLDOWN_MS') {
+      const raw = text.trim().toLowerCase();
+      const baseNumber = Number(raw.replace(/[^0-9.]/g, ''));
+      const cooldownMs = raw.endsWith('h')
+        ? Math.round(baseNumber * 60 * 60 * 1000)
+        : raw.endsWith('m')
+          ? Math.round(baseNumber * 60 * 1000)
+          : raw.endsWith('s')
+            ? Math.round(baseNumber * 1000)
+            : Math.round(baseNumber);
+
+      if (!Number.isFinite(cooldownMs) || cooldownMs < 0) {
+        await replyText(ctx, 'Cooldown tidak valid. Kirim menit (mis. 15m) atau ms (mis. 900000).');
+        return;
+      }
+
+      await deps.settings.patchRisk({ cooldownMs });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Cooldown diubah ke ${cooldownMs} ms (~${Math.round(cooldownMs / 60000)} menit).`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'MAX_OPEN_POSITIONS') {
+      const maxOpenPositions = Math.round(Number(text.replace(/[^0-9.]/g, '')));
+      if (!Number.isFinite(maxOpenPositions) || maxOpenPositions <= 0 || maxOpenPositions > 50) {
+        await replyText(ctx, 'Max open positions tidak valid. Kirim angka 1..50.');
+        return;
+      }
+
+      await deps.settings.patchRisk({ maxOpenPositions });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Max open positions diubah ke ${maxOpenPositions}.`,
+        riskSettingsKeyboard(deps.settings.get()),
+      );
+      return;
+    }
+
+    if (userFlow.pendingConfig === 'MAX_POSITION_SIZE_IDR') {
+      const maxPositionSizeIdr = Math.round(Number(text.replace(/[^0-9.]/g, '')));
+      if (!Number.isFinite(maxPositionSizeIdr) || maxPositionSizeIdr <= 0) {
+        await replyText(ctx, 'Max position size tidak valid. Kirim angka IDR, misalnya 100000');
+        return;
+      }
+
+      await deps.settings.patchRisk({ maxPositionSizeIdr });
+      userFlow.pendingConfig = undefined;
+      userFlow.pendingSlippageConfirmation = undefined;
+      await replyText(
+        ctx,
+        `Max position size diubah ke ${maxPositionSizeIdr}.`,
         riskSettingsKeyboard(deps.settings.get()),
       );
       return;

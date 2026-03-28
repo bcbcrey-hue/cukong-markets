@@ -66,6 +66,7 @@ interface CallbackReconcileInput {
   exchangeOrderId?: string | null;
   pair?: string | null;
   status?: string | null;
+  side?: 'buy' | 'sell' | null;
 }
 
 interface OrderHistorySearchWindow {
@@ -144,6 +145,16 @@ export class ExecutionEngine {
   private quoteAsset(pair: string): string {
     const [, quoteAsset = 'idr'] = pair.toLowerCase().split('_');
     return quoteAsset || 'idr';
+  }
+
+  private assertSupportedQuoteAssetForLive(pair: string, settings: BotSettings): void {
+    const quote = this.quoteAsset(pair);
+    const expected = settings.defaultQuoteAsset || 'idr';
+    if (quote !== expected) {
+      throw new Error(
+        `Pair quoteAsset tidak didukung untuk LIVE execution: ${quote}. Expected ${expected}. Pair=${pair}`,
+      );
+    }
   }
 
   private appendNotes(current: string | undefined, note: string): string {
@@ -1385,15 +1396,67 @@ export class ExecutionEngine {
     const target = this.orders
       .listActive()
       .find((order) => order.exchangeOrderId && String(order.exchangeOrderId) === exchangeOrderId);
+    const pairHint = input.pair?.trim().toLowerCase() ?? null;
 
-    if (!target) {
+    const matchSubmissionUncertain = async (): Promise<OrderRecord | null> => {
+      const candidates = this.orders.listActive().filter((order) => {
+        if (order.exchangeOrderId) return false;
+        if (order.exchangeStatus !== 'submission_uncertain' && order.exchangeStatus !== 'submission_uncertain_unresolved') {
+          return false;
+        }
+        if (pairHint && order.pair.trim().toLowerCase() !== pairHint) {
+          return false;
+        }
+        if (input.side && order.side !== input.side) {
+          return false;
+        }
+        return true;
+      });
+
+      if (candidates.length === 0) {
+        return null;
+      }
+
+      if (candidates.length > 1) {
+        await this.journal.warn(
+          'CALLBACK_RECONCILIATION_AMBIGUOUS',
+          'callback cocok ke lebih dari 1 submission-uncertain order; di-skip untuk safety',
+          {
+            exchangeOrderId,
+            pair: input.pair ?? null,
+            status: input.status ?? null,
+            side: input.side ?? null,
+            candidateOrders: candidates.slice(0, 5).map((item) => ({
+              orderId: item.id,
+              pair: item.pair,
+              side: item.side,
+              createdAt: item.createdAt,
+              exchangeStatus: item.exchangeStatus ?? null,
+            })),
+            candidateCount: candidates.length,
+          },
+        );
+        return null;
+      }
+
+      const candidate = candidates[0]!;
+      return (await this.orders.update(candidate.id, {
+        exchangeOrderId,
+        exchangeStatus: 'matched_from_callback_after_submission_uncertain',
+        exchangeUpdatedAt: nowIso(),
+        notes: this.appendNotes(candidate.notes, `exchangeOrderId=${exchangeOrderId}`),
+      })) ?? null;
+    };
+
+    const resolvedTarget = target ?? (await matchSubmissionUncertain());
+    if (!resolvedTarget) {
       return null;
     }
 
     try {
-      const beforeStatus = target.status;
-      const beforeFilled = target.filledQuantity;
-      const synced = await this.syncLiveOrder(target.id);
+      const beforeStatus = resolvedTarget.status;
+      const beforeFilled = resolvedTarget.filledQuantity;
+      const synced = await this.syncLiveOrder(resolvedTarget.id);
 
       if (!synced) {
         return null;
@@ -1412,6 +1475,7 @@ export class ExecutionEngine {
           exchangeOrderId,
           pair: input.pair ?? null,
           exchangeStatus: input.status ?? null,
+          side: input.side ?? null,
         },
       );
       return null;
@@ -1989,6 +2053,7 @@ export class ExecutionEngine {
     }
 
     try {
+      this.assertSupportedQuoteAssetForLive(signal.pair, settings);
       const api = this.indodax.forAccount(account);
       const liveResult = await api.trade(signal.pair, 'buy', entryPrice, executionAmountIdr);
       const exchangeOrderId = this.extractExchangeOrderId(liveResult.return);
@@ -2225,6 +2290,7 @@ export class ExecutionEngine {
         throw new Error('Account posisi tidak ditemukan');
       }
 
+      this.assertSupportedQuoteAssetForLive(position.pair, settings);
       const api = this.indodax.forAccount(account);
       const liveResult = await api.trade(position.pair, 'sell', exitPrice, closeQuantity);
       const exchangeOrderId = this.extractExchangeOrderId(liveResult.return);

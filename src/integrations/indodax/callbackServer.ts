@@ -432,6 +432,9 @@ export class IndodaxCallbackServer {
         }
       });
     });
+    this.server.on('error', (error) => {
+      log.error({ error }, 'callback server error');
+    });
 
     await new Promise<void>((resolve, reject) => {
       this.server?.once('error', reject);

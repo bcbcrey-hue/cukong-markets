@@ -1,4 +1,5 @@
 import { Markup } from 'telegraf';
+import { createHash } from 'node:crypto';
 import type {
   BotSettings,
   ExecutionMode,
@@ -94,12 +95,20 @@ export const TELEGRAM_ACTION = {
   MANUAL_BUY: '🟢 Manual Buy',
   MANUAL_SELL: '🔴 Manual Sell',
   BUY_SLIPPAGE: '🎯 Buy Slippage',
+  MAX_BUY_SLIPPAGE: '🧱 Max Buy Slippage',
   MIN_PUMP_PROBABILITY: '📈 Min Pump Probability',
   MIN_CONFIDENCE: '🧪 Min Confidence',
   EXECUTION_SIMULATED: '🧪 Execution Simulated',
   EXECUTION_LIVE: '💸 Execution Live',
   STRATEGY: '⚙️ Strategy Settings',
   RISK: '🛡️ Risk Settings',
+  MAX_DAILY_LOSS: '💥 Max Daily Loss',
+  TAKE_PROFIT: '🎯 Take Profit',
+  STOP_LOSS: '🛑 Stop Loss',
+  TRAILING_STOP: '🪝 Trailing Stop',
+  COOLDOWN: '⏳ Cooldown',
+  MAX_OPEN_POSITIONS: '📌 Max Open Positions',
+  MAX_POSITION_SIZE: '💰 Max Position Size',
   ACCOUNTS: '👤 Accounts',
   LIST_ACCOUNTS: '📋 List Accounts',
   ADD_MANUAL: '➕ Add Manual',
@@ -112,6 +121,7 @@ export const TELEGRAM_ACTION = {
   LAST_RESULT: '🧾 Last Result',
   PAUSE_AUTO: '⏸️ Pause Auto → ALERT_ONLY',
   PAUSE_ALL: '🛑 Pause All → OFF',
+  EMERGENCY_FREEZE: '🧊 Emergency Freeze (toggle)',
   CANCEL_ALL: '🧹 Cancel All Orders',
   SELL_ALL: '💥 Sell All Positions',
   SHADOW_CATEGORY: '🌘 Shadow Run',
@@ -135,6 +145,12 @@ function bindPositionValue(backMenu: TelegramMenuId, positionId: string): string
   return `${backMenu}:${positionId}`;
 }
 
+export function toAccountCallbackToken(accountId: string): string {
+  const stable = accountId.trim();
+  const token = createHash('sha256').update(stable).digest('hex').slice(0, 12);
+  return `a${token}`;
+}
+
 export const mainMenuKeyboard = Markup.keyboard([
   [TELEGRAM_MAIN_MENU.EXECUTE, TELEGRAM_MAIN_MENU.EMERGENCY],
   [TELEGRAM_MAIN_MENU.MONITORING, TELEGRAM_MAIN_MENU.TRADE],
@@ -152,6 +168,7 @@ export const executeTradeKeyboard = Markup.inlineKeyboard([
 export const emergencyKeyboard = Markup.inlineKeyboard([
   [Markup.button.callback(TELEGRAM_ACTION.PAUSE_AUTO, buildCallback({ namespace: 'EMG', action: 'MODE', value: 'ALERT_ONLY' }))],
   [Markup.button.callback(TELEGRAM_ACTION.PAUSE_ALL, buildCallback({ namespace: 'EMG', action: 'MODE', value: 'OFF' }))],
+  [Markup.button.callback(TELEGRAM_ACTION.EMERGENCY_FREEZE, buildCallback({ namespace: 'EMG', action: 'FREEZE_TOGGLE' }))],
   [Markup.button.callback(TELEGRAM_ACTION.CANCEL_ALL, buildCallback({ namespace: 'EMG', action: 'CANCEL_ALL' }))],
   [Markup.button.callback(TELEGRAM_ACTION.SELL_ALL, buildCallback({ namespace: 'EMG', action: 'SELL_ALL' }))],
   [backButton('ROOT')],
@@ -233,13 +250,25 @@ export function strategySettingsKeyboard(settings: BotSettings) {
         buildCallback({ namespace: 'SET', action: 'MIN_CONFIDENCE' }),
       ),
     ],
+    [
+      Markup.button.callback(
+        `${TELEGRAM_ACTION.MAX_BUY_SLIPPAGE} ${settings.strategy.maxBuySlippageBps} bps`,
+        buildCallback({ namespace: 'SET', action: 'MAX_BUY_SLIPPAGE' }),
+      ),
+    ],
     [backButton('SET')],
   ]);
 }
 
 export function riskSettingsKeyboard(settings: BotSettings) {
   return Markup.inlineKeyboard([
-    [Markup.button.callback(`Take Profit ${settings.risk.takeProfitPct}%`, buildCallback({ namespace: 'SET', action: 'TAKE_PROFIT' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.MAX_DAILY_LOSS} ${settings.risk.maxDailyLossIdr}`, buildCallback({ namespace: 'SET', action: 'MAX_DAILY_LOSS' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.MAX_OPEN_POSITIONS} ${settings.risk.maxOpenPositions}`, buildCallback({ namespace: 'SET', action: 'MAX_OPEN_POSITIONS' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.MAX_POSITION_SIZE} ${settings.risk.maxPositionSizeIdr}`, buildCallback({ namespace: 'SET', action: 'MAX_POSITION_SIZE' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.COOLDOWN} ${Math.round(settings.risk.cooldownMs / 60000)}m`, buildCallback({ namespace: 'SET', action: 'COOLDOWN' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.TAKE_PROFIT} ${settings.risk.takeProfitPct}%`, buildCallback({ namespace: 'SET', action: 'TAKE_PROFIT' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.STOP_LOSS} ${settings.risk.stopLossPct}%`, buildCallback({ namespace: 'SET', action: 'STOP_LOSS' }))],
+    [Markup.button.callback(`${TELEGRAM_ACTION.TRAILING_STOP} ${settings.risk.trailingStopPct}%`, buildCallback({ namespace: 'SET', action: 'TRAILING_STOP' }))],
     [backButton('SET')],
   ]);
 }
@@ -263,7 +292,7 @@ export function accountsDeleteKeyboard(accounts: StoredAccount[]) {
     ...accounts.slice(0, 10).map((account) => [
       Markup.button.callback(
         `Hapus ${account.name}`,
-        buildCallback({ namespace: 'ACC', action: 'DEL_PICK', value: account.id }),
+        buildCallback({ namespace: 'ACC', action: 'DEL_PICK', value: toAccountCallbackToken(account.id) }),
       ),
     ]),
     [backButton('ACC_PANEL')],
